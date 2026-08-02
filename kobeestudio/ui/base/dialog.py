@@ -126,7 +126,7 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
             selected_footprints = [f for f in b.Footprints() if f.IsSelected()] if b is not None else []
             if len(selected_footprints) == 1:
                 f = selected_footprints[0]
-                if 'kibuzzard' in f.GetReference() or 'kibeezard' in f.GetReference():
+                if 'kibuzzard' in f.GetReference() or 'kobeestudio' in f.GetReference():
                     param_str = f.GetKeywords()
                     if param_str.startswith("kb_params="):
                         encoded_str = param_str[10:]
@@ -136,7 +136,7 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
                         # alongside the flat settings needed by this transition
                         # dialog. Historical KiBuzzard and earlier payloads remain
                         # valid because they are already flat settings mappings.
-                        if params.get("format") == "kibeezard-composition":
+                        if params.get("format") == "kobee-studio-composition":
                             params = params.get("legacy_settings", {})
                         params["_LoadedFootprintSettings"] = True
                         self.LoadSettings(params)

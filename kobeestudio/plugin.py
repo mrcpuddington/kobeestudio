@@ -45,7 +45,7 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
         logger.propagate = False
         path = Path(wx.StandardPaths.Get().GetUserConfigDir()) / "kobee-studio"
         path.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(str(path / "kibeezard.log"), encoding="utf-8")
+        handler = logging.FileHandler(str(path / "kobeestudio.log"), encoding="utf-8")
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         logger.addHandler(handler)
         return logger

@@ -5,13 +5,13 @@ from __future__ import annotations
 import math
 import unittest
 
-from kibeezard.core.icon_catalog import (
+from kobeestudio.core.icon_catalog import (
     BUILTIN_ICONS,
     ICON_BY_ID,
     LABEL_PRESETS,
     render_builtin_icon,
 )
-from kibeezard.core.composition import Point
+from kobeestudio.core.composition import Point
 
 
 class IconCatalogTests(unittest.TestCase):

@@ -6,7 +6,7 @@ import json
 import unittest
 from dataclasses import FrozenInstanceError
 
-from kibeezard.core.composition import (
+from kobeestudio.core.composition import (
     CompositionDocument,
     DocumentStyle,
     GroupObject,
@@ -20,7 +20,7 @@ from kibeezard.core.composition import (
     TextObject,
     TypographyStyle,
 )
-from kibeezard.core.legacy_adapter import (
+from kobeestudio.core.legacy_adapter import (
     FOOTPRINT_PAYLOAD_FORMAT,
     build_footprint_payload,
     document_from_legacy_settings,

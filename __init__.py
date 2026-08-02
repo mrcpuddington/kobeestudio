@@ -3,4 +3,4 @@
 KiCad discovers this module from its scripting/plugin search path.
 """
 
-from .kibeezard import plugin
+from .kobeestudio import plugin

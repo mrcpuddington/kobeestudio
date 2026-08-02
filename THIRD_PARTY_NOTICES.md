@@ -8,9 +8,9 @@ The following runtime dependencies are bundled because KiCad plugins cannot
 assume a separate system Python environment:
 
 - **FontTools**, under the MIT Licence — see
-  [`kibeezard/vendor/licenses/fonttools-LICENSE`](kibeezard/vendor/licenses/fonttools-LICENSE).
+  [`kobeestudio/vendor/licenses/fonttools-LICENSE`](kobeestudio/vendor/licenses/fonttools-LICENSE).
 - **svg2mod**, under GPL-2.0 — see
-  [`kibeezard/vendor/licenses/svg2mod-LICENSE`](kibeezard/vendor/licenses/svg2mod-LICENSE).
+  [`kobeestudio/vendor/licenses/svg2mod-LICENSE`](kobeestudio/vendor/licenses/svg2mod-LICENSE).
 
 The included FreddySpark, Ubuntu Mono, and M+ typefaces remain credited to
 their respective creators in the project history and are retained solely for

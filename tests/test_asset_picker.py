@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from kibeezard.ui.asset_picker import (
+from kobeestudio.ui.asset_picker import (
     filter_picker_items,
     icon_picker_items,
     label_picker_items,

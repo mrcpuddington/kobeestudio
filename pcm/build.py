@@ -22,7 +22,7 @@ os.chdir(build_path)
 plugins_path = path.join('plugin', 'plugins')
 os.mkdir(plugins_path)
 shutil.copy(path.join(repo_path, '__init__.py'), path.join(plugins_path, '__init__.py'))
-shutil.copytree(path.join(repo_path, 'kibeezard'), path.join(plugins_path, 'kibeezard'))
+shutil.copytree(path.join(repo_path, 'kobeestudio'), path.join(plugins_path, 'kobeestudio'))
 
 # clean out any __pycache__ or .pyc files (https://stackoverflow.com/a/41386937)
 import pathlib
@@ -64,7 +64,7 @@ md['versions'][0].update({
     'install_size': uncompressed_size,
     'download_size': zip_size,
     'download_sha256': zip_sha256,
-    'download_url': 'https://github.com/kobee-au/kibeezard/releases/download/{0}/{1}'.format(
+    'download_url': 'https://github.com/mrcpuddington/kobeestudio/releases/download/{0}/{1}'.format(
         md['versions'][0]['version'], package_name
     )
 })

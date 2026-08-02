@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unittest
 
-from kibeezard.core.composition import (
+from kobeestudio.core.composition import (
     DocumentStyle,
     IconObject,
     Padding,
@@ -13,15 +13,15 @@ from kibeezard.core.composition import (
     TextObject,
     TypographyStyle,
 )
-from kibeezard.core.pin_header import PinHeaderSpec
-from kibeezard.core.icon_catalog import BUILTIN_ICONS
-from kibeezard.core.studio_artwork import (
+from kobeestudio.core.pin_header import PinHeaderSpec
+from kobeestudio.core.icon_catalog import BUILTIN_ICONS
+from kobeestudio.core.studio_artwork import (
     TextVectorizer,
     render_header_artwork,
     render_label_artwork,
     serialize_artwork,
 )
-from kibeezard.core.text_geometry import TextGeometry
+from kobeestudio.core.text_geometry import TextGeometry
 
 
 class StudioArtworkTests(unittest.TestCase):

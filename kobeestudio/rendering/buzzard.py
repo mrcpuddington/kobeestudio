@@ -175,7 +175,7 @@ class Buzzard():
         layer. KiCad then presents it normally from the board underside
         without a manual flip.
         """
-        name = "kibeezard-{:8X}".format(int(round(time.time())))
+        name = "kobee-studio-{:8X}".format(int(round(time.time())))
         output_layer = output_layer or self.layer
         mod = Svg2ModExportLatestCustom(
             Svg2ModImport(module_name=name, module_value="G***"),
@@ -357,7 +357,7 @@ class Svg2ModExportLatestCustom( Svg2ModExportLatest ):
 
     def _write_library_intro( self, cmdline ):
         footprint_layer = "B.Cu" if self.bottom_side else "F.Cu"
-        self.output_file.write( """(footprint {0} (layer {4}) (tedit {1:8X}) (generator kibeezard)
+        self.output_file.write( """(footprint {0} (layer {4}) (tedit {1:8X}) (generator kobee_studio)
     (attr board_only exclude_from_pos_files exclude_from_bom)
     (descr "{2}")
     (tags "kb_params={3}")

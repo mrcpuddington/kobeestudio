@@ -1,6 +1,6 @@
 # Kobee Studio
 
-![Kobee bee](kibeezard/resources/kobee-bee.png)
+![Kobee bee](kobeestudio/resources/kobee-bee.png)
 
 > Friendly, flexible PCB artwork for KiCad. 🐝
 
@@ -83,7 +83,7 @@ connector pins together.
 
 Kobee Studio is a KiCad plugin, not a footprint library. The intended public
 path will be a signed, versioned `Kobee-Studio-x.y.z-pcm.zip` download from the
-[GitHub Releases page](https://github.com/mrcpuddington/kibeezard/releases).
+[GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases).
 
 When a release is available:
 
@@ -106,30 +106,29 @@ Choose a writable user plugin directory from that list, then use one of these:
 
 ```sh
 # Git — easiest way to update later
-git clone https://github.com/mrcpuddington/kibeezard.git "PLUGIN_DIRECTORY/kibeezard"
+git clone https://github.com/mrcpuddington/kobeestudio.git "PLUGIN_DIRECTORY/kobeestudio"
 
 # Existing local checkout — best for contributors
-ln -s "$(pwd)" "PLUGIN_DIRECTORY/kibeezard"
+ln -s "$(pwd)" "PLUGIN_DIRECTORY/kobeestudio"
 ```
 
 Or download GitHub’s **Source code (zip)** archive, unzip it, and move its
-top-level folder to `PLUGIN_DIRECTORY/kibeezard`. The on-disk `kibeezard`
-folder is the stable Python plugin module used by KiCad; the product itself is
-Kobee Studio. Refresh plugins or restart PCB Editor afterwards.
+top-level folder to `PLUGIN_DIRECTORY/kobeestudio`. Refresh plugins or restart
+PCB Editor afterwards.
 
 To update a Git checkout, run:
 
 ```sh
-git -C "PLUGIN_DIRECTORY/kibeezard" pull
+git -C "PLUGIN_DIRECTORY/kobeestudio" pull
 ```
 
 ## Repository layout
 
-- `kibeezard/core/` — composition documents, shapes, artwork, and output.
-- `kibeezard/rendering/` — the retained font-to-vector renderer.
-- `kibeezard/fonts/` — bundled typefaces used by the renderer.
-- `kibeezard/ui/` — the Kobee Studio wxPython interface and its base dialog.
-- `kibeezard/vendor/` — only the FontTools and svg2mod runtime source required
+- `kobeestudio/core/` — composition documents, shapes, artwork, and output.
+- `kobeestudio/rendering/` — the retained font-to-vector renderer.
+- `kobeestudio/fonts/` — bundled typefaces used by the renderer.
+- `kobeestudio/ui/` — the Kobee Studio wxPython interface and its base dialog.
+- `kobeestudio/vendor/` — only the FontTools and svg2mod runtime source required
   by the plugin; upstream docs, tests, and development tooling are excluded.
 - `tests/` — repeatable generation and geometry checks.
 

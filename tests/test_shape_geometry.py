@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import unittest
 
-from kibeezard.core.composition import (
+from kobeestudio.core.composition import (
     CompositionDocument,
     DocumentStyle,
     Padding,
@@ -14,7 +14,7 @@ from kibeezard.core.composition import (
     ShapeStyle,
     Size,
 )
-from kibeezard.core.shape_geometry import (
+from kobeestudio.core.shape_geometry import (
     clamp_corner_radius,
     content_box,
     polygon_bounds,
@@ -24,7 +24,7 @@ from kibeezard.core.shape_geometry import (
     size_from_polygons,
     transform_geometry,
 )
-from kibeezard.core.transforms import SUPPORTED_OUTPUT_LAYERS
+from kobeestudio.core.transforms import SUPPORTED_OUTPUT_LAYERS
 
 
 class ShapeGeometryTests(unittest.TestCase):

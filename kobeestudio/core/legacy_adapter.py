@@ -20,7 +20,7 @@ from .composition import (
 from .transforms import FRONT_SILKSCREEN, SUPPORTED_OUTPUT_LAYERS
 
 
-FOOTPRINT_PAYLOAD_FORMAT = "kibeezard-composition"
+FOOTPRINT_PAYLOAD_FORMAT = "kobee-studio-composition"
 
 
 def _float(settings: Mapping[str, Any], key: str, default: float = 0.0) -> float:

@@ -19,7 +19,7 @@
     <property name="internationalize">1</property>
     <property name="name">DIALOG_TEXT_BASE</property>
     <property name="namespace"></property>
-    <property name="path">./kibeezard/ui/base</property>
+    <property name="path">./kobeestudio/ui/base</property>
     <property name="precompiled_header"></property>
     <property name="relative_path">1</property>
     <property name="skip_lua_events">1</property>

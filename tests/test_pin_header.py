@@ -6,9 +6,9 @@ import math
 import unittest
 from dataclasses import replace
 
-from kibeezard.core.composition import DocumentStyle, Padding, ShapeStyle, Size, TypographyStyle
-from kibeezard.core.pin_header import PinHeaderSpec, layout_pin_header, mirror_layout_for_output
-from kibeezard.core.shape_geometry import render_document_shapes
+from kobeestudio.core.composition import DocumentStyle, Padding, ShapeStyle, Size, TypographyStyle
+from kobeestudio.core.pin_header import PinHeaderSpec, layout_pin_header, mirror_layout_for_output
+from kobeestudio.core.shape_geometry import render_document_shapes
 
 
 def header_style():

@@ -20,14 +20,14 @@ try:
 except ImportError:  # pragma: no cover - lets normal Python discover the suite
     pcbnew = None
 
-from kibeezard.core.composition import CompositionDocument, DocumentStyle, Padding, ShapeStyle, TypographyStyle
-from kibeezard.core.legacy_adapter import build_footprint_payload, legacy_settings_from_payload
-from kibeezard.core.icon_catalog import BUILTIN_ICONS
-from kibeezard.core.pin_header import PinHeaderSpec
-from kibeezard.core.studio_artwork import TextVectorizer, render_header_artwork, render_label_artwork, serialize_artwork
-from kibeezard.core.text_geometry import TextGeometry
-from kibeezard.core.transforms import fit_preview_polygons, preview_polygons
-from kibeezard.integration.kicad_compatibility import KiCadCompatibility
+from kobeestudio.core.composition import CompositionDocument, DocumentStyle, Padding, ShapeStyle, TypographyStyle
+from kobeestudio.core.legacy_adapter import build_footprint_payload, legacy_settings_from_payload
+from kobeestudio.core.icon_catalog import BUILTIN_ICONS
+from kobeestudio.core.pin_header import PinHeaderSpec
+from kobeestudio.core.studio_artwork import TextVectorizer, render_header_artwork, render_label_artwork, serialize_artwork
+from kobeestudio.core.text_geometry import TextGeometry
+from kobeestudio.core.transforms import fit_preview_polygons, preview_polygons
+from kobeestudio.integration.kicad_compatibility import KiCadCompatibility
 
 
 @unittest.skipIf(pcbnew is None, "requires KiCad's embedded Python")
