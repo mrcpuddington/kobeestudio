@@ -8,7 +8,7 @@ htmlcov/
 .venv/
 venv/
 
-# Local KiBeezard/KiBuzzard state and logs
+# Local Kobee Studio/KiBuzzard state and logs
 config.ini
 config.json
 *.log

@@ -38,6 +38,13 @@ ORIENTATIONS = ("horizontal", "vertical")
 PIN1_ENDS = ("start", "end")
 LABEL_SIDES = ("above", "below", "left", "right")
 OPENING_MODES = ("none", "continuous", "individual")
+PIN_LABEL_CLEARANCE_MM = 0.20
+
+
+def maximum_pin_label_height(pitch_mm: float = 2.54) -> float:
+    """Largest label height that leaves visible separation at one-pin pitch."""
+    _positive("pitch_mm", pitch_mm)
+    return max(0.01, float(pitch_mm) - PIN_LABEL_CLEARANCE_MM)
 
 
 def _positive(name: str, value: float) -> None:
@@ -61,9 +68,13 @@ class PinHeaderSpec:
     pin1_end: str = "start"
     label_side: str = "above"
     pad_clearance_mm: float = 2.0
-    leading_padding_mm: float = 1.27
-    trailing_padding_mm: float = 1.27
+    leading_padding_mm: float = 0.3
+    trailing_padding_mm: float = 0.3
     label_padding_mm: float = 0.3
+    pin_outer_padding_mm: Optional[float] = None
+    pin_to_label_gap_mm: Optional[float] = None
+    label_outer_padding_mm: Optional[float] = None
+    rail_cross_size_mm: float = 0.0
     opening_mode: str = "none"
     opening_end_padding_mm: float = 0.0
     pin1_marker: bool = True
@@ -88,8 +99,27 @@ class PinHeaderSpec:
             "trailing_padding_mm",
             "label_padding_mm",
             "opening_end_padding_mm",
+            "rail_cross_size_mm",
         ):
             _non_negative(name, getattr(self, name))
+        # New controls are deliberately optional in the serialized model so
+        # every existing header keeps its former geometry on reopen.
+        for name in (
+            "pin_outer_padding_mm",
+            "pin_to_label_gap_mm",
+            "label_outer_padding_mm",
+        ):
+            value = getattr(self, name)
+            if value is not None:
+                _non_negative(name, value)
+        maximum_height = maximum_pin_label_height(self.pitch_mm)
+        if self.style.typography.height_mm > maximum_height:
+            raise ValueError(
+                "Text height {:.2f} mm is too large for {:.2f} mm pin spacing; "
+                "maximum is {:.2f} mm".format(
+                    self.style.typography.height_mm, self.pitch_mm, maximum_height
+                )
+            )
         if self.orientation not in ORIENTATIONS:
             raise ValueError("Unsupported header orientation: {}".format(self.orientation))
         if self.pin1_end not in PIN1_ENDS:
@@ -131,6 +161,10 @@ class PinHeaderSpec:
             "leading_padding_mm": self.leading_padding_mm,
             "trailing_padding_mm": self.trailing_padding_mm,
             "label_padding_mm": self.label_padding_mm,
+            "pin_outer_padding_mm": self.pin_outer_padding_mm,
+            "pin_to_label_gap_mm": self.pin_to_label_gap_mm,
+            "label_outer_padding_mm": self.label_outer_padding_mm,
+            "rail_cross_size_mm": self.rail_cross_size_mm,
             "opening_mode": self.opening_mode,
             "opening_end_padding_mm": self.opening_end_padding_mm,
             "pin1_marker": self.pin1_marker,
@@ -208,6 +242,22 @@ class PinHeaderSpec:
             leading_padding_mm=float(data.get("leading_padding_mm", 1.27)),
             trailing_padding_mm=float(data.get("trailing_padding_mm", 1.27)),
             label_padding_mm=float(data.get("label_padding_mm", 0.3)),
+            pin_outer_padding_mm=(
+                float(data["pin_outer_padding_mm"])
+                if data.get("pin_outer_padding_mm") is not None
+                else None
+            ),
+            pin_to_label_gap_mm=(
+                float(data["pin_to_label_gap_mm"])
+                if data.get("pin_to_label_gap_mm") is not None
+                else None
+            ),
+            label_outer_padding_mm=(
+                float(data["label_outer_padding_mm"])
+                if data.get("label_outer_padding_mm") is not None
+                else None
+            ),
+            rail_cross_size_mm=float(data.get("rail_cross_size_mm", 0.0)),
             # Existing 0.3.0-dev headers always used a continuous opening.
             opening_mode=str(data.get("opening_mode", "continuous")),
             opening_end_padding_mm=float(data.get("opening_end_padding_mm", 0.0)),
@@ -350,6 +400,15 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
     sizes = tuple(label_sizes)
     if len(sizes) != spec.pin_count:
         raise ValueError("label size count must match pin_count")
+    maximum_height = maximum_pin_label_height(spec.pitch_mm)
+    oversized = max((size.height for size in sizes), default=0.0)
+    if oversized > maximum_height + 1e-9:
+        raise ValueError(
+            "Rendered text height {:.2f} mm is too large for {:.2f} mm pin spacing; "
+            "maximum is {:.2f} mm".format(
+                oversized, spec.pitch_mm, maximum_height
+            )
+        )
 
     direction = 1.0 if spec.pin1_end == "start" else -1.0
     if spec.orientation == "horizontal":
@@ -389,12 +448,54 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
         axis_min = min(axis_min, centre - label_axis_size / 2.0 - spec.label_padding_mm)
         axis_max = max(axis_max, centre + label_axis_size / 2.0 + spec.label_padding_mm)
 
+    # The old one-value label padding remains the fallback for a saved 0.4
+    # header.  New headers can independently control the clearance outside
+    # the pins, the pin-to-text gap, and the outside edge after the labels.
+    pin_outer_padding = (
+        spec.label_padding_mm
+        if spec.pin_outer_padding_mm is None
+        else spec.pin_outer_padding_mm
+    )
+    pin_to_label_gap = (
+        spec.label_padding_mm
+        if spec.pin_to_label_gap_mm is None
+        else spec.pin_to_label_gap_mm
+    )
+    label_outer_padding = (
+        spec.label_padding_mm
+        if spec.label_outer_padding_mm is None
+        else spec.label_outer_padding_mm
+    )
     maximum_label_cross = max(label_cross_sizes, default=0.0)
     negative_side = spec.label_side in ("above", "left")
-    near_edge = -clearance_radius - spec.label_padding_mm if negative_side else clearance_radius + spec.label_padding_mm
+    near_edge = (
+        -clearance_radius - pin_to_label_gap
+        if negative_side
+        else clearance_radius + pin_to_label_gap
+    )
     far_text_edge = near_edge - maximum_label_cross if negative_side else near_edge + maximum_label_cross
-    cross_min = far_text_edge - spec.label_padding_mm if negative_side else -clearance_radius - spec.label_padding_mm
-    cross_max = clearance_radius + spec.label_padding_mm if negative_side else far_text_edge + spec.label_padding_mm
+    cross_min = (
+        far_text_edge - label_outer_padding
+        if negative_side
+        else -clearance_radius - pin_outer_padding
+    )
+    cross_max = (
+        clearance_radius + pin_outer_padding
+        if negative_side
+        else far_text_edge + label_outer_padding
+    )
+    # A fixed cross-axis rail dimension makes a predictable block around a
+    # connector.  The free room is intentionally placed between connector and
+    # text so the labels remain aligned at the outer edge (right-aligned for
+    # a vertical row with pins on the left).
+    natural_cross_size = cross_max - cross_min
+    if spec.rail_cross_size_mm > natural_cross_size:
+        if negative_side:
+            cross_min = cross_max - spec.rail_cross_size_mm
+            far_text_edge = cross_min + label_outer_padding
+        else:
+            cross_max = cross_min + spec.rail_cross_size_mm
+            far_text_edge = cross_max - label_outer_padding
     cross_size = max(0.001, cross_max - cross_min)
     axis_centre = (axis_min + axis_max) / 2.0
     axis_size = max(0.001, axis_max - axis_min)

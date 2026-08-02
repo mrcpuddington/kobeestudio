@@ -8,14 +8,17 @@ import unittest
 from kobeestudio.core.composition import (
     DocumentStyle,
     IconObject,
+    Point,
     Padding,
     ShapeStyle,
     TextObject,
     TypographyStyle,
 )
 from kobeestudio.core.pin_header import PinHeaderSpec
-from kobeestudio.core.icon_catalog import BUILTIN_ICONS
+from kobeestudio.core.icon_catalog import BUILTIN_ICONS, render_builtin_icon
 from kobeestudio.core.studio_artwork import (
+    _knockout_tiles,
+    _point_in_polygon,
     TextVectorizer,
     render_header_artwork,
     render_label_artwork,
@@ -137,6 +140,54 @@ class StudioArtworkTests(unittest.TestCase):
         self.assertEqual((), bare_icon.strokes)
         self.assertGreater(len(bare_icon.filled_polygons), 0)
 
+    def test_alignment_moves_the_measured_icon_and_text_as_one_assembly(self):
+        minimum_width = 14.0
+        for alignment in ("left", "center", "right"):
+            with self.subTest(alignment=alignment):
+                style = DocumentStyle(
+                    typography=TypographyStyle(height_mm=1.0, alignment=alignment),
+                    shape=ShapeStyle(
+                        padding=Padding.symmetric(0.4, 0.3),
+                        corner_radius_mm=0.2,
+                        filled=True,
+                        inverted=True,
+                    ),
+                )
+                artwork = render_label_artwork(
+                    self.vectorizer,
+                    "WARNING",
+                    style,
+                    "F.SilkS",
+                    "rounded_rectangle",
+                    minimum_width_mm=minimum_width,
+                    icon_id="builtin.warning",
+                )
+                text_object = next(
+                    item for item in artwork.document.objects if isinstance(item, TextObject)
+                )
+                icon_object = next(
+                    item for item in artwork.document.objects if isinstance(item, IconObject)
+                )
+                text = self.vectorizer.render("WARNING", style.typography)
+                icon = render_builtin_icon("builtin.warning", 1.0)
+                polygons = tuple(
+                    tuple(Point(point.x + text_object.position.x, point.y) for point in polygon)
+                    for polygon in text.polygons
+                ) + tuple(
+                    tuple(Point(point.x + icon_object.position.x, point.y) for point in polygon)
+                    for polygon in icon.polygons
+                )
+                minimum = min(point.x for polygon in polygons for point in polygon)
+                maximum = max(point.x for polygon in polygons for point in polygon)
+                inner_left = -minimum_width / 2.0 + style.shape.padding.left
+                inner_right = minimum_width / 2.0 - style.shape.padding.right
+                if alignment == "left":
+                    self.assertAlmostEqual(inner_left, minimum)
+                elif alignment == "right":
+                    self.assertAlmostEqual(inner_right, maximum)
+                else:
+                    self.assertAlmostEqual(0.0, (minimum + maximum) / 2.0)
+
     def test_icons_render_as_positive_and_inverted_fabrication_geometry(self):
         plain = render_label_artwork(
             self.vectorizer,
@@ -171,6 +222,22 @@ class StudioArtworkTests(unittest.TestCase):
                 )
                 self.assertGreater(len(artwork.filled_polygons), 0)
                 self.assertEqual((), artwork.strokes)
+
+    def test_every_inverted_icon_stays_within_live_canvas_complexity_budget(self):
+        for icon in BUILTIN_ICONS:
+            with self.subTest(icon=icon.asset_id):
+                artwork = render_label_artwork(
+                    self.vectorizer,
+                    "ICON",
+                    self.style(filled=True, inverted=True),
+                    "F.SilkS",
+                    "pill",
+                    icon_id=icon.asset_id,
+                    icon_height_mm=1.0,
+                )
+                output = serialize_artwork(artwork, "encoded", "F.SilkS")
+                self.assertLess(len(artwork.filled_polygons), 500)
+                self.assertLess(len(output), 120000)
 
     def test_inverted_fill_combines_shape_and_text_as_knockouts(self):
         artwork = render_label_artwork(
@@ -235,6 +302,30 @@ class StudioArtworkTests(unittest.TestCase):
         }
         self.assertNotEqual(signatures["none"], signatures["continuous"])
         self.assertNotEqual(signatures["continuous"], signatures["individual"])
+
+    def test_overlapping_knockouts_are_combined_instead_of_xor(self):
+        outer = (
+            Point(-2.0, -2.0),
+            Point(2.0, -2.0),
+            Point(2.0, 2.0),
+            Point(-2.0, 2.0),
+        )
+        first = (
+            Point(-1.0, -1.0),
+            Point(0.5, -1.0),
+            Point(0.5, 1.0),
+            Point(-1.0, 1.0),
+        )
+        second = (
+            Point(-0.5, -1.0),
+            Point(1.0, -1.0),
+            Point(1.0, 1.0),
+            Point(-0.5, 1.0),
+        )
+        tiles = _knockout_tiles(outer, (first, second))
+        self.assertFalse(any(_point_in_polygon(Point(0.0, 0.0), tile) for tile in tiles))
+        self.assertFalse(any(_point_in_polygon(Point(0.75, 0.0), tile) for tile in tiles))
+        self.assertTrue(any(_point_in_polygon(Point(1.5, 0.0), tile) for tile in tiles))
 
     def test_bottom_serialization_is_one_x_mirror(self):
         artwork = render_label_artwork(self.vectorizer, "R2D7", self.style(), "F.SilkS", "pointer")

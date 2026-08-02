@@ -22,10 +22,20 @@ os.chdir(build_path)
 plugins_path = path.join('plugin', 'plugins')
 os.mkdir(plugins_path)
 shutil.copy(path.join(repo_path, '__init__.py'), path.join(plugins_path, '__init__.py'))
-shutil.copytree(path.join(repo_path, 'kobeestudio'), path.join(plugins_path, 'kobeestudio'))
+shutil.copytree(
+    path.join(repo_path, 'kobeestudio'),
+    path.join(plugins_path, 'kobeestudio'),
+    ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyo', '.DS_Store'),
+)
+shutil.copy(path.join(repo_path, 'LICENCE'), path.join(plugins_path, 'kobeestudio', 'LICENCE'))
+shutil.copy(
+    path.join(repo_path, 'THIRD_PARTY_NOTICES.md'),
+    path.join(plugins_path, 'kobeestudio', 'THIRD_PARTY_NOTICES.md'),
+)
 
 # clean out any __pycache__ or .pyc files (https://stackoverflow.com/a/41386937)
 import pathlib
+[p.unlink() for p in pathlib.Path('.').rglob('.DS_Store')]
 [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]
 [p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]
 
@@ -65,7 +75,7 @@ md['versions'][0].update({
     'download_size': zip_size,
     'download_sha256': zip_sha256,
     'download_url': 'https://github.com/mrcpuddington/kobeestudio/releases/download/{0}/{1}'.format(
-        md['versions'][0]['version'], package_name
+        'v{}'.format(md['versions'][0]['version']), package_name
     )
 })
     

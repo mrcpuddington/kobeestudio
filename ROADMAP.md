@@ -80,7 +80,8 @@ The generated item will be an artwork overlay, not an electrical replacement for
 - [ ] SVG import with scale, rotation, crop, and alignment.
 - [ ] Stroke-to-path conversion and curve simplification.
 - [ ] Minimum-feature and malformed-path warnings.
-- [ ] QR codes with configurable payload and error correction.
+- [x] QR Codes and Code 128 barcodes with payload validation, quiet zones, compact sizing, rounded QR frames, and optional knockout footer text.
+- [ ] Configurable QR error-correction level and additional barcode symbologies.
 - [ ] Data Matrix and serial-number markings.
 - [ ] Connector callouts, pinout tables, and test-point legends.
 - [ ] CSV and pasted-table batch generation.

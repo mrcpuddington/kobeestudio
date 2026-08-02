@@ -126,8 +126,16 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
             selected_footprints = [f for f in b.Footprints() if f.IsSelected()] if b is not None else []
             if len(selected_footprints) == 1:
                 f = selected_footprints[0]
-                if 'kibuzzard' in f.GetReference() or 'kobeestudio' in f.GetReference():
-                    param_str = f.GetKeywords()
+                # The saved footprint is the source of truth.  Early Studio
+                # builds used ``kobee-studio-…`` as the reference while the
+                # Python package is named ``kobeestudio``; recognise both
+                # spellings (and the historical KiBuzzard one) here.
+                reference = f.GetReference().lower()
+                param_str = f.GetKeywords()
+                if (
+                    any(marker in reference for marker in ("kibuzzard", "kobeestudio", "kobee-studio"))
+                    or param_str.startswith("kb_params=")
+                ):
                     if param_str.startswith("kb_params="):
                         encoded_str = param_str[10:]
                         json_str = base64.b64decode(encoded_str).decode('utf-8')

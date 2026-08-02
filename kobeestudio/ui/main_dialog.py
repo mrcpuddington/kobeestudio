@@ -10,8 +10,20 @@ from .base.dialog import Dialog as UpstreamDialog
 
 from ..core.composition import DocumentStyle, Padding, ShapeStyle, TypographyStyle
 from ..core.icon_catalog import BUILTIN_ICONS, LABEL_PRESETS, PRESET_BY_ID
-from ..core.pin_header import PinHeaderSpec
-from ..core.studio_artwork import TextVectorizer, render_header_artwork, render_label_artwork
+from ..core.machine_codes import (
+    CODE128_DEFAULT_HEIGHT_MM,
+    CODE128_DEFAULT_MODULE_MM,
+    CODE128_MIN_HEIGHT_MM,
+    CODE128_MIN_MODULE_MM,
+    QR_MIN_MODULE_MM,
+)
+from ..core.pin_header import PinHeaderSpec, maximum_pin_label_height
+from ..core.studio_artwork import (
+    TextVectorizer,
+    render_header_artwork,
+    render_label_artwork,
+    render_machine_code_artwork,
+)
 from ..core.transforms import (
     BOTTOM_COPPER,
     BOTTOM_MASK,
@@ -91,12 +103,23 @@ PRESET_ID_TO_LABEL = {preset.preset_id: preset.display_name for preset in LABEL_
 ICON_LABELS = {"No icon": ""}
 ICON_LABELS.update({icon.name: icon.asset_id for icon in BUILTIN_ICONS})
 ICON_ID_TO_LABEL = {asset_id: label for label, asset_id in ICON_LABELS.items()}
+MACHINE_CODE_LABELS = {
+    "QR Code": "qr",
+    "Code 128 barcode": "code128",
+}
+QR_PRESENTATION_LABELS = {
+    "Plain code": "plain",
+    "Rounded frame": "rounded_frame",
+    "Rounded frame + footer": "rounded_caption",
+}
+
 ICON_POSITION_LABELS = {
     "Left of text": "left",
     "Right of text": "right",
     "Icon only": "only",
 }
 STUDIO_DIMENSIONS_VERSION = 2
+STUDIO_DEFAULTS_VERSION = 3
 DEFAULT_LABEL_DIMENSIONS = {
     "HeightCtrl": 1.2,
     "PaddingTopCtrl": 0.5,
@@ -109,7 +132,7 @@ STUDIO_DEFAULTS = {
     "ShapeChoice": "Rounded rectangle",
     "ShapeVariantChoice": "Inverted fill",
     "BorderThicknessCtrl": 0.2,
-    "CornerRadiusCtrl": 0.6,
+    "CornerRadiusCtrl": 0.2,
     "FeatureSizeCtrl": 0.75,
     "ShapeDirectionChoice": "Right",
     "StartCapChoice": "Square",
@@ -126,10 +149,21 @@ STUDIO_DEFAULTS = {
     "HeaderPadClearanceCtrl": 2.0,
     "HeaderOpeningChoice": "None",
     "HeaderOpeningEndPaddingCtrl": 0.0,
-    "HeaderLeadingPaddingCtrl": 1.27,
-    "HeaderTrailingPaddingCtrl": 1.27,
+    "HeaderLeadingPaddingCtrl": 0.3,
+    "HeaderTrailingPaddingCtrl": 0.3,
     "HeaderLabelPaddingCtrl": 0.3,
+    "HeaderPinOuterPaddingCtrl": 0.3,
+    "HeaderPinToLabelGapCtrl": 0.3,
+    "HeaderLabelOuterPaddingCtrl": 0.3,
+    "HeaderCrossSizeCtrl": 0.0,
     "HeaderPin1MarkerCheckbox": True,
+    "MachineCodeTypeChoice": "QR Code",
+    "MachineCodeModuleSizeCtrl": QR_MIN_MODULE_MM,
+    "MachineCodeBarHeightCtrl": CODE128_DEFAULT_HEIGHT_MM,
+    "MachineCodePresentationChoice": "Plain code",
+    "MachineCodeCaptionCtrl": "SCAN ME",
+    "MachineCodeCaptionHeightCtrl": 1.2,
+    "MachineCodeFramePaddingCtrl": 0.2,
 }
 
 
@@ -152,17 +186,20 @@ class MainDialog(UpstreamDialog):
         self._loaded_studio_settings = dict(STUDIO_DEFAULTS)
         self._studio_controls_ready = False
         self._applying_label_preset = False
+        self._dynamic_refit_pending = False
         self.artwork = None
         self.stroke_polys = []
         self.guide_polys = []
         super(MainDialog, self).__init__(parent, config, buzzard, func)
         self.SetTitle("Kobee Studio")
         self._build_studio_controls()
+        self._build_machine_code_controls()
         self._build_layer_selector()
         self._studio_controls_ready = True
         self._apply_studio_settings(self._loaded_studio_settings)
         self._hide_legacy_cap_controls()
-        self.m_PaddingLabel.SetLabel("Padding (mm):")
+        self._polish_existing_controls()
+        self.m_PaddingLabel.SetLabel("Container padding (mm):")
         self.m_LayerComboBox1.SetLabel("Output layer:")
         self.m_LayerComboBox.Clear()
         self.m_LayerComboBox.AppendItems(list(LAYER_LABELS.values()))
@@ -172,32 +209,43 @@ class MainDialog(UpstreamDialog):
         self.m_LayerComboBox1.Hide()
         # Reuse the generated preview label.  Adding a new root-sizer item and
         # fitting the dialog again was the first source of the macOS reflow.
-        self.m_PreviewLabel.SetLabel("Preview:   Kobee Studio {}".format(__version__))
+        self.m_PreviewLabel.SetLabel("Live preview  ·  Kobee Studio {}".format(__version__))
         self.m_PreviewPanel.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self._update_mode_ui(refit=False)
         self._stabilise_dialog_layout()
+        # Reopening a placed icon is still an edit of its label.  Keeping the
+        # text field focused avoids the surprising jump back into symbols.
+        wx.CallAfter(self.m_MultiLineText.SetFocus)
 
     def _build_studio_controls(self):
         root_sizer = self.GetSizer()
 
         panel = wx.Panel(self)
-        box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Label style"), wx.VERTICAL)
-        grid = wx.FlexGridSizer(0, 6, 4, 6)
+        box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Design"), wx.VERTICAL)
+        # Two label/control pairs per row remain legible on the 800 px-wide
+        # KiCad dialog, including the independent long-edge controls.
+        grid = wx.FlexGridSizer(0, 4, 4, 6)
         grid.AddGrowableCol(1)
         grid.AddGrowableCol(3)
-        grid.AddGrowableCol(5)
 
-        self.m_StudioModeChoice = wx.Choice(panel, choices=("Label", "2.54 mm Pin Header"))
+        self.m_StudioModeChoice = wx.Choice(
+            panel,
+            choices=("Label", "2.54 mm Pin Header", "QR / Barcode"),
+        )
         self.m_ShapeChoice = wx.Choice(panel, choices=tuple(LABEL_SHAPE_LABELS.keys()))
         self.m_ShapeVariantChoice = wx.Choice(panel, choices=VARIANT_LABELS)
         self.m_BorderThicknessCtrl = self._double_control(panel, 0.0, 10.0, 0.2, 0.05, 2)
-        self.m_CornerRadiusCtrl = self._double_control(panel, 0.0, 100.0, 0.6, 0.1, 2)
+        self.m_CornerRadiusCtrl = self._double_control(panel, 0.0, 100.0, 0.2, 0.1, 2)
         self.m_FeatureSizeCtrl = self._double_control(panel, 0.0, 100.0, 0.75, 0.1, 2)
         self.m_ShapeDirectionChoice = wx.Choice(panel, choices=("Left", "Right"))
         self.m_StartCapChoice = wx.Choice(panel, choices=CAP_LABELS)
         self.m_EndCapChoice = wx.Choice(panel, choices=CAP_LABELS)
 
-        self._add_control(grid, panel, "Tool:", self.m_StudioModeChoice)
+        mode_row = wx.BoxSizer(wx.HORIZONTAL)
+        mode_label = wx.StaticText(panel, label="Artwork type:")
+        mode_row.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        mode_row.Add(self.m_StudioModeChoice, 1, wx.EXPAND)
+        box.Add(mode_row, 0, wx.EXPAND | wx.ALL, 5)
         self._add_control(grid, panel, "Shape:", self.m_ShapeChoice)
         self._add_control(grid, panel, "Appearance:", self.m_ShapeVariantChoice)
         self.m_BorderThicknessLabel = self._add_control(
@@ -214,12 +262,10 @@ class MainDialog(UpstreamDialog):
         )
         self.m_StartCapLabel = self._add_control(grid, panel, "Left end:", self.m_StartCapChoice)
         self.m_EndCapLabel = self._add_control(grid, panel, "Right end:", self.m_EndCapChoice)
-        box.Add(grid, 1, wx.EXPAND | wx.ALL, 5)
 
-        asset_grid = wx.FlexGridSizer(0, 6, 4, 6)
+        asset_grid = wx.FlexGridSizer(0, 4, 4, 6)
         asset_grid.AddGrowableCol(1)
         asset_grid.AddGrowableCol(3)
-        asset_grid.AddGrowableCol(5)
         self.m_PresetLabelChoice = wx.Choice(panel, choices=tuple(PRESET_LABELS.keys()))
         self.m_IconChoice = wx.Choice(panel, choices=tuple(ICON_LABELS.keys()))
         self.m_PresetLabelChoice.Hide()
@@ -229,8 +275,8 @@ class MainDialog(UpstreamDialog):
         self.m_IconPositionChoice = wx.Choice(panel, choices=tuple(ICON_POSITION_LABELS.keys()))
         self.m_IconHeightCtrl = self._double_control(panel, 0.0, 20.0, 0.0, 0.1, 2)
         self.m_IconGapCtrl = self._double_control(panel, 0.0, 20.0, 0.3, 0.1, 2)
-        self._add_control(asset_grid, panel, "Quick labels:", self.m_PresetPickerButton)
-        self._add_control(asset_grid, panel, "Symbols:", self.m_IconPickerButton)
+        self._add_control(asset_grid, panel, "Text preset:", self.m_PresetPickerButton)
+        self._add_control(asset_grid, panel, "Symbol:", self.m_IconPickerButton)
         self.m_IconPositionLabel = self._add_control(
             asset_grid, panel, "Position:", self.m_IconPositionChoice
         )
@@ -245,13 +291,21 @@ class MainDialog(UpstreamDialog):
         self.m_FeatureSizeCtrl.SetToolTip(
             "Controls the depth of the point, notch, tab, chamfer, or hexagon end."
         )
-        box.Add(asset_grid, 0, wx.EXPAND | wx.ALL, 5)
+        content_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Content"), wx.VERTICAL)
+        content_box.Add(asset_grid, 0, wx.EXPAND | wx.ALL, 5)
+        box.Add(content_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        self.m_ContentBox = content_box
+
+        container_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Container"), wx.VERTICAL)
+        container_box.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
+        box.Add(container_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        self.m_ContainerBox = container_box
         panel.SetSizer(box)
         root_sizer.Insert(2, panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.m_StudioPanel = panel
 
         header_panel = wx.Panel(self)
-        header_box = wx.StaticBoxSizer(wx.StaticBox(header_panel, label="2.54 mm header block"), wx.VERTICAL)
+        header_box = wx.StaticBoxSizer(wx.StaticBox(header_panel, label="Pin header layout"), wx.VERTICAL)
         header_grid = wx.GridSizer(0, 4, 4, 8)
         self.m_HeaderPinCountCtrl = wx.SpinCtrl(header_panel, min=1, max=40, initial=4)
         self.m_HeaderOrientationChoice = wx.Choice(header_panel, choices=("Horizontal", "Vertical"))
@@ -261,25 +315,39 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderOpeningChoice = wx.Choice(header_panel, choices=tuple(OPENING_LABELS.keys()))
         self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.0, 0.1, 2)
         self.m_HeaderLabelPaddingCtrl = self._double_control(header_panel, 0.0, 20.0, 0.3, 0.1, 2)
-        self.m_HeaderLeadingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 1.27, 0.1, 2)
-        self.m_HeaderTrailingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 1.27, 0.1, 2)
+        self.m_HeaderPinOuterPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderPinToLabelGapCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderLabelOuterPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderCrossSizeCtrl = self._double_control(header_panel, 0.0, 100.0, 0.0, 0.1, 2)
+        self.m_HeaderLeadingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderTrailingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
         self.m_HeaderFillLabelsButton = wx.Button(header_panel, label="Fill labels 1…N")
         self.m_HeaderPin1MarkerCheckbox = wx.CheckBox(header_panel, label="Pin 1 marker")
         self.m_HeaderPin1MarkerCheckbox.SetValue(True)
 
         for label, control in (
-            ("Pins", self.m_HeaderPinCountCtrl),
+            ("Pin count", self.m_HeaderPinCountCtrl),
             ("Orientation", self.m_HeaderOrientationChoice),
-            ("Pin 1 end", self.m_HeaderPin1Choice),
+            ("Pin 1 position", self.m_HeaderPin1Choice),
             ("Pins on", self.m_HeaderPinSideChoice),
-            ("Opening", self.m_HeaderOpeningChoice),
-            ("Pin / opening width (mm)", self.m_HeaderPadClearanceCtrl),
-            ("Opening end pad (mm)", self.m_HeaderOpeningEndPaddingCtrl),
-            ("Gap + outer pad (mm)", self.m_HeaderLabelPaddingCtrl),
-            ("Pin 1 end pad (mm)", self.m_HeaderLeadingPaddingCtrl),
-            ("Far end pad (mm)", self.m_HeaderTrailingPaddingCtrl),
+            ("Artwork opening", self.m_HeaderOpeningChoice),
+            ("Connector width (mm)", self.m_HeaderPadClearanceCtrl),
+            ("Row start outer padding (mm)", self.m_HeaderLeadingPaddingCtrl),
+            ("Row end outer padding (mm)", self.m_HeaderTrailingPaddingCtrl),
         ):
             self._add_vertical_control(header_grid, header_panel, label, control)
+
+        header_detail_grid = wx.GridSizer(0, 4, 4, 8)
+        for label, control in (
+            ("Opening end extension (mm)", self.m_HeaderOpeningEndPaddingCtrl),
+            ("Label row end padding (mm)", self.m_HeaderLabelPaddingCtrl),
+            ("Pin-side outer padding (mm)", self.m_HeaderPinOuterPaddingCtrl),
+            ("Pin-to-label gap (mm)", self.m_HeaderPinToLabelGapCtrl),
+            ("Label-side outer padding (mm)", self.m_HeaderLabelOuterPaddingCtrl),
+            ("Fixed rail width / height (mm)", self.m_HeaderCrossSizeCtrl),
+        ):
+            self._add_vertical_control(header_detail_grid, header_panel, label, control)
+
         self.m_HeaderPadClearanceCtrl.SetToolTip(
             "Reserved connector width; also the cut width when an opening is enabled."
         )
@@ -287,9 +355,46 @@ class MainDialog(UpstreamDialog):
             "Extend a continuous opening this far beyond the first and last pin."
         )
         self.m_HeaderLabelPaddingCtrl.SetToolTip(
-            "Used before the pin area, between the pins and labels, and after the aligned labels."
+            "Padding past the first and last label along the pin row."
         )
-        header_box.Add(header_grid, 1, wx.EXPAND | wx.ALL, 5)
+        self.m_HeaderPinOuterPaddingCtrl.SetToolTip(
+            "Clearance from the outside rail edge to the connector/pin envelope."
+        )
+        self.m_HeaderPinToLabelGapCtrl.SetToolTip(
+            "Space from the connector/pin envelope to the nearest label edge."
+        )
+        self.m_HeaderLabelOuterPaddingCtrl.SetToolTip(
+            "Clearance from the outer label edge to the rail."
+        )
+        self.m_HeaderCrossSizeCtrl.SetToolTip(
+            "Optional total rail width (vertical header) or height (horizontal header). 0 follows content."
+        )
+        header_box.Add(header_grid, 0, wx.EXPAND | wx.ALL, 5)
+        self.m_HeaderDetailsCheckbox = wx.CheckBox(
+            header_panel, label="Show detailed spacing"
+        )
+        self.m_HeaderDetailsCheckbox.SetToolTip(
+            "Show independent outer padding, label gap, rail size and end spacing."
+        )
+        header_box.Add(
+            self.m_HeaderDetailsCheckbox,
+            0,
+            wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            5,
+        )
+        header_detail_box = wx.StaticBoxSizer(
+            wx.StaticBox(header_panel, label="Detailed spacing"), wx.VERTICAL
+        )
+        header_detail_box.Add(header_detail_grid, 0, wx.EXPAND | wx.ALL, 5)
+        header_box.Add(
+            header_detail_box,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            5,
+        )
+        self.m_HeaderDetailBox = header_detail_box
+        self.m_HeaderDetailBox.GetStaticBox().Hide()
+        self.m_HeaderDetailBox.ShowItems(False)
         help_row = wx.BoxSizer(wx.HORIZONTAL)
         help_row.Add(
             wx.StaticText(header_panel, label="Enter one label per pin."),
@@ -336,11 +441,16 @@ class MainDialog(UpstreamDialog):
             "HeaderLeadingPaddingCtrl": self.m_HeaderLeadingPaddingCtrl,
             "HeaderTrailingPaddingCtrl": self.m_HeaderTrailingPaddingCtrl,
             "HeaderLabelPaddingCtrl": self.m_HeaderLabelPaddingCtrl,
+            "HeaderPinOuterPaddingCtrl": self.m_HeaderPinOuterPaddingCtrl,
+            "HeaderPinToLabelGapCtrl": self.m_HeaderPinToLabelGapCtrl,
+            "HeaderLabelOuterPaddingCtrl": self.m_HeaderLabelOuterPaddingCtrl,
+            "HeaderCrossSizeCtrl": self.m_HeaderCrossSizeCtrl,
             "HeaderPin1MarkerCheckbox": self.m_HeaderPin1MarkerCheckbox,
         }
         self.m_StudioModeChoice.Bind(wx.EVT_CHOICE, self._on_mode_changed)
         self.m_HeaderOrientationChoice.Bind(wx.EVT_CHOICE, self._on_header_orientation_changed)
         self.m_HeaderOpeningChoice.Bind(wx.EVT_CHOICE, self._on_header_opening_changed)
+        self.m_HeaderDetailsCheckbox.Bind(wx.EVT_CHECKBOX, self._on_header_details_changed)
         self.m_ShapeChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
         self.m_ShapeVariantChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
         self.m_StartCapChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
@@ -350,6 +460,99 @@ class MainDialog(UpstreamDialog):
         self.m_IconPositionChoice.Bind(wx.EVT_CHOICE, self._on_icon_changed)
         self.m_MultiLineText.Bind(wx.EVT_TEXT, self._on_label_text_edited)
         self.m_HeaderFillLabelsButton.Bind(wx.EVT_BUTTON, self._fill_header_labels)
+
+    def _build_machine_code_controls(self):
+        root_sizer = self.GetSizer()
+        panel = wx.Panel(self)
+        box = wx.StaticBoxSizer(
+            wx.StaticBox(panel, label="Machine-readable code"), wx.VERTICAL
+        )
+        grid = wx.FlexGridSizer(0, 4, 4, 8)
+        grid.AddGrowableCol(1)
+        grid.AddGrowableCol(3)
+
+        self.m_MachineCodeTypeChoice = wx.Choice(
+            panel, choices=tuple(MACHINE_CODE_LABELS.keys())
+        )
+        self.m_MachineCodeModuleSizeCtrl = self._double_control(
+            panel, CODE128_MIN_MODULE_MM, 5.0, QR_MIN_MODULE_MM, 0.05, 2
+        )
+        self.m_MachineCodeBarHeightCtrl = self._double_control(
+            panel,
+            CODE128_MIN_HEIGHT_MM,
+            100.0,
+            CODE128_DEFAULT_HEIGHT_MM,
+            0.5,
+            1,
+        )
+        self.m_MachineCodePresentationChoice = wx.Choice(
+            panel, choices=tuple(QR_PRESENTATION_LABELS.keys())
+        )
+        self.m_MachineCodeCaptionCtrl = wx.TextCtrl(panel, value="SCAN ME")
+        self.m_MachineCodeCaptionCtrl.SetMaxLength(32)
+        self.m_MachineCodeCaptionHeightCtrl = self._double_control(
+            panel, 0.8, 10.0, 1.2, 0.1, 1
+        )
+        self.m_MachineCodeFramePaddingCtrl = self._double_control(
+            panel, 0.0, 10.0, 0.2, 0.05, 2
+        )
+        self.m_MachineCodeFramePaddingCtrl.SetToolTip(
+            "Extra space outside the required QR quiet zone. Zero still preserves the full quiet zone."
+        )
+        self._add_control(grid, panel, "Code type:", self.m_MachineCodeTypeChoice)
+        self.m_MachineCodeModuleSizeLabel = self._add_control(
+            grid, panel, "Module size (mm):", self.m_MachineCodeModuleSizeCtrl
+        )
+        self.m_MachineCodeBarHeightLabel = self._add_control(
+            grid, panel, "Bar height (mm):", self.m_MachineCodeBarHeightCtrl
+        )
+        self.m_MachineCodePresentationLabel = self._add_control(
+            grid, panel, "QR presentation:", self.m_MachineCodePresentationChoice
+        )
+        self.m_MachineCodeFramePaddingLabel = self._add_control(
+            grid, panel, "Extra frame gap (mm):", self.m_MachineCodeFramePaddingCtrl
+        )
+        self.m_MachineCodeCaptionLabel = self._add_control(
+            grid, panel, "Footer text:", self.m_MachineCodeCaptionCtrl
+        )
+        self.m_MachineCodeCaptionHeightLabel = self._add_control(
+            grid, panel, "Footer height (mm):", self.m_MachineCodeCaptionHeightCtrl
+        )
+        box.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
+        self.m_MachineCodeHelp = wx.StaticText(panel, label="")
+        self.m_MachineCodeHelp.Wrap(720)
+        box.Add(
+            self.m_MachineCodeHelp,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            7,
+        )
+        panel.SetSizer(box)
+        root_sizer.Insert(
+            4,
+            panel,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            10,
+        )
+        self.m_MachineCodePanel = panel
+        self._studio_controls.update(
+            {
+                "MachineCodeTypeChoice": self.m_MachineCodeTypeChoice,
+                "MachineCodeModuleSizeCtrl": self.m_MachineCodeModuleSizeCtrl,
+                "MachineCodeBarHeightCtrl": self.m_MachineCodeBarHeightCtrl,
+                "MachineCodePresentationChoice": self.m_MachineCodePresentationChoice,
+                "MachineCodeCaptionCtrl": self.m_MachineCodeCaptionCtrl,
+                "MachineCodeCaptionHeightCtrl": self.m_MachineCodeCaptionHeightCtrl,
+                "MachineCodeFramePaddingCtrl": self.m_MachineCodeFramePaddingCtrl,
+            }
+        )
+        self.m_MachineCodeTypeChoice.Bind(
+            wx.EVT_CHOICE, self._on_machine_code_type_changed
+        )
+        self.m_MachineCodePresentationChoice.Bind(
+            wx.EVT_CHOICE, self._on_machine_code_presentation_changed
+        )
 
     def _build_layer_selector(self):
         self.m_LayerSelector = wx.RadioBox(
@@ -400,6 +603,91 @@ class MainDialog(UpstreamDialog):
             self.m_CapRightChoice,
         ):
             control.Hide()
+
+    def _polish_existing_controls(self):
+        """Give inherited controls a Studio hierarchy without changing behaviour."""
+        self.textLabel.SetLabel("Label text:")
+        self.m_FontLabel.SetLabel("Typeface:")
+        self.m_HeightLabel.SetLabel("Text height:")
+        self.m_WidthLabel.SetLabel("Minimum width:")
+        self.m_AlignmentLabel.SetLabel("Text alignment:")
+        self.m_lineSpacingLabel.SetLabel("Line spacing:")
+        self.m_PaddingLabel.SetLabel("Container padding (mm):")
+        self.m_lineoverLabel.SetLabel("Overline:")
+        self.m_spCharLabel.SetLabel("Insert character:")
+        self.m_inlineFormatTextbox.SetLabel("Enable inline formatting")
+        self.m_advancedCheckbox.SetLabel("Advanced typography")
+        self.m_LayerSelector.SetLabel("Output layer")
+        self.m_sdbSizerOK.SetLabel(
+            "Update artwork" if self.updateFootprint is not None else "Place artwork"
+        )
+
+        self.m_StudioModeChoice.SetToolTip(
+            "Choose a single label or a labelled 2.54 mm connector rail."
+        )
+        self.m_ShapeChoice.SetToolTip("Choose the outer container geometry.")
+        self.m_ShapeVariantChoice.SetToolTip(
+            "Use a solid reversed label or a stroked outline."
+        )
+        self.m_BorderThicknessCtrl.SetToolTip(
+            "Outline stroke width in millimetres. Used only for Outline appearance."
+        )
+        self.m_CornerRadiusCtrl.SetToolTip("Corner radius in millimetres.")
+        self.m_StartCapChoice.SetToolTip("Style for the first independent edge.")
+        self.m_EndCapChoice.SetToolTip("Style for the second independent edge.")
+        self.m_PresetPickerButton.SetToolTip("Browse searchable, ready-made label content.")
+        self.m_IconPickerButton.SetToolTip("Browse searchable built-in PCB symbols.")
+        self.m_advancedCheckbox.SetToolTip(
+            "Show overline, special-character and inline-formatting controls."
+        )
+        self.m_WidthCtrl.SetToolTip(
+            "Optional minimum container width. Leave at 0 to fit the content."
+        )
+        self.m_LineSpacingCtrl.SetToolTip("Spacing multiplier for multi-line label text.")
+
+        for control, width in (
+            (self.m_StudioModeChoice, 190),
+            (self.m_ShapeChoice, 170),
+            (self.m_ShapeVariantChoice, 140),
+            (self.m_PresetPickerButton, 170),
+            (self.m_IconPickerButton, 170),
+        ):
+            control.SetMinSize(wx.Size(width, -1))
+
+        # The original dialog presents typography and padding as unrelated
+        # grids divided by rules.  Keep the proven controls, but give them one
+        # coherent section that can later absorb project-wide type settings.
+        root_sizer = self.GetSizer()
+        font_sizer = self.m_FontComboBox.GetContainingSizer()
+        padding_sizer = self.m_PaddingTopCtrl.GetContainingSizer()
+        font_index = next(
+            (
+                index
+                for index in range(root_sizer.GetItemCount())
+                if root_sizer.GetItem(index).GetSizer() is font_sizer
+            ),
+            -1,
+        )
+        if font_index >= 0 and padding_sizer is not None:
+            root_sizer.Detach(font_sizer)
+            root_sizer.Detach(padding_sizer)
+            for divider in (self.m_staticline1, self.m_staticline11):
+                root_sizer.Detach(divider)
+                divider.Hide()
+            typography_box = wx.StaticBoxSizer(
+                wx.StaticBox(self, label="Typography & spacing"), wx.VERTICAL
+            )
+            typography_box.Add(font_sizer, 0, wx.EXPAND | wx.ALL, 5)
+            typography_box.Add(padding_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+            root_sizer.Insert(
+                font_index,
+                typography_box,
+                0,
+                wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+                10,
+            )
+            self._ordinary_padding_items = (typography_box.GetItem(1),)
+            self.m_TypographyBox = typography_box
 
     def _apply_studio_settings(self, settings):
         if not self._studio_controls_ready:
@@ -454,6 +742,37 @@ class MainDialog(UpstreamDialog):
 
     def _on_header_opening_changed(self, event):
         self._update_opening_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_header_details_changed(self, event):
+        show_details = self.m_HeaderDetailsCheckbox.IsChecked()
+        self.m_HeaderDetailBox.GetStaticBox().Show(show_details)
+        self.m_HeaderDetailBox.ShowItems(show_details)
+        self.m_HeaderPanel.Layout()
+        self.SetMinSize(wx.DefaultSize)
+        self.Fit()
+        self.GetSizer().SetSizeHints(self)
+        self.Layout()
+        event.Skip()
+
+    def _on_machine_code_type_changed(self, event):
+        kind = MACHINE_CODE_LABELS.get(
+            self.m_MachineCodeTypeChoice.GetStringSelection(), "qr"
+        )
+        if kind == "code128":
+            if abs(self.m_MachineCodeModuleSizeCtrl.GetValue() - QR_MIN_MODULE_MM) < 0.0001:
+                self.m_MachineCodeModuleSizeCtrl.SetValue(CODE128_DEFAULT_MODULE_MM)
+            if self.m_MachineCodeBarHeightCtrl.GetValue() < CODE128_MIN_HEIGHT_MM:
+                self.m_MachineCodeBarHeightCtrl.SetValue(CODE128_DEFAULT_HEIGHT_MM)
+        self._update_machine_code_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_machine_code_presentation_changed(self, event):
+        self._update_machine_code_ui()
         self.ReGenerateFlag(event)
         self.ReGeneratePreview()
         event.Skip()
@@ -599,6 +918,7 @@ class MainDialog(UpstreamDialog):
         self.m_CornerRadiusLabel.Show(uses_radius)
         self.m_CornerRadiusCtrl.Show(uses_radius)
         self.m_StudioPanel.Layout()
+        self._schedule_dynamic_refit()
 
     def _sync_cap_choices(self, header_mode):
         choices = HEADER_CAP_LABELS if header_mode else CAP_LABELS
@@ -611,14 +931,14 @@ class MainDialog(UpstreamDialog):
                 control.SetStringSelection("Square")
 
     def _update_icon_ui(self):
-        header_mode = self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header"
+        label_mode = self.m_StudioModeChoice.GetStringSelection() == "Label"
         icon_id = ICON_LABELS.get(self.m_IconChoice.GetStringSelection(), "")
         icon_only = self.m_IconPositionChoice.GetStringSelection() == "Icon only"
-        self.m_PresetLabelChoice.Enable(not header_mode)
-        self.m_IconChoice.Enable(not header_mode)
-        self.m_PresetPickerButton.Enable(not header_mode)
-        self.m_IconPickerButton.Enable(not header_mode)
-        show_icon_options = not header_mode and bool(icon_id)
+        self.m_PresetLabelChoice.Enable(label_mode)
+        self.m_IconChoice.Enable(label_mode)
+        self.m_PresetPickerButton.Enable(label_mode)
+        self.m_IconPickerButton.Enable(label_mode)
+        show_icon_options = label_mode and bool(icon_id)
         show_icon_gap = show_icon_options and not icon_only
         for control in (
             self.m_IconPositionLabel,
@@ -631,19 +951,114 @@ class MainDialog(UpstreamDialog):
         self.m_IconGapCtrl.Show(show_icon_gap)
         self._update_asset_button_labels()
         self.m_StudioPanel.Layout()
+        self._schedule_dynamic_refit()
+
+    def _update_machine_code_ui(self):
+        if not hasattr(self, "m_MachineCodePanel"):
+            return
+        kind = MACHINE_CODE_LABELS.get(
+            self.m_MachineCodeTypeChoice.GetStringSelection(), "qr"
+        )
+        code128 = kind == "code128"
+        minimum_module = CODE128_MIN_MODULE_MM if code128 else QR_MIN_MODULE_MM
+        self.m_MachineCodeModuleSizeCtrl.SetRange(minimum_module, 5.0)
+        if self.m_MachineCodeModuleSizeCtrl.GetValue() < minimum_module:
+            self.m_MachineCodeModuleSizeCtrl.SetValue(minimum_module)
+        self.m_MachineCodeBarHeightCtrl.SetRange(CODE128_MIN_HEIGHT_MM, 100.0)
+        if self.m_MachineCodeBarHeightCtrl.GetValue() < CODE128_MIN_HEIGHT_MM:
+            self.m_MachineCodeBarHeightCtrl.SetValue(CODE128_DEFAULT_HEIGHT_MM)
+
+        self.m_MachineCodeBarHeightLabel.Show(code128)
+        self.m_MachineCodeBarHeightCtrl.Show(code128)
+        self.m_MachineCodePresentationLabel.Show(not code128)
+        self.m_MachineCodePresentationChoice.Show(not code128)
+        presentation = QR_PRESENTATION_LABELS.get(
+            self.m_MachineCodePresentationChoice.GetStringSelection(), "plain"
+        )
+        framed_mode = not code128 and presentation != "plain"
+        self.m_MachineCodeFramePaddingLabel.Show(framed_mode)
+        self.m_MachineCodeFramePaddingCtrl.Show(framed_mode)
+        caption_mode = not code128 and presentation == "rounded_caption"
+        for control in (
+            self.m_MachineCodeCaptionLabel,
+            self.m_MachineCodeCaptionCtrl,
+            self.m_MachineCodeCaptionHeightLabel,
+            self.m_MachineCodeCaptionHeightCtrl,
+        ):
+            control.Show(caption_mode)
+
+        if code128:
+            self.m_MachineCodeHelp.SetLabel(
+                "Printable ASCII, maximum 48 characters. Default 0.25 mm modules and 4.0 mm bars; "
+                "minimum 0.20 mm and 3.0 mm. Check the finished board with your fabricator and scanner."
+            )
+        else:
+            self.m_MachineCodeHelp.SetLabel(
+                "UTF-8 payload, maximum 512 bytes. QR error correction M and the required four-module "
+                "quiet zone are automatic. Rounded frames remain outside that protected area."
+            )
+        self.m_MachineCodePanel.Layout()
+        self._schedule_dynamic_refit()
+
+    def _schedule_dynamic_refit(self):
+        """Grow the dialog once after dynamic controls become visible."""
+        if not self._studio_controls_ready or self._dynamic_refit_pending:
+            return
+        self._dynamic_refit_pending = True
+        wx.CallAfter(self._refit_dynamic_controls)
+
+    def _refit_dynamic_controls(self):
+        self._dynamic_refit_pending = False
+        if not self:
+            return
+        panel_sizer = self.m_StudioPanel.GetSizer()
+        self.m_StudioPanel.SetMinSize(wx.DefaultSize)
+        panel_sizer.Layout()
+        self.m_StudioPanel.SetMinSize(panel_sizer.CalcMin())
+        root_sizer = self.GetSizer()
+        root_sizer.Layout()
+        needed = root_sizer.CalcMin()
+        current = self.GetSize()
+        target = wx.Size(max(current.width, needed.width), max(current.height, needed.height))
+        if target != current:
+            self.SetSize(target)
+        self.SetMinSize(needed)
+        self.Layout()
+
+    @staticmethod
+    def _set_picker_button(button, selected_label, empty_label, item_kind):
+        """Keep selected asset names useful without letting them resize the UI."""
+        selected_label = str(selected_label or "").replace("\n", " ").strip()
+        if selected_label:
+            visible = selected_label
+            if len(visible) > 24:
+                visible = visible[:23].rstrip() + "…"
+            button.SetLabel("{}  ▾".format(visible))
+            button.SetToolTip(
+                "Selected {}: {}\nClick to browse or search.".format(
+                    item_kind, selected_label
+                )
+            )
+        else:
+            button.SetLabel(empty_label)
+            button.SetToolTip("Click to browse or search {}.".format(item_kind + "s"))
 
     def _update_asset_button_labels(self):
         if not hasattr(self, "m_PresetPickerButton"):
             return
-        preset = PRESET_LABELS.get(self.m_PresetLabelChoice.GetStringSelection())
-        self.m_PresetPickerButton.SetLabel(
-            "{}  ▾".format(preset.text) if preset is not None else "Choose quick label…"
+        preset_label = self.m_PresetLabelChoice.GetStringSelection()
+        self._set_picker_button(
+            self.m_PresetPickerButton,
+            "" if preset_label == "Custom label" else preset_label,
+            "Browse text presets…",
+            "text preset",
         )
         icon_label = self.m_IconChoice.GetStringSelection()
-        self.m_IconPickerButton.SetLabel(
-            "{}  ▾".format(icon_label)
-            if icon_label and icon_label != "No icon"
-            else "Choose symbol…"
+        self._set_picker_button(
+            self.m_IconPickerButton,
+            "" if icon_label == "No icon" else icon_label,
+            "Browse symbols…",
+            "symbol",
         )
 
     def _sync_shape_choices(self, header_mode):
@@ -674,21 +1089,70 @@ class MainDialog(UpstreamDialog):
         self.ReGenerateFlag(event)
 
     def _update_mode_ui(self, refit=True):
-        header_mode = self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header"
+        selection = self.m_StudioModeChoice.GetStringSelection()
+        label_mode = selection == "Label"
+        header_mode = selection == "2.54 mm Pin Header"
+        code_mode = selection == "QR / Barcode"
         self._sync_shape_choices(header_mode)
+        if header_mode:
+            height_limit = maximum_pin_label_height(2.54)
+            self.m_HeightCtrl.SetRange(0.0, height_limit)
+            if self.m_HeightCtrl.GetValue() > height_limit:
+                self.m_HeightCtrl.SetValue(height_limit)
+            self.m_HeightCtrl.SetToolTip(
+                "Maximum {:.2f} mm in 2.54 mm header mode to keep adjacent pin labels separate.".format(
+                    height_limit
+                )
+            )
+        else:
+            self.m_HeightCtrl.SetRange(0.0, 128.0)
+            self.m_HeightCtrl.SetToolTip("Capital-letter height in millimetres.")
         self._sync_cap_choices(header_mode)
         self.m_HeaderPanel.Show(header_mode)
+        self.m_MachineCodePanel.Show(code_mode)
+        for group, show in (
+            (self.m_ContentBox, label_mode),
+            (self.m_ContainerBox, not code_mode),
+            (self.m_TypographyBox, not code_mode),
+        ):
+            group.GetStaticBox().Show(show)
+            group.ShowItems(show)
         for item in self._ordinary_padding_items:
-            item.Show(not header_mode)
-        self.textLabel.SetLabel("Pin labels (one per line):" if header_mode else "Text:")
-        self.m_WidthCtrl.Enable(not header_mode)
-        self.m_WidthLabel.Enable(not header_mode)
-        self.m_WidthUnits.Enable(not header_mode)
-        self.m_AlignmentChoice.Enable(not header_mode)
-        self.m_AlignmentLabel.Enable(not header_mode)
+            item.Show(label_mode)
+
+        self.textLabel.SetLabel(
+            "Pin labels (one per line):"
+            if header_mode
+            else "Payload:"
+            if code_mode
+            else "Label text:"
+        )
+        for control in (
+            self.m_WidthCtrl,
+            self.m_WidthLabel,
+            self.m_WidthUnits,
+            self.m_AlignmentChoice,
+            self.m_AlignmentLabel,
+        ):
+            control.Enable(label_mode)
+        self.m_advancedCheckbox.Show(not code_mode)
+        if code_mode:
+            self.m_lineoverPanel.Hide()
+            self.m_spCharPanel.Hide()
+            self.m_AdvancedDivider.Hide()
+        elif self.m_advancedCheckbox.IsChecked():
+            self.m_lineoverPanel.Show()
+            self.m_spCharPanel.Show()
+            self.m_AdvancedDivider.Show()
+        else:
+            self.m_lineoverPanel.Hide()
+            self.m_spCharPanel.Hide()
+            self.m_AdvancedDivider.Hide()
+
         self._update_opening_ui()
         self._update_shape_ui()
         self._update_icon_ui()
+        self._update_machine_code_ui()
         if header_mode and not self.m_MultiLineText.GetValue().strip():
             self._fill_header_labels(wx.CommandEvent())
         if refit:
@@ -765,8 +1229,34 @@ class MainDialog(UpstreamDialog):
             dimensions_version = int(params.get("StudioDimensionsVersion", 0) or 0)
         except (TypeError, ValueError):
             dimensions_version = 0
+        try:
+            defaults_version = int(params.get("StudioDefaultsVersion", 0) or 0)
+        except (TypeError, ValueError):
+            defaults_version = 0
+        if not params.get("_LoadedFootprintSettings") and defaults_version < STUDIO_DEFAULTS_VERSION:
+            params.update(
+                {
+                    "CornerRadiusCtrl": 0.2,
+                    "HeaderLeadingPaddingCtrl": 0.3,
+                    "HeaderTrailingPaddingCtrl": 0.3,
+                    "MachineCodeModuleSizeCtrl": (
+                        CODE128_DEFAULT_MODULE_MM
+                        if params.get("MachineCodeTypeChoice") == "Code 128 barcode"
+                        else QR_MIN_MODULE_MM
+                    ),
+                    "MachineCodeBarHeightCtrl": CODE128_DEFAULT_HEIGHT_MM,
+                    "MachineCodeFramePaddingCtrl": 0.2,
+                }
+            )
         if not params.get("_LoadedFootprintSettings") and dimensions_version < STUDIO_DIMENSIONS_VERSION:
             params.update(DEFAULT_LABEL_DIMENSIONS)
+        # A new invocation should begin with the everyday label tool.  Only an
+        # explicitly selected, saved footprint is allowed to reopen in header mode.
+        if not params.get("_LoadedFootprintSettings"):
+            params["StudioModeChoice"] = "Label"
+            params["PresetLabelChoice"] = "Custom label"
+            params["IconChoice"] = "No icon"
+            params["IconPositionChoice"] = "Left of text"
         # 0.3.0-dev briefly stored the side occupied by the labels.  The UI now
         # asks the much clearer question "Pins on", while the pure layout model
         # continues to receive the opposite label side.
@@ -812,6 +1302,7 @@ class MainDialog(UpstreamDialog):
         settings = super(MainDialog, self).CurrentSettings()
         settings["LayerComboBox"] = self.output_layer
         settings["StudioDimensionsVersion"] = STUDIO_DIMENSIONS_VERSION
+        settings["StudioDefaultsVersion"] = STUDIO_DEFAULTS_VERSION
         if self._studio_controls_ready:
             for key, control in self._studio_controls.items():
                 if isinstance(control, wx.Choice):
@@ -834,7 +1325,32 @@ class MainDialog(UpstreamDialog):
             style = self._document_style()
             vectorizer = TextVectorizer(self.buzzard)
             text = self.m_MultiLineText.GetValue()
-            if self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header":
+            mode = self.m_StudioModeChoice.GetStringSelection()
+            if mode == "QR / Barcode":
+                kind = MACHINE_CODE_LABELS.get(
+                    self.m_MachineCodeTypeChoice.GetStringSelection(), "qr"
+                )
+                presentation = (
+                    "plain"
+                    if kind == "code128"
+                    else QR_PRESENTATION_LABELS.get(
+                        self.m_MachineCodePresentationChoice.GetStringSelection(),
+                        "plain",
+                    )
+                )
+                self.artwork = render_machine_code_artwork(
+                    payload=text,
+                    kind=kind,
+                    module_size_mm=self.m_MachineCodeModuleSizeCtrl.GetValue(),
+                    bar_height_mm=self.m_MachineCodeBarHeightCtrl.GetValue(),
+                    output_layer=self.output_layer,
+                    vectorizer=vectorizer,
+                    presentation=presentation,
+                    caption_text=self.m_MachineCodeCaptionCtrl.GetValue(),
+                    caption_height_mm=self.m_MachineCodeCaptionHeightCtrl.GetValue(),
+                    frame_padding_mm=self.m_MachineCodeFramePaddingCtrl.GetValue(),
+                )
+            elif mode == "2.54 mm Pin Header":
                 labels = tuple(text.splitlines())
                 pin_count = self.m_HeaderPinCountCtrl.GetValue()
                 if len(labels) != pin_count:
@@ -857,6 +1373,10 @@ class MainDialog(UpstreamDialog):
                     leading_padding_mm=self.m_HeaderLeadingPaddingCtrl.GetValue(),
                     trailing_padding_mm=self.m_HeaderTrailingPaddingCtrl.GetValue(),
                     label_padding_mm=self.m_HeaderLabelPaddingCtrl.GetValue(),
+                    pin_outer_padding_mm=self.m_HeaderPinOuterPaddingCtrl.GetValue(),
+                    pin_to_label_gap_mm=self.m_HeaderPinToLabelGapCtrl.GetValue(),
+                    label_outer_padding_mm=self.m_HeaderLabelOuterPaddingCtrl.GetValue(),
+                    rail_cross_size_mm=self.m_HeaderCrossSizeCtrl.GetValue(),
                     pin1_marker=self.m_HeaderPin1MarkerCheckbox.IsChecked(),
                     shape=self._selected_shape() or "rectangle",
                     output_layer=self.output_layer,

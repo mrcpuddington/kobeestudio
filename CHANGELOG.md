@@ -1,5 +1,16 @@
 # Changelog
 
+
+## 1.0.0 — 2026-08-02
+
+- Released the first packaged Kobee Studio milestone for KiCad 10, tested on macOS with Windows and Linux validation still planned.
+- Added parametric labels with filled, inverted, and outline appearances; asymmetric padding; rounded, pill, pointer, flag, tab, chamfer, hexagon, and independently styled ends.
+- Added searchable libraries of common PCB labels and original electrical, warning, control, interface, and polarity symbols, including standalone icon artwork.
+- Added configurable single-row 2.54 mm header overlays with per-pin labels, four orientations, detailed connector/text spacing, optional openings, and independent long-edge styles.
+- Added QR Code and Code 128 generation with payload validation, fabrication-aware sizing, protected quiet zones, compact barcode defaults, rounded QR frames, adjustable extra frame spacing, and optional knockout footer text.
+- Fixed icon-and-text assembly alignment, font sizing/spacing, inverted artwork knockout geometry, bottom-side mirroring, live-preview painting, editor reopening, and growing-dialog layout issues.
+- Added KiCad footprint parsing, six-layer Gerber export, geometry, settings, picker, icon-complexity, QR, barcode, and pin-header regression coverage.
+- Bundled the pure-Python runtime dependencies and retained all upstream licences and KiBuzzard attribution for a self-contained PCM installation.
 ## 0.4.0-dev — 2026-08-02
 
 - Renamed the product to **Kobee Studio** across the KiCad plugin, dialog,
@@ -13,11 +24,11 @@
 
 ## 0.3.0-dev — 2026-08-02
 
-- Added the first usable Silk Studio controls to the KiBeezard dialog, including every first-generation parametric shape, inverted and outline styles, padding, borders, corner radius, feature size, and direction.
+- Added the first usable Silk Studio controls to the Kobee Studio dialog, including every first-generation parametric shape, inverted and outline styles, padding, borders, corner radius, feature size, and direction.
 - Added a single-row 2.54 mm pin-header label tool with 1–40 pins, one label per pin, horizontal/vertical orientation, configurable pin-1 end, four rail sides, and an optional pin-1 marker.
 - Added independent connector clearance, label padding, and leading/trailing padding controls so larger sockets, shrouds, and plug bodies can reserve more space than an ordinary header.
 - Added a shared millimetre artwork renderer and KiCad footprint writer so preview and exported geometry use the same vectors.
-- Added versioned pin-header edit data, pin-1 placement anchoring, preview-only clearance guides, and compatibility loading for existing KiBuzzard/KiBeezard labels.
+- Added versioned pin-header edit data, pin-1 placement anchoring, preview-only clearance guides, and compatibility loading for existing KiBuzzard labels.
 - Added geometry, mirroring, parser, payload, and six-layer Gerber coverage for the new Studio label and header paths.
 - Corrected Studio font scaling so the requested capital height is the actual generated height in millimetres, and changed the default text padding to a compact KiBuzzard-like 0.4 mm horizontal / 0.2 mm vertical margin.
 - Reworked header blocks as one enclosure around the connector and labels: pins can sit on any side, text aligns away from the pins, horizontal labels rotate 90 degrees, and the adjustable plug envelope becomes a real artwork knockout.
@@ -43,7 +54,7 @@
 
 ## 0.1.0-dev — 2026-08-02
 
-- Started KiBeezard as a maintained fork of KiBuzzard, with original-author attribution retained.
+- Started Kobee Studio as a maintained fork of KiBuzzard, with original-author attribution retained.
 - Added explicit front and bottom output choices for silkscreen, copper, and solder mask.
 - Generated bottom labels as B.Cu-owned footprints with a single mirror transform on their selected B.* layer.
 - Rebuilt the macOS preview renderer with deterministic sizing, buffered painting, and a separate bottom-view caption strip.

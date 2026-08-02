@@ -14,13 +14,21 @@ from .composition import (
     IconObject,
     Point,
     ShapeObject,
+    ShapeStyle,
     Size,
     TextObject,
     TypographyStyle,
 )
 from .icon_catalog import render_builtin_icon
+from .machine_codes import render_machine_code
 from .pin_header import HeaderLayout, PinHeaderSpec, layout_pin_header
-from .shape_geometry import Polygon, inset_polygon, polygon_bounds, render_shape
+from .shape_geometry import (
+    Polygon,
+    inset_polygon,
+    polygon_bounds,
+    render_shape,
+    shape_contour,
+)
 from .transforms import SUPPORTED_OUTPUT_LAYERS, is_bottom
 
 
@@ -107,6 +115,31 @@ def _translate_polygon(polygon: Polygon, offset: Point) -> Polygon:
     return tuple(Point(point.x + offset.x, point.y + offset.y) for point in polygon)
 
 
+def _clip_polygon_below_y(polygon: Polygon, minimum_y: float) -> Polygon:
+    """Clip a polygon to the half-plane at or below ``minimum_y``."""
+    if len(polygon) < 3:
+        return ()
+
+    def intersection(start: Point, end: Point) -> Point:
+        if abs(end.y - start.y) <= 1e-12:
+            return Point(end.x, minimum_y)
+        ratio = (minimum_y - start.y) / (end.y - start.y)
+        return Point(start.x + ratio * (end.x - start.x), minimum_y)
+
+    result = []
+    previous = polygon[-1]
+    previous_inside = previous.y >= minimum_y
+    for current in polygon:
+        current_inside = current.y >= minimum_y
+        if current_inside != previous_inside:
+            result.append(intersection(previous, current))
+        if current_inside:
+            result.append(current)
+        previous = current
+        previous_inside = current_inside
+    return tuple(result)
+
+
 def _place_polygon(polygon: Polygon, offset: Point, rotation_deg: float = 0.0) -> Polygon:
     if rotation_deg == 0.0:
         return _translate_polygon(polygon, offset)
@@ -134,26 +167,45 @@ def _edge_x_at_y(start: Point, end: Point, y: float) -> float:
 
 
 def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, ...]:
-    """Decompose an even-odd polygon with holes into simple trapezoids.
+    """Decompose an even-odd polygon into compact, simple y-monotone regions.
 
-    KiCad footprint polygons have no native hole rings.  The former zero-width
-    bridge approach becomes self-intersecting with several glyphs and a long
-    connector opening.  Horizontal trapezoid decomposition preserves the
-    exact polygon edges, supports nested glyph counters, and emits only simple
-    filled polygons that KiCad renders reliably.
+    Each scanline span is simple and reliable in KiCad, but emitting every
+    span as a separate trapezoid can turn a detailed icon into thousands of
+    footprint polygons.  Adjacent spans bounded by the same source edges are
+    merged here.  The result keeps the stable, non-self-intersecting geometry
+    while reducing complex polarity labels from megabytes to a practical size.
     """
     rings = tuple(ring for ring in (outer,) + tuple(holes) if len(ring) >= 3)
     levels = sorted({point.y for ring in rings for point in ring})
-    tiles = []
     epsilon = 1e-10
+    active = {}
+    regions = []
+
+    def append_edge_point(points, point):
+        if points and abs(points[-1].x - point.x) <= epsilon and abs(points[-1].y - point.y) <= epsilon:
+            return
+        if len(points) >= 2:
+            first, second = points[-2], points[-1]
+            cross = ((second.x - first.x) * (point.y - second.y)
+                     - (second.y - first.y) * (point.x - second.x))
+            if abs(cross) <= epsilon:
+                points[-1] = point
+                return
+        points.append(point)
+
+    def finish(strip):
+        boundary = tuple(strip["left"] + list(reversed(strip["right"])))
+        if len(boundary) >= 3 and abs(_signed_area(boundary)) > epsilon:
+            regions.append(boundary)
+
     for y0, y1 in zip(levels, levels[1:]):
         if y1 - y0 <= epsilon:
             continue
         middle_y = (y0 + y1) / 2.0
         crossings = []
-        for ring in rings:
-            for index, start in enumerate(ring):
-                end = ring[(index + 1) % len(ring)]
+        for ring_index, ring in enumerate(rings):
+            for edge_index, start in enumerate(ring):
+                end = ring[(edge_index + 1) % len(ring)]
                 low, high = sorted((start.y, end.y))
                 if end.y == start.y or not (low < middle_y < high):
                     continue
@@ -162,23 +214,61 @@ def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, 
                         _edge_x_at_y(start, end, middle_y),
                         _edge_x_at_y(start, end, y0),
                         _edge_x_at_y(start, end, y1),
+                        (ring_index, edge_index),
                     )
                 )
         crossings.sort(key=lambda item: item[0])
-        # Every closed-ring scanline has an even crossing count.  Pairing them
-        # applies the even-odd fill rule, including counters in O, P, R, etc.
-        for left, right in zip(crossings[0::2], crossings[1::2]):
+        next_active = {}
+        inside_outer = False
+        active_holes = set()
+        span_left = None
+
+        # The outer ring uses even/odd membership, while every content ring is
+        # part of one combined knockout.  Treating all rings as a single
+        # even/odd path made overlapping icon components cancel each other,
+        # leaving diamonds and wedges inside inverted symbols.
+        for crossing in crossings:
+            was_filled = inside_outer and not active_holes
+            ring_index = crossing[3][0]
+            if ring_index == 0:
+                inside_outer = not inside_outer
+            elif ring_index in active_holes:
+                active_holes.remove(ring_index)
+            else:
+                active_holes.add(ring_index)
+            is_filled = inside_outer and not active_holes
+
+            if not was_filled and is_filled:
+                span_left = crossing
+                continue
+            if not (was_filled and not is_filled and span_left is not None):
+                continue
+
+            left, right = span_left, crossing
+            span_left = None
             if right[0] - left[0] <= epsilon:
                 continue
-            tile = (
-                Point(left[1], y0),
-                Point(right[1], y0),
-                Point(right[2], y1),
-                Point(left[2], y1),
-            )
-            if abs(_signed_area(tile)) > epsilon:
-                tiles.append(tile)
-    return tuple(tiles)
+            key = (left[3], right[3])
+            strip = active.pop(key, None)
+            if strip is None or abs(strip["end_y"] - y0) > epsilon:
+                if strip is not None:
+                    finish(strip)
+                strip = {
+                    "left": [Point(left[1], y0)],
+                    "right": [Point(right[1], y0)],
+                    "end_y": y0,
+                }
+            append_edge_point(strip["left"], Point(left[2], y1))
+            append_edge_point(strip["right"], Point(right[2], y1))
+            strip["end_y"] = y1
+            next_active[key] = strip
+        for strip in active.values():
+            finish(strip)
+        active = next_active
+
+    for strip in active.values():
+        finish(strip)
+    return tuple(regions)
 
 
 def _point_in_polygon(point: Point, polygon: Polygon) -> bool:
@@ -233,7 +323,24 @@ def _bridge_holes(outer: Polygon, holes: Sequence[Polygon]) -> Polygon:
 
 
 def _knockout_regions(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, ...]:
-    """Build compact weakly-simple KiCad polygons using even-odd nesting."""
+    """Return simple KiCad polygons for an inverted shape.
+
+    KiCad's accelerated canvas does not consistently paint the weakly-simple
+    bridge paths that are otherwise valid in a footprint polygon.  This was
+    particularly visible with icons plus the compact FreddySpark glyphs:
+    letters appeared to join or disappear while editing.  The scanline tiles
+    are ordinary non-self-intersecting polygons, so they are a little more
+    numerous but render identically and reliably in both canvas backends.
+    """
+    return _knockout_tiles(outer, holes)
+
+
+def _legacy_knockout_regions(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, ...]:
+    """Build compact weakly-simple KiCad polygons using even-odd nesting.
+
+    Retained as a reference implementation for the nested-contour algorithm;
+    live artwork uses the stable simple-tile representation above.
+    """
     contours = tuple(
         ring
         for ring in holes
@@ -364,6 +471,30 @@ def render_label_artwork(
             text_centre = Point(-content_size.width / 2.0 + vectors.size.width / 2.0, 0.0)
             icon_centre = Point(content_size.width / 2.0 - icon.size.width / 2.0, 0.0)
 
+    placed_text = tuple(_translate_polygon(polygon, text_centre) for polygon in vectors.polygons)
+    placed_icon = tuple(
+        _translate_polygon(polygon, icon_centre) for polygon in (icon.polygons if icon else ())
+    )
+    content_polygons = placed_text + placed_icon
+    if content_polygons:
+        content_minimum, content_maximum = polygon_bounds(content_polygons)
+        normalise = Point(
+            -(content_minimum.x + content_maximum.x) / 2.0,
+            -(content_minimum.y + content_maximum.y) / 2.0,
+        )
+        text_centre = Point(text_centre.x + normalise.x, text_centre.y + normalise.y)
+        icon_centre = Point(icon_centre.x + normalise.x, icon_centre.y + normalise.y)
+        content_polygons = tuple(
+            _translate_polygon(polygon, normalise) for polygon in content_polygons
+        )
+        content_size = Size(
+            content_maximum.x - content_minimum.x,
+            content_maximum.y - content_minimum.y,
+        )
+
+    # Alignment is applied to this measured icon-plus-text assembly.  Building
+    # the objects after normalisation prevents an icon's nominal canvas or
+    # asymmetric source bounds from leaving the text centred on its own.
     objects = []
     if has_text:
         objects.append(TextObject("text.primary", text, position=text_centre))
@@ -376,11 +507,6 @@ def render_label_artwork(
                 size=icon.size,
             )
         )
-    placed_text = tuple(_translate_polygon(polygon, text_centre) for polygon in vectors.polygons)
-    placed_icon = tuple(
-        _translate_polygon(polygon, icon_centre) for polygon in (icon.polygons if icon else ())
-    )
-    content_polygons = placed_text + placed_icon
 
     if shape is None:
         if len(objects) > 1:
@@ -446,6 +572,166 @@ def render_label_artwork(
         style=style,
     )
     return StudioArtwork(filled, strokes, (), document)
+
+
+def render_machine_code_artwork(
+    payload: str,
+    kind: str,
+    module_size_mm: float,
+    bar_height_mm: float,
+    output_layer: str,
+    vectorizer: Optional[TextVectorizer] = None,
+    presentation: str = "plain",
+    caption_text: str = "SCAN ME",
+    caption_height_mm: float = 1.2,
+    frame_padding_mm: float = 0.2,
+) -> StudioArtwork:
+    """Render a QR or linear barcode directly as fabrication polygons."""
+    if output_layer not in SUPPORTED_OUTPUT_LAYERS:
+        raise ValueError("Unsupported Kobee Studio output layer: {}".format(output_layer))
+    if presentation not in ("plain", "rounded_frame", "rounded_caption"):
+        raise ValueError("Unsupported machine-code presentation: {}".format(presentation))
+    if kind != "qr" and presentation != "plain":
+        raise ValueError("Rounded containers are currently available for QR Codes only")
+    if frame_padding_mm < 0.0:
+        raise ValueError("QR frame padding must be non-negative")
+
+    code = render_machine_code(kind, payload, module_size_mm, bar_height_mm)
+    half_width = code.size.width / 2.0
+    half_height = code.size.height / 2.0
+    quiet_zone_guide = (
+        Point(-half_width, -half_height),
+        Point(half_width, -half_height),
+        Point(half_width, half_height),
+        Point(-half_width, half_height),
+    )
+    code_object = IconObject(
+        "code.primary",
+        "generated.{}".format(kind),
+        size=code.size,
+    )
+    if presentation == "plain":
+        document = CompositionDocument(
+            objects=(code_object,),
+            output_layer=output_layer,
+            size=code.size,
+            alignment="center",
+        )
+        return StudioArtwork(code.polygons, (), (quiet_zone_guide,), document)
+
+    frame_width = max(0.35, module_size_mm)
+    frame_gap = frame_padding_mm
+    corner_radius = max(0.8, frame_width * 2.0)
+    caption_vectors = TextVectors((), Size())
+    caption_position = Point()
+    caption_object = None
+    caption_typography = TypographyStyle(
+        font_name="UbuntuMono-B",
+        height_mm=caption_height_mm,
+        alignment="center",
+    )
+    if presentation == "rounded_caption":
+        caption = caption_text.strip()
+        if not caption:
+            raise ValueError("Enter footer text or choose Rounded frame without footer")
+        if "\n" in caption or "\r" in caption:
+            raise ValueError("QR footer text must be a single line")
+        if len(caption) > 32:
+            raise ValueError("QR footer text must be 32 characters or fewer")
+        if vectorizer is None:
+            raise ValueError("A text renderer is required for a QR footer")
+        caption_vectors = vectorizer.render(caption, caption_typography)
+        if not caption_vectors.polygons:
+            raise ValueError("QR footer text has no printable artwork")
+
+    horizontal_caption_padding = max(0.8, module_size_mm * 2.0)
+    outer_width = code.size.width + 2.0 * (frame_gap + frame_width)
+    if caption_vectors.polygons:
+        outer_width = max(
+            outer_width,
+            caption_vectors.size.width + 2.0 * horizontal_caption_padding,
+        )
+
+    outer_top = -half_height - frame_gap - frame_width
+    footer_top = half_height + frame_gap
+    footer_height = 0.0
+    if caption_vectors.polygons:
+        footer_height = caption_vectors.size.height + 2.0 * (0.35 + frame_width / 2.0)
+        outer_bottom = footer_top + footer_height
+        caption_position = Point(0.0, footer_top + footer_height / 2.0)
+        caption_object = TextObject(
+            "code.caption",
+            caption_text.strip(),
+            position=caption_position,
+            style_role="secondary",
+        )
+    else:
+        outer_bottom = half_height + frame_gap + frame_width
+
+    outer_size = Size(outer_width, outer_bottom - outer_top)
+    outer_centre = Point(0.0, (outer_top + outer_bottom) / 2.0)
+    frame_style = ShapeStyle(corner_radius_mm=corner_radius)
+    outer = _translate_polygon(
+        shape_contour("rounded_rectangle", outer_size, frame_style),
+        outer_centre,
+    )
+    inner_size = Size(
+        outer_size.width - 2.0 * frame_width,
+        outer_size.height - 2.0 * frame_width,
+    )
+    # Tight frames need squarer inner corners so the rounded border never
+    # clips the square QR quiet-zone corners. Extra padding progressively
+    # restores the matching rounded inner contour.
+    inner_radius = min(
+        max(0.0, corner_radius - frame_width),
+        frame_gap * 3.0,
+    )
+    inner = _translate_polygon(
+        shape_contour(
+            "rounded_rectangle",
+            inner_size,
+            ShapeStyle(corner_radius_mm=inner_radius),
+        ),
+        outer_centre,
+    )
+    frame_polygons = _knockout_tiles(outer, (inner,))
+
+    footer_polygons = ()
+    if caption_vectors.polygons:
+        footer = _clip_polygon_below_y(outer, footer_top)
+        placed_caption = tuple(
+            _translate_polygon(polygon, caption_position)
+            for polygon in caption_vectors.polygons
+        )
+        footer_polygons = _knockout_tiles(footer, placed_caption)
+
+    content_ids = [code_object.object_id]
+    objects = [code_object]
+    if caption_object is not None:
+        content_ids.append(caption_object.object_id)
+        objects.append(caption_object)
+    shape_object = ShapeObject(
+        "code.container",
+        shape="rounded_rectangle",
+        position=outer_centre,
+        size=outer_size,
+        content_ids=tuple(content_ids),
+    )
+    objects.append(shape_object)
+    objects.append(GroupObject("group.code", tuple(item.object_id for item in objects)))
+    document = CompositionDocument(
+        objects=tuple(objects),
+        output_layer=output_layer,
+        size=outer_size,
+        alignment="center",
+        style=DocumentStyle(typography=caption_typography, shape=frame_style),
+    )
+    return StudioArtwork(
+        filled_polygons=code.polygons + frame_polygons + footer_polygons,
+        strokes=(),
+        guides=(quiet_zone_guide,),
+        document=document,
+    )
 
 
 def render_header_artwork(vectorizer: TextVectorizer, spec: PinHeaderSpec) -> StudioArtwork:

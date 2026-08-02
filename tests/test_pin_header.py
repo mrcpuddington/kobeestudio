@@ -7,7 +7,12 @@ import unittest
 from dataclasses import replace
 
 from kobeestudio.core.composition import DocumentStyle, Padding, ShapeStyle, Size, TypographyStyle
-from kobeestudio.core.pin_header import PinHeaderSpec, layout_pin_header, mirror_layout_for_output
+from kobeestudio.core.pin_header import (
+    PinHeaderSpec,
+    layout_pin_header,
+    maximum_pin_label_height,
+    mirror_layout_for_output,
+)
 from kobeestudio.core.shape_geometry import render_document_shapes
 
 
@@ -45,10 +50,32 @@ class PinHeaderTests(unittest.TestCase):
             with self.subTest(pin_count=pin_count):
                 spec = self.make_spec(pin_count)
                 layout = layout_pin_header(spec, (Size(1.0, 1.0),) * pin_count)
-                # The enclosure now includes the full 2 mm connector region,
-                # then 1.27 mm of padding beyond each end pin.
-                self.assertAlmostEqual(pin_count * 2.54 + 2.0, layout.size.width)
+                # The enclosure includes the 2 mm connector envelope plus
+                # 0.3 mm of adjustable outer padding at each row end.
+                self.assertAlmostEqual(pin_count * 2.54 + 0.06, layout.size.width)
                 self.assertAlmostEqual(3.9, layout.size.height)
+
+    def test_default_row_end_padding_is_compact_and_adjustable(self):
+        compact = layout_pin_header(self.make_spec(2), (Size(1.0, 1.0),) * 2)
+        roomy = layout_pin_header(
+            self.make_spec(2, leading_padding_mm=2.0, trailing_padding_mm=3.0),
+            (Size(1.0, 1.0),) * 2,
+        )
+        self.assertAlmostEqual(0.3, compact.spec.leading_padding_mm)
+        self.assertAlmostEqual(0.3, compact.spec.trailing_padding_mm)
+        self.assertAlmostEqual(4.4, roomy.size.width - compact.size.width)
+
+    def test_text_height_cannot_overlap_adjacent_2_54_mm_labels(self):
+        limit = maximum_pin_label_height(2.54)
+        self.assertAlmostEqual(2.34, limit)
+        tall_style = replace(
+            header_style(),
+            typography=replace(header_style().typography, height_mm=limit + 0.01),
+        )
+        with self.assertRaisesRegex(ValueError, "too large.*maximum is 2.34"):
+            self.make_spec(2, style=tall_style)
+        with self.assertRaisesRegex(ValueError, "Rendered text height.*maximum is 2.34"):
+            layout_pin_header(self.make_spec(2), (Size(1.0, limit + 0.01),) * 2)
 
     def test_pin_labels_must_match_pin_count(self):
         with self.assertRaisesRegex(ValueError, "label count"):
@@ -133,6 +160,41 @@ class PinHeaderTests(unittest.TestCase):
         left_edges = tuple(centre.x - size.width / 2.0 for centre, size in zip(layout.label_centres, sizes))
         self.assertTrue(all(abs(edge + 4.3) < 1e-9 for edge in left_edges))
         self.assertTrue(all(centre.x < 0.0 for centre in layout.label_centres))
+
+    def test_cross_axis_padding_is_independently_controllable(self):
+        layout = layout_pin_header(
+            self.make_spec(
+                3,
+                orientation="vertical",
+                label_side="right",
+                pad_clearance_mm=2.0,
+                pin_outer_padding_mm=3.0,
+                pin_to_label_gap_mm=5.0,
+                label_outer_padding_mm=1.0,
+            ),
+            (Size(2.0, 1.0),) * 3,
+        )
+        # Pins occupy x=-1…1.  The rail retains 3 mm outside the pin
+        # envelope and 5 mm before text starts, independently of its 1 mm
+        # label-side outer padding.
+        self.assertAlmostEqual(-4.0, layout.bounds_min.x)
+        self.assertAlmostEqual(9.0, layout.bounds_max.x)
+        self.assertAlmostEqual(6.0, layout.label_centres[0].x - 1.0)
+        self.assertAlmostEqual(8.0, layout.label_centres[0].x + 1.0)
+
+    def test_fixed_cross_dimension_keeps_labels_outer_aligned(self):
+        layout = layout_pin_header(
+            self.make_spec(
+                3,
+                orientation="vertical",
+                label_side="right",
+                rail_cross_size_mm=15.0,
+            ),
+            (Size(2.0, 1.0),) * 3,
+        )
+        self.assertAlmostEqual(15.0, layout.size.width)
+        right_edges = tuple(centre.x + 1.0 for centre in layout.label_centres)
+        self.assertTrue(all(abs(edge - (layout.bounds_max.x - 0.3)) < 1e-9 for edge in right_edges))
 
     def test_horizontal_layout_is_the_same_model_rotated_90_degrees(self):
         sizes = (Size(1.0, 1.0), Size(2.0, 1.0), Size(3.0, 1.0))
@@ -277,6 +339,10 @@ class PinHeaderTests(unittest.TestCase):
             leading_padding_mm=2.0,
             trailing_padding_mm=3.0,
             label_padding_mm=0.75,
+            pin_outer_padding_mm=1.25,
+            pin_to_label_gap_mm=2.5,
+            label_outer_padding_mm=0.5,
+            rail_cross_size_mm=12.0,
             opening_mode="continuous",
             opening_end_padding_mm=1.5,
             shape="pill",

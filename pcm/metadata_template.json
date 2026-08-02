@@ -1,21 +1,21 @@
 {
-    "$schema": "https://go.kicad.org/pcm/schemas/v1",
+    "$schema": "https://go.kicad.org/pcm/schemas/v2",
     "name": "Kobee Studio",
-    "description": "PCB artwork studio for labels, icons, and connector callouts",
-    "description_full": "Kobee Studio turns fonts and parametric artwork into editable KiCad footprints, with explicit front and bottom silkscreen, copper, and solder-mask output. It evolved from KiBuzzard by Greg Davill.",
-    "identifier": "au.com.kobee.Studio",
+    "description": "Create parametric PCB labels, icons, header overlays, QR Codes, and barcodes inside KiCad",
+    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels, PCB symbols, searchable presets, configurable 2.54 mm header overlays, QR Codes, and Code 128 barcodes. Kobee Studio evolved from KiBuzzard by Greg Davill. Version 1.0 is tested with KiCad 10 on macOS; Windows and Linux validation is planned.",
+    "identifier": "au.com.kobee.kobeestudio",
     "type": "plugin",
     "author": {
-        "name": "Greg Davill (original KiBuzzard author)",
+        "name": "Corey Busuttil",
         "contact": {
-            "github": "https://github.com/gregdavill",
-            "web": "https://gregdavill.com",
-            "twitter": "https://twitter.com/gregdavill"
+            "github": "https://github.com/mrcpuddington",
+            "web": "https://www.coreybusuttil.com"
         }
-    },    
+    },
     "maintainer": {
-        "name": "Kobee",
+        "name": "Kobee — Corey Busuttil",
         "contact": {
+            "github": "https://github.com/mrcpuddington/kobeestudio",
             "web": "https://www.kobee.com.au"
         }
     },
@@ -25,9 +25,10 @@
     },
     "versions": [
         {
-            "version": "0.4.0",
+            "version": "1.0.0",
             "status": "testing",
-            "kicad_version": "10.0"
+            "kicad_version": "10.0",
+            "runtime": "swig"
         }
     ]
 }

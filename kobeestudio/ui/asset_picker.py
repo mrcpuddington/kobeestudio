@@ -57,9 +57,10 @@ def filter_picker_items(
 
 
 class AssetPickerDialog(wx.Dialog):
-    """Compact vertical asset browser with search and category filtering."""
+    """Searchable, multi-column visual browser for labels and symbols."""
 
-    THUMBNAIL_SIZE = (480, 48)
+    THUMBNAIL_SIZE = (202, 78)
+    GRID_COLUMNS = 3
 
     def __init__(self, parent, title: str, items: Iterable[PickerItem], selected_id: str = ""):
         super(AssetPickerDialog, self).__init__(
@@ -71,6 +72,7 @@ class AssetPickerDialog(wx.Dialog):
         self._all_items = tuple(items)
         self._visible_items = ()
         self._selected_id = selected_id
+        self._cards = {}
 
         root = wx.BoxSizer(wx.VERTICAL)
         filters = wx.BoxSizer(wx.HORIZONTAL)
@@ -84,17 +86,12 @@ class AssetPickerDialog(wx.Dialog):
         filters.Add(self.m_CategoryChoice, 0)
         root.Add(filters, 0, wx.EXPAND | wx.ALL, 12)
 
-        self.m_AssetList = wx.ListCtrl(
-            self,
-            style=(
-                wx.LC_REPORT
-                | wx.LC_NO_HEADER
-                | wx.LC_SINGLE_SEL
-                | wx.BORDER_THEME
-            ),
-        )
-        self.m_AssetList.SetBackgroundColour("#14181C")
-        root.Add(self.m_AssetList, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
+        self.m_AssetScroller = wx.ScrolledWindow(self, style=wx.BORDER_THEME)
+        self.m_AssetScroller.SetBackgroundColour("#14181C")
+        self.m_AssetScroller.SetScrollRate(0, 14)
+        self.m_AssetGrid = wx.GridSizer(0, self.GRID_COLUMNS, 8, 8)
+        self.m_AssetScroller.SetSizer(self.m_AssetGrid)
+        root.Add(self.m_AssetScroller, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
 
         buttons = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
         root.Add(buttons, 0, wx.EXPAND | wx.ALL, 12)
@@ -103,8 +100,6 @@ class AssetPickerDialog(wx.Dialog):
 
         self.m_SearchCtrl.Bind(wx.EVT_TEXT, self._on_filter_changed)
         self.m_CategoryChoice.Bind(wx.EVT_CHOICE, self._on_filter_changed)
-        self.m_AssetList.Bind(wx.EVT_LIST_ITEM_SELECTED, self._on_selected)
-        self.m_AssetList.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_activated)
         self._rebuild()
         self.m_SearchCtrl.SetFocus()
 
@@ -116,70 +111,80 @@ class AssetPickerDialog(wx.Dialog):
         self._rebuild()
         event.Skip()
 
-    def _on_selected(self, event):
-        index = event.GetIndex()
-        if 0 <= index < len(self._visible_items):
-            self._selected_id = self._visible_items[index].asset_id
+    def _on_selected(self, event, asset_id):
+        # Never destroy/rebuild the clicked native button from inside its own
+        # Cocoa event callback.  Doing so causes a use-after-free in wxWidgets
+        # and can take the whole KiCad process down.  Updating bitmaps in place
+        # gives the same selected-state feedback without changing lifetimes.
+        self._selected_id = asset_id
+        for visible_id, (card, item) in self._cards.items():
+            card.SetBitmap(self._thumbnail(item, visible_id == asset_id))
+            card.Refresh(False)
         event.Skip()
 
-    def _on_activated(self, event):
-        self._on_selected(event)
+    def _on_activated(self, event, asset_id):
+        self._selected_id = asset_id
         self.EndModal(wx.ID_OK)
 
-    def _rebuild(self):
+    def _rebuild(self, reset_scroll=True):
         query = self.m_SearchCtrl.GetValue()
         category = self.m_CategoryChoice.GetStringSelection() or "All"
         self._visible_items = filter_picker_items(self._all_items, query, category)
-        self.m_AssetList.ClearAll()
-        self.m_AssetList.InsertColumn(0, "Asset")
-        self.m_AssetList.SetColumnWidth(0, self.THUMBNAIL_SIZE[0] + 4)
-        image_list = wx.ImageList(*self.THUMBNAIL_SIZE)
-        selected_index = -1
-        for index, item in enumerate(self._visible_items):
-            image_index = image_list.Add(self._thumbnail(item))
-            self.m_AssetList.InsertItem(index, "", image_index)
-            if item.asset_id == self._selected_id:
-                selected_index = index
-        self.m_AssetList.AssignImageList(image_list, wx.IMAGE_LIST_SMALL)
-        self._image_list = image_list
-        if selected_index >= 0:
-            self.m_AssetList.SetItemState(
-                selected_index,
-                wx.LIST_STATE_SELECTED | wx.LIST_STATE_FOCUSED,
-                wx.LIST_STATE_SELECTED | wx.LIST_STATE_FOCUSED,
+        self.m_AssetGrid.Clear(delete_windows=True)
+        self._cards = {}
+        for item in self._visible_items:
+            selected = item.asset_id == self._selected_id
+            card = wx.BitmapButton(
+                self.m_AssetScroller,
+                bitmap=self._thumbnail(item, selected),
+                style=wx.BU_EXACTFIT | wx.BORDER_NONE,
+                size=wx.Size(*self.THUMBNAIL_SIZE),
             )
-        if self._visible_items:
-            self.m_AssetList.EnsureVisible(0)
+            card.SetToolTip("{} — {}".format(item.title, item.category))
+            card.Bind(
+                wx.EVT_BUTTON,
+                lambda event, asset_id=item.asset_id: self._on_selected(event, asset_id),
+            )
+            card.Bind(
+                wx.EVT_LEFT_DCLICK,
+                lambda event, asset_id=item.asset_id: self._on_activated(event, asset_id),
+            )
+            self.m_AssetGrid.Add(card, 0, wx.EXPAND)
+            self._cards[item.asset_id] = (card, item)
+        self.m_AssetScroller.Layout()
+        self.m_AssetScroller.FitInside()
+        if reset_scroll:
+            self.m_AssetScroller.Scroll(0, 0)
 
-    def _thumbnail(self, item: PickerItem) -> wx.Bitmap:
+    def _thumbnail(self, item: PickerItem, selected: bool = False) -> wx.Bitmap:
         width, height = self.THUMBNAIL_SIZE
         bitmap = wx.Bitmap(width, height)
         dc = wx.MemoryDC(bitmap)
         dc.SetBackground(wx.Brush("#14181C"))
         dc.Clear()
-        dc.SetPen(wx.Pen("#607180", width=1))
-        dc.SetBrush(wx.Brush("#25313B"))
+        dc.SetPen(wx.Pen("#72A9C9" if selected else "#607180", width=2 if selected else 1))
+        dc.SetBrush(wx.Brush("#3C596D" if selected else "#25313B"))
         dc.DrawRoundedRectangle(3, 3, width - 6, height - 6, 8)
         if item.preview_text:
             dc.SetPen(wx.TRANSPARENT_PEN)
-            dc.SetBrush(wx.Brush("#3C596D"))
-            dc.DrawRoundedRectangle(9, 7, 302, height - 14, 10)
-            icon_box = (18, 13, 24, height - 26) if item.icon_id else None
+            dc.SetBrush(wx.Brush("#496B81" if selected else "#354B5A"))
+            dc.DrawRoundedRectangle(9, 8, width - 18, 37, 8)
+            icon_box = (16, 14, 22, 25) if item.icon_id else None
             if icon_box:
                 self._draw_icon(dc, item.icon_id, icon_box, "#FFFFFF")
-            text_left = 50 if item.icon_id else 17
+            text_left = 45 if item.icon_id else 17
             self._draw_fitted_text(
                 dc,
                 item.preview_text,
-                (text_left, 9, 300 - text_left, height - 18),
+                (text_left, 10, width - text_left - 17, 33),
                 "#FFFFFF",
             )
         elif item.icon_id:
-            self._draw_icon(dc, item.icon_id, (18, 10, 30, height - 20), "#FFFFFF")
+            self._draw_icon(dc, item.icon_id, (17, 10, 39, 39), "#FFFFFF")
             self._draw_fitted_text(
                 dc,
                 item.title,
-                (62, 7, 245, height - 14),
+                (66, 10, width - 82, 39),
                 "#FFFFFF",
                 align="left",
             )
@@ -187,16 +192,16 @@ class AssetPickerDialog(wx.Dialog):
             self._draw_fitted_text(
                 dc,
                 item.title,
-                (18, 7, 289, height - 14),
+                (18, 10, width - 36, 39),
                 "#FFFFFF",
                 align="left",
             )
         self._draw_fitted_text(
             dc,
             item.category,
-            (327, 7, width - 345, height - 14),
-            "#C8D0D6",
-            align="right",
+            (16, 51, width - 32, 18),
+            "#E0E8ED",
+            align="left",
             bold=False,
         )
         dc.SelectObject(wx.NullBitmap)
