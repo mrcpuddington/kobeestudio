@@ -1,0 +1,33 @@
+{
+    "$schema": "https://go.kicad.org/pcm/schemas/v1",
+    "name": "Kobee Studio",
+    "description": "PCB artwork studio for labels, icons, and connector callouts",
+    "description_full": "Kobee Studio turns fonts and parametric artwork into editable KiCad footprints, with explicit front and bottom silkscreen, copper, and solder-mask output. It evolved from KiBuzzard by Greg Davill.",
+    "identifier": "au.com.kobee.Studio",
+    "type": "plugin",
+    "author": {
+        "name": "Greg Davill (original KiBuzzard author)",
+        "contact": {
+            "github": "https://github.com/gregdavill",
+            "web": "https://gregdavill.com",
+            "twitter": "https://twitter.com/gregdavill"
+        }
+    },    
+    "maintainer": {
+        "name": "Kobee",
+        "contact": {
+            "web": "https://www.kobee.com.au"
+        }
+    },
+    "license": "GPL-2.0-only",
+    "resources": {
+        "homepage": "https://github.com/kobee-au/kibeezard"
+    },
+    "versions": [
+        {
+            "version": "0.4.0",
+            "status": "testing",
+            "kicad_version": "10.0"
+        }
+    ]
+}

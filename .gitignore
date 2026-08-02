@@ -1,0 +1,33 @@
+# Python bytecode, test, and environment files
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Local KiBeezard/KiBuzzard state and logs
+config.ini
+config.json
+*.log
+
+# Generated package and build output
+pcm/build/
+build/
+dist/
+*.egg-info/
+
+# Editors and operating-system metadata
+.idea/
+.vscode/
+.DS_Store
+.AppleDouble
+
+# Local KiCad lock, backup, and project-state files
+*.lck
+*.kicad_prl
+*-backups/
+*.kicad_pcb-bak
+*.kicad_sch-bak
