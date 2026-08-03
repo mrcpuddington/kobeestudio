@@ -11,6 +11,7 @@ from kobeestudio.core.composition import (
     Point,
     Padding,
     ShapeStyle,
+    ShapeObject,
     TextObject,
     TypographyStyle,
 )
@@ -66,6 +67,61 @@ class StudioArtworkTests(unittest.TestCase):
                 artwork = render_label_artwork(self.vectorizer, "GND", self.style(), "F.SilkS", shape)
                 self.assertGreater(len(artwork.filled_polygons), 0)
                 self.assertEqual(1, len(artwork.strokes))
+
+    def test_main_text_can_be_underlined_as_exported_geometry(self):
+        plain = render_label_artwork(
+            self.vectorizer,
+            "RESET",
+            self.style(),
+            "F.SilkS",
+        )
+        underlined = render_label_artwork(
+            self.vectorizer,
+            "RESET",
+            self.style(),
+            "F.SilkS",
+            underline=True,
+            underline_thickness_mm=0.15,
+            underline_gap_mm=0.12,
+        )
+        underline = next(
+            item for item in underlined.document.objects
+            if isinstance(item, ShapeObject) and item.object_id == "text.underline"
+        )
+        text = next(
+            item for item in underlined.document.objects
+            if isinstance(item, TextObject) and item.object_id == "text.primary"
+        )
+        self.assertGreater(underline.position.y, text.position.y)
+        self.assertAlmostEqual(0.15, underline.size.height)
+        self.assertGreater(
+            underlined.document.size.height,
+            plain.document.size.height,
+        )
+        self.assertGreater(
+            len(underlined.filled_polygons),
+            len(plain.filled_polygons),
+        )
+
+    def test_underlined_text_is_a_knockout_inside_inverted_labels(self):
+        artwork = render_label_artwork(
+            self.vectorizer,
+            "POWER",
+            self.style(filled=True, inverted=True),
+            "F.SilkS",
+            "rounded_rectangle",
+            underline=True,
+        )
+        underline = next(
+            item for item in artwork.document.objects
+            if isinstance(item, ShapeObject) and item.object_id == "text.underline"
+        )
+        self.assertFalse(
+            any(
+                _point_in_polygon(underline.position, polygon)
+                for polygon in artwork.filled_polygons
+            )
+        )
 
     def test_requested_cap_height_and_padding_are_physical_millimetres(self):
         style = DocumentStyle(

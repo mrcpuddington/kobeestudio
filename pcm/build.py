@@ -1,83 +1,87 @@
+"""Build a KiCad Plugin and Content Manager archive for the IPC runtime."""
 
-import os
-from os import path
-import shutil
-
-repo_path = path.join(path.dirname(__file__), '..')
-
-metadata_template = path.join(path.dirname(__file__),'metadata_template.json')
-resources_path = path.join(path.dirname(__file__),'resources')
-#print(src_path)
-
-build_path = path.join('build')
-
-try:
-    shutil.rmtree(build_path)
-except FileNotFoundError:
-    pass
-os.mkdir(build_path)
-os.mkdir(path.join(build_path,'plugin'))
-os.chdir(build_path)
-
-plugins_path = path.join('plugin', 'plugins')
-os.mkdir(plugins_path)
-shutil.copy(path.join(repo_path, '__init__.py'), path.join(plugins_path, '__init__.py'))
-shutil.copytree(
-    path.join(repo_path, 'kobeestudio'),
-    path.join(plugins_path, 'kobeestudio'),
-    ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.pyo', '.DS_Store'),
-)
-shutil.copy(path.join(repo_path, 'LICENCE'), path.join(plugins_path, 'kobeestudio', 'LICENCE'))
-shutil.copy(
-    path.join(repo_path, 'THIRD_PARTY_NOTICES.md'),
-    path.join(plugins_path, 'kobeestudio', 'THIRD_PARTY_NOTICES.md'),
-)
-
-# clean out any __pycache__ or .pyc files (https://stackoverflow.com/a/41386937)
-import pathlib
-[p.unlink() for p in pathlib.Path('.').rglob('.DS_Store')]
-[p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]
-[p.rmdir() for p in pathlib.Path('.').rglob('__pycache__')]
-
-
-# copy metadata
-shutil.copy(metadata_template, path.join('plugin','metadata.json'))
-# copy icon
-shutil.copytree(resources_path, path.join('plugin','resources'))
-
-# load up json script
-from pathlib import Path
-import json
-with open(metadata_template) as f:
-    md = json.load(f)
-
-
-
-# zip all files
-package_name = 'Kobee-Studio-{0}-pcm.zip'.format(md['versions'][0]['version'])
-zip_file = package_name
-shutil.make_archive(Path(zip_file).stem, 'zip', 'plugin')
-
-
-zip_size = path.getsize(zip_file)
-
-
-uncompressed_size = sum(f.stat().st_size for f in Path('plugin').glob('**/*') if f.is_file())
+from __future__ import annotations
 
 import hashlib
-with open(zip_file, 'rb') as f:
-    zip_sha256 = hashlib.sha256(f.read()).hexdigest()
+import json
+import shutil
+from pathlib import Path
 
 
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+BUILD = HERE / "build"
+STAGING = BUILD / "plugin"
+PLUGINS = STAGING / "plugins"
+METADATA_TEMPLATE = HERE / "metadata_template.json"
 
-md['versions'][0].update({
-    'install_size': uncompressed_size,
-    'download_size': zip_size,
-    'download_sha256': zip_sha256,
-    'download_url': 'https://github.com/mrcpuddington/kobeestudio/releases/download/{0}/{1}'.format(
-        'v{}'.format(md['versions'][0]['version']), package_name
+
+def _copy_plugin() -> None:
+    PLUGINS.mkdir(parents=True)
+    for filename in (
+        "plugin.json",
+        "requirements.txt",
+        "kobeestudio_ipc.py",
+        "kobee-toolbar-24.png",
+        "kobee-toolbar-48.png",
+    ):
+        shutil.copy2(ROOT / "ipc_plugin" / filename, PLUGINS / filename)
+    shutil.copytree(
+        ROOT / "kobeestudio",
+        PLUGINS / "kobeestudio",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", ".DS_Store"),
     )
-})
-    
-with open('metadata.json', 'w') as of:
-    json.dump(md, of, indent=2)
+    for filename in ("LICENCE", "THIRD_PARTY_NOTICES.md"):
+        shutil.copy2(ROOT / filename, PLUGINS / filename)
+
+
+def _write_metadata() -> tuple[dict, str]:
+    metadata = json.loads(METADATA_TEMPLATE.read_text(encoding="utf-8"))
+    (STAGING / "metadata.json").write_text(
+        json.dumps(metadata, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    version = metadata["versions"][0]["version"]
+    return metadata, version
+
+
+def _build_archive(version: str) -> Path:
+    archive_base = BUILD / "Kobee-Studio-{}-pcm".format(version)
+    shutil.make_archive(str(archive_base), "zip", STAGING)
+    return Path(str(archive_base) + ".zip")
+
+
+def _write_repository_metadata(metadata: dict, version: str, archive: Path) -> None:
+    package_name = archive.name
+    metadata["versions"][0].update(
+        {
+            "install_size": sum(
+                item.stat().st_size for item in STAGING.rglob("*") if item.is_file()
+            ),
+            "download_size": archive.stat().st_size,
+            "download_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "download_url": (
+                "https://github.com/mrcpuddington/kobeestudio/"
+                "releases/download/v{}/{}"
+            ).format(version, package_name),
+        }
+    )
+    (BUILD / "metadata.json").write_text(
+        json.dumps(metadata, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def main() -> None:
+    if BUILD.exists():
+        shutil.rmtree(BUILD)
+    _copy_plugin()
+    shutil.copytree(HERE / "resources", STAGING / "resources")
+    metadata, version = _write_metadata()
+    archive = _build_archive(version)
+    _write_repository_metadata(metadata, version, archive)
+    print(archive)
+
+
+if __name__ == "__main__":
+    main()

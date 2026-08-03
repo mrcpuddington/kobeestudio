@@ -1,9 +1,9 @@
 """Small, testable boundary around KiCad's supported IPC plugin API.
 
-The production 1.2.x plugin continues to use the SWIG ActionPlugin runtime.
-This module is the migration seam: it deliberately contains no ``pcbnew`` or
-``wx`` imports, and loads the official ``kicad-python`` client only when an IPC
-action is actually launched by KiCad.
+The released 1.2.x plugin uses the SWIG ActionPlugin runtime, while 1.3 and
+newer use this IPC boundary. It deliberately contains no ``pcbnew`` or ``wx``
+imports, and loads the official ``kicad-python`` client only when an IPC action
+is actually launched by KiCad.
 """
 
 from __future__ import annotations

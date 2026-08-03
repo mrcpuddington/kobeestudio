@@ -1,7 +1,7 @@
 # IPC migration
 
-Kobee Studio 1.2.x uses KiCad's SWIG ActionPlugin interface. It remains the
-released path for KiCad 10. This branch develops the successor against KiCad's
+Kobee Studio 1.2.x uses KiCad's SWIG ActionPlugin interface and remains the
+current stable release for KiCad 10. Kobee Studio 1.3 develops the successor against KiCad's
 supported IPC plugin API, which is available in KiCad 9 and 10 and planned to
 replace SWIG in KiCad 11.
 
@@ -20,6 +20,8 @@ replace SWIG in KiCad 11.
   its saved settings, position, or orientation.
 - [x] Complete live macOS create, reopen, update and undo-transaction testing
   against KiCad 10.0.4 using the self-contained development install.
+- [x] Build a schema-valid IPC PCM archive with the identifier
+  `com.github.mrcpuddington.kobeestudio`.
 - [ ] Repeat the live IPC regression on KiCad 10 for Windows.
 
 ## Migration shape
@@ -32,7 +34,8 @@ the KiCad-facing adapter currently in
 IPC artwork will be created in one board transaction, so placing or updating a
 Kobee Studio item remains a single Undo operation. Until placement and editing
 are fully covered by regression tests on KiCad 10 for macOS and Windows, the
-IPC scaffold is deliberately excluded from PCM release packages.
+IPC build is now available as a local development PCM package. It will remain
+marked development until the Windows regression and stable release checks pass.
 
 ## Test path
 
@@ -42,7 +45,7 @@ launches `kobeestudio_ipc.py` with `KICAD_API_SOCKET` and `KICAD_API_TOKEN`.
 The `tools/ipc_smoke_test.py` development helper can exercise create and update
 against a disposable board through an explicitly selected PCB Editor socket.
 
-Run `python ipc_plugin/build.py` to create a self-contained development plugin
-directory and ZIP under the ignored `ipc_plugin/build/` directory. The build
-contains the application source and licences, so it does not depend on a local
-repository checkout when installed into KiCad's user plugin directory.
+Run `python3 pcm/build.py` to create the installable
+`pcm/build/Kobee-Studio-1.3.0-pcm.zip` archive. It contains the IPC manifest,
+application source, dependencies, icon and licences and can be installed with
+KiCad's **Plugin and Content Manager → Install from File…** command.

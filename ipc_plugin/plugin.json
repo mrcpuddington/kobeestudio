@@ -1,8 +1,8 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "au.com.kobee.kobeestudio.ipc",
-  "name": "Kobee Studio",
-  "description": "Create polished PCB labels, symbols, and board artwork",
+  "identifier": "com.github.mrcpuddington.kobeestudio",
+  "name": "Kobee Studio (IPC Development)",
+  "description": "Development IPC build for creating polished PCB labels, symbols, and board artwork",
   "runtime": {
     "type": "python",
     "min_version": "3.9"
@@ -10,18 +10,20 @@
   "actions": [
     {
       "identifier": "create-pcb-artwork",
-      "name": "Create PCB Artwork",
-      "description": "Create editable labels, callouts, symbols, and machine-readable artwork",
+      "name": "Create PCB Artwork — IPC DEV",
+      "description": "Create editable labels, callouts, symbols, and machine-readable artwork using the IPC development build",
       "show-button": true,
       "scopes": [
         "pcb"
       ],
       "entrypoint": "kobeestudio_ipc.py",
       "icons-light": [
-        "kobee-bee.png"
+        "kobee-toolbar-24.png",
+        "kobee-toolbar-48.png"
       ],
       "icons-dark": [
-        "kobee-bee.png"
+        "kobee-toolbar-24.png",
+        "kobee-toolbar-48.png"
       ]
     }
   ]

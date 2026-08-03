@@ -1,13 +1,13 @@
 """Kobee Studio IPC action entry point.
 
-This is intentionally kept outside the shipping SWIG package while the IPC
-placement and edit adapters are completed.  KiCad launches this file in an
-isolated Python environment and provides KICAD_API_SOCKET and KICAD_API_TOKEN.
+KiCad launches this file from the PCM package in an isolated Python
+environment and provides KICAD_API_SOCKET and KICAD_API_TOKEN.
 """
 
 from __future__ import annotations
 
 import sys
+import traceback
 from pathlib import Path
 
 
@@ -68,12 +68,14 @@ def main() -> int:
             geometry.buzzard,
             place,
             editor_session=session,
+            build_label="IPC DEV",
         )
         try:
             dialog.ShowModal()
         finally:
             dialog.Destroy()
     except Exception as error:
+        traceback.print_exc()
         print("Kobee Studio IPC startup failed: {}".format(error), file=sys.stderr)
         wx.MessageBox(str(error), "Kobee Studio IPC", wx.OK | wx.ICON_ERROR)
         return 1

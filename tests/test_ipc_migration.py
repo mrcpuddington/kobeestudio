@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import struct
 import unittest
 from pathlib import Path
 
@@ -63,10 +64,44 @@ class IpcMigrationTests(unittest.TestCase):
     def test_manifest_declares_supported_ipc_runtime(self):
         manifest = json.loads((ROOT / "ipc_plugin/plugin.json").read_text())
         self.assertEqual("https://go.kicad.org/api/schemas/v1", manifest["$schema"])
+        self.assertEqual(
+            "com.github.mrcpuddington.kobeestudio",
+            manifest["identifier"],
+        )
         self.assertEqual("python", manifest["runtime"]["type"])
+        self.assertIn("IPC Development", manifest["name"])
         action = manifest["actions"][0]
         self.assertEqual("kobeestudio_ipc.py", action["entrypoint"])
         self.assertEqual(["pcb"], action["scopes"])
+        self.assertIn("IPC DEV", action["name"])
+        expected_icons = ["kobee-toolbar-24.png", "kobee-toolbar-48.png"]
+        self.assertEqual(expected_icons, action["icons-light"])
+        self.assertEqual(expected_icons, action["icons-dark"])
+        for icon_name, expected_size in zip(expected_icons, (24, 48)):
+            icon_path = ROOT / "ipc_plugin" / icon_name
+            icon_data = icon_path.read_bytes()
+            self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
+            self.assertEqual(
+                (expected_size, expected_size),
+                struct.unpack(">II", icon_data[16:24]),
+            )
+
+    def test_pcm_metadata_matches_ipc_manifest_and_catalog_icon_rules(self):
+        manifest = json.loads((ROOT / "ipc_plugin/plugin.json").read_text())
+        metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
+        self.assertEqual(manifest["identifier"], metadata["identifier"])
+        self.assertEqual("ipc", metadata["versions"][0]["runtime"])
+        self.assertEqual("development", metadata["versions"][0]["status"])
+        self.assertEqual("1.3.0", metadata["versions"][0]["version"])
+        icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
+        self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
+        self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
+
+    def test_pcm_builder_places_ipc_manifest_directly_under_plugins(self):
+        source = (ROOT / "pcm/build.py").read_text()
+        self.assertIn('PLUGINS / filename', source)
+        self.assertIn('"plugin.json"', source)
+        self.assertNotIn("plugins_path, 'kobeestudio', 'plugin.json'", source)
 
     def test_ipc_session_uses_the_connection_details_from_kicad(self):
         session = IpcSession.connect(

@@ -21,7 +21,8 @@ def main() -> None:
         "plugin.json",
         "requirements.txt",
         "kobeestudio_ipc.py",
-        "kobee-bee.png",
+        "kobee-toolbar-24.png",
+        "kobee-toolbar-48.png",
     ):
         shutil.copy2(HERE / filename, PACKAGE / filename)
 

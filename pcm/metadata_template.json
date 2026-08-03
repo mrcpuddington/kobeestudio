@@ -2,8 +2,8 @@
     "$schema": "https://go.kicad.org/pcm/schemas/v2",
     "name": "Kobee Studio",
     "description": "Create PCB labels, symbols, component callouts, header overlays, QR Codes, and barcodes inside KiCad",
-    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels, PCB symbols, searchable presets, component callouts and arrays, configurable 2.54 mm header overlays, QR Codes, and Code 128 barcodes. Kobee Studio evolved from KiBuzzard by Greg Davill. Version 1.2.1 is tested with KiCad 10 on macOS and Windows; Linux validation is planned.",
-    "identifier": "au.com.kobee.kobeestudio",
+    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels with optional underlines, PCB symbols, searchable presets, component callouts and arrays, configurable 2.54 mm header overlays, QR Codes, Code 128 barcodes, and optional readable text beneath machine codes. Kobee Studio evolved from KiBuzzard by Greg Davill. The released 1.2 series is tested with KiCad 10 on macOS and Windows. Version 1.3 moves the plugin to KiCad's supported IPC API; macOS IPC validation is complete and Windows IPC validation is planned.",
+    "identifier": "com.github.mrcpuddington.kobeestudio",
     "type": "plugin",
     "author": {
         "name": "Corey Busuttil",
@@ -21,14 +21,17 @@
     },
     "license": "GPL-2.0",
     "resources": {
-        "homepage": "https://github.com/mrcpuddington/kobeestudio"
+        "homepage": "https://www.coreybusuttil.com/kobeestudio/",
+        "documentation": "https://www.coreybusuttil.com/kobeestudio/docs/",
+        "repository": "https://github.com/mrcpuddington/kobeestudio",
+        "issues": "https://github.com/mrcpuddington/kobeestudio/issues"
     },
     "versions": [
         {
-            "version": "1.2.1",
-            "status": "stable",
+            "version": "1.3.0",
+            "status": "development",
             "kicad_version": "10.0",
-            "runtime": "swig"
+            "runtime": "ipc"
         }
     ]
 }
