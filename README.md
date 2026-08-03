@@ -8,16 +8,21 @@
 
 Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 
-> **⚠️ Current status:** Kobee Studio is developed and tested on **KiCad 10 for macOS**. Windows and Linux use the same plug-in package, but their full UI and artwork validation is still planned. If you test either platform, bug reports, screenshots, and board files are very welcome.
-
+> **⚠️ Current status:** Kobee Studio is tested on **KiCad 10 for macOS and Windows**. Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
+
+![Kobee Studio feature showcase board](examples/showcase/renders/showcase-angle.png)
+
+The repository includes the [editable KiCad showcase board](examples/showcase/)
+used for this render, with labels, symbols, component callouts, component
+arrays, connector overlays, machine-readable codes and multilayer artwork.
 
 ---
 
 ## Why?
 
-Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)** by Greg Davill to solve some of the features i wanted for my own personal PCB Design flow. Hopefully it can also help a few of you out there.
+Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)** by Greg Davill to solve some of the features I wanted for my own personal PCB Design flow. Hopefully it can also help a few of you out there.
 
 The goal is to create a complete toolkit for PCB graphics—bringing together labels, icons, connector overlays, branding, artwork and reusable design systems into one workflow while keeping everything editable inside KiCad.
 
@@ -27,10 +32,28 @@ In the future I want Kobee Studio to be an all in one PCB graphics tool (Hopeful
 
 ---
 
+## What’s in 1.2.0
+
+| Tool                 | What it does                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| Labels               | Filled, inverted and outline labels with flexible shapes, padding, borders and mixed ends. |
+| Icons & quick labels | Searchable PCB-safe symbols and common labels, usable standalone or with text.             |
+| Header overlays      | Pin labels for single-row 2.54 mm headers, with clearances, openings and editable layout.  |
+| QR & barcodes        | QR codes and compact Code 128 markings with fabrication-minded size checks.                |
+| Component callouts    | Labels that frame packages, switches and LED arrays while keeping the component clear.   |
+| Layers               | Front/back silk, copper and solder-mask artwork.                                           |
+
+Everything lands as an ordinary, editable KiCad footprint. Kobee Studio never changes the electrical footprint underneath it.
+
+Version 1.2 also makes the first step more predictable: every artwork type opens with a useful, renderable starting design. For example, the 2.54 mm header tool begins as a four-pin vertical header with a continuous plug opening and `Pin 1` through `Pin 4` ready to edit.
+
 # Features
 
 ---
 
+Generate artwork on:
+
+- Front Silkscreen, Bottom Silkscreen, Front Copper, Bottom Copper, Front Solder Mask, Bottom Solder Mask
 
 ## Header Overlays
 
@@ -40,46 +63,23 @@ Current support:
 
 - 2.54 mm single-row headers
 
-Features:
-
-- Automatic pin labels
-- Configurable plug clearance
-- Optional openings
-- Multiple layout styles
-- Fully editable output
-
-Generated artwork never replaces or modifies the electrical footprint.
+Features: Automatic pin labels, Configurable plug clearance, ptional openings
 
 ---
 
-
 ## Parametric Labels
 
-Generate labels with configurable containers.
+Generate labels with configurable containers. Supported shapes include:
 
-Supported shapes include:
-
-- Rounded rectangles
-- Pills
-- Flags
-- Tabs
-- Pointers
-- Chamfers
-- Hexagons
+- Rounded rectangles, Pills, Flags, Tabs, Pointers, Chamfers, Hexagons
 
 Every label supports:
 
-- Fill
-- Outline
-- Border width
-- Padding
-- Corner radius
-- Independent end styles
+- Fill, Outline, Border width, Padding, Corner radius, Independent end styles
 
 Generated artwork remains fully editable inside KiCad.
 
 ---
-
 
 ## PCB Icons
 
@@ -89,21 +89,11 @@ Kobee Studio includes a growing collection of PCB-safe icons.
 
 Current icons include:
 
-- Ground
-- Power
-- LED
-- Battery
-- Warning
-- Input
-- Output
-- Test Point
-- Polarity
+- Ground, Power, LED, Battery, Warning, Input, Output, Test Point, Polarity
 
-Icons can be used:
+* Many More
 
-- Standalone
-- Beside text
-- Inside labels
+Icons can be used: Standalone, Beside text, Inside labels
 
 ---
 
@@ -114,45 +104,22 @@ Generate machine-readable PCB artwork directly from a payload.
 - QR Codes use automatic error-correction sizing and a protected four-module quiet zone.
 - QR presentation can be plain, placed in a rounded frame, or use a rounded frame with an optional negative footer such as **SCAN ME**. Extra frame spacing is adjustable down to zero without reducing the protected quiet zone.
 - Code 128 uses compact 0.25 mm modules and 4.0 mm bars by default, with guarded minimums of 0.20 mm and 3.0 mm.
-- The preview shows the protected quiet area, but guide geometry is never exported.
 
 Small codes should always be checked against the chosen PCB finish, fabricator capabilities and the scanner that will be used.
 
 ---
 
-
-## Built for KiCad
-
-Everything is created directly inside the KiCad PCB Editor.
-
-No SVG conversion.
-
-No external graphics editor.
-
-No footprint libraries.
-
-Just create the artwork and place it.
-
----
-
 ## Layer Support
 
-Generate artwork on:
-
-- Front Silkscreen
-- Bottom Silkscreen
-- Front Copper
-- Bottom Copper
-- Front Solder Mask
-- Bottom Solder Mask
-
-Everything is generated as ordinary editable KiCad footprints.
+Choose one output layer for each artwork item: front or bottom silkscreen, copper, or solder mask. If the same marking belongs on more than one layer, duplicate the placed Kobee Studio item, reopen it and choose the other layer. Everything is generated as ordinary editable KiCad footprints.
 
 ---
 
-# Roadmap
+# Truncated Roadmap
 
 Kobee Studio is growing beyond labels into a complete PCB graphics toolkit.
+
+Ive started to create a more robust **[Roadmap](https://github.com/mrcpuddington/kobeestudio/blob/main/ROADMAP.md)** which will be updated as time goes on
 
 ## Current Progress
 
@@ -164,7 +131,11 @@ Kobee Studio is growing beyond labels into a complete PCB graphics toolkit.
 
 ✅ 2.54 mm single-row header overlays
 
-⬜ Component highlight labelling
+✅ Component callouts with editable footprint safe zones
+
+✅ Multi-component and LED array callouts
+
+✅ Main and subtitle text layouts
 
 ✅ QR Code and Code 128 barcode generation
 
@@ -188,7 +159,7 @@ Kobee Studio is growing beyond labels into a complete PCB graphics toolkit.
 
 ⬜ Templates
 
-⬜ Tested Windows support
+✅ Tested Windows support
 
 ⬜ Tested Linux support
 
@@ -220,7 +191,7 @@ Kobee Studio is a KiCad plugin, not a footprint library.
 
 For the current release:
 
-1. Download `Kobee-Studio-1.0.0-pcm.zip` from the [GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases). Do not unzip it.
+1. Download `Kobee-Studio-1.2.0-pcm.zip` from the [GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases). Do not unzip it.
 2. In KiCad PCB Editor, open **Plugin and Content Manager**.
 3. Choose **Install from File…**, select the ZIP, and approve the install.
 4. Open **Tools → External Plugins → Kobee Studio: Create PCB Artwork**.
@@ -278,7 +249,7 @@ Restart KiCad PCB Editor afterwards. The on-disk `kobeestudio` folder is the Pyt
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
 | macOS    | KiCad 10      | Tested development platform                      |
-| Windows  | KiCad 10      | Install path documented; full validation planned |
+| Windows  | KiCad 10      | Tested release platform                          |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---
@@ -309,6 +280,6 @@ Without their work, Kobee Studio wouldn't exist.
 
 # License
 
-Kobee Studio's original code is available under the MIT Licence. The packaged plug-in also bundles GPL-2.0 svg2mod runtime code, alongside MIT/BSD dependencies and retained KiBuzzard attribution.
+Kobee Studio is distributed under the GPL-2.0 licence. It bundles GPL-2.0 svg2mod runtime code alongside MIT/BSD dependencies and retains KiBuzzard attribution and third-party notices.
 
 See [LICENCE](LICENCE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the complete notices.

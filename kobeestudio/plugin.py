@@ -106,6 +106,15 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                     "kind": "pin_header_2_54",
                     "data": dialog.artwork.header.to_dict(),
                 }
+            elif dialog.artwork.component_callout is not None:
+                feature = {
+                    "kind": (
+                        "component_array"
+                        if dialog.artwork.component_callout.array_count > 1
+                        else "component_callout"
+                    ),
+                    "data": dialog.artwork.component_callout.to_dict(),
+                }
             payload = build_footprint_payload(
                 dialog.CurrentSettings(),
                 document=dialog.artwork.document,

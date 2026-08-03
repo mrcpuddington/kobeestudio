@@ -13,6 +13,9 @@ config.ini
 config.json
 *.log
 
+# Showcase project
+examples/showcase/
+
 # Generated package and build output
 pcm/build/
 build/

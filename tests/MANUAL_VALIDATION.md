@@ -1,6 +1,6 @@
 # Manual KiCad 10 acceptance validation
 
-Run this against the development symbolic-link install on macOS before claiming KiCad 10 compatibility.
+Run this against the development install on macOS and Windows before claiming KiCad 10 compatibility.
 
 1. Open a saved board in KiCad 10 PCB Editor and run **Kobee Studio: Create PCB Artwork** from **Tools → External Plugins**.
 2. Place `FRONT`, `BOTTOM`, `ABC123`, and `R2D7` on each of F/B Silkscreen, F/B Copper, and F/B Solder Mask.
@@ -30,4 +30,4 @@ For a command-line export after saving `acceptance.kicad_pcb`:
   --output gerbers acceptance.kicad_pcb
 ```
 
-Record KiCad version, macOS version, generated Gerbers, and screenshots in the release evidence. This test is deliberately manual because correct 3D and Gerber viewing orientation is a visual acceptance criterion.
+Record KiCad version, operating-system version, generated Gerbers, and screenshots in the release evidence. This test is deliberately manual because correct 3D and Gerber viewing orientation is a visual acceptance criterion.

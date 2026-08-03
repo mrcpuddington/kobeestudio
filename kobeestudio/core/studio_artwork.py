@@ -11,6 +11,7 @@ from .composition import (
     CompositionDocument,
     DocumentStyle,
     GroupObject,
+    GuideObject,
     IconObject,
     Point,
     ShapeObject,
@@ -19,6 +20,7 @@ from .composition import (
     TextObject,
     TypographyStyle,
 )
+from .component_callout import ComponentCalloutSpec
 from .icon_catalog import render_builtin_icon
 from .machine_codes import render_machine_code
 from .pin_header import HeaderLayout, PinHeaderSpec, layout_pin_header
@@ -51,6 +53,7 @@ class StudioArtwork:
     guides: Tuple[Polygon, ...]
     document: CompositionDocument
     header: Optional[PinHeaderSpec] = None
+    component_callout: Optional[ComponentCalloutSpec] = None
 
     @property
     def all_exported_polygons(self) -> Tuple[Polygon, ...]:
@@ -430,6 +433,9 @@ def render_label_artwork(
     icon_position: str = "left",
     icon_height_mm: float = 0.0,
     icon_gap_mm: float = 0.3,
+    subtitle_text: str = "",
+    subtitle_typography: Optional[TypographyStyle] = None,
+    subtitle_gap_mm: float = 0.25,
 ) -> StudioArtwork:
     if icon_position not in ("left", "right", "only"):
         raise ValueError("Unsupported icon position: {}".format(icon_position))
@@ -437,9 +443,11 @@ def render_label_artwork(
         raise ValueError("Icon height must be non-negative")
     if icon_gap_mm < 0:
         raise ValueError("Icon gap must be non-negative")
+    if subtitle_gap_mm < 0:
+        raise ValueError("Subtitle gap must be non-negative")
 
     has_icon = bool(icon_id)
-    has_text = bool(text) and icon_position != "only"
+    has_text = bool(text or subtitle_text) and icon_position != "only"
     if not has_text and not has_icon:
         raise ValueError("A label needs text or an icon")
 
@@ -450,6 +458,46 @@ def render_label_artwork(
         lineover_style,
         lineover_thickness,
     )
+    secondary_typography = subtitle_typography or TypographyStyle(
+        font_name=style.typography.font_name,
+        height_mm=max(0.01, style.typography.height_mm * 0.65),
+        width_mm=0.0,
+        line_spacing=style.typography.line_spacing,
+        alignment=style.typography.alignment,
+    )
+    subtitle_vectors = vectorizer.render(
+        subtitle_text if has_text else "",
+        secondary_typography,
+        False,
+        lineover_style,
+        lineover_thickness,
+    )
+    has_primary = bool(vectors.polygons)
+    has_subtitle = bool(subtitle_vectors.polygons)
+    text_gap = subtitle_gap_mm if has_primary and has_subtitle else 0.0
+    text_stack_size = Size(
+        max(vectors.size.width, subtitle_vectors.size.width),
+        vectors.size.height + subtitle_vectors.size.height + text_gap,
+    )
+
+    def line_x(line_width: float) -> float:
+        if style.typography.alignment == "left":
+            return -text_stack_size.width / 2.0 + line_width / 2.0
+        if style.typography.alignment == "right":
+            return text_stack_size.width / 2.0 - line_width / 2.0
+        return 0.0
+
+    primary_in_stack = Point(line_x(vectors.size.width), 0.0)
+    subtitle_in_stack = Point(line_x(subtitle_vectors.size.width), 0.0)
+    if has_primary and has_subtitle:
+        primary_in_stack = Point(
+            primary_in_stack.x,
+            -text_stack_size.height / 2.0 + vectors.size.height / 2.0,
+        )
+        subtitle_in_stack = Point(
+            subtitle_in_stack.x,
+            text_stack_size.height / 2.0 - subtitle_vectors.size.height / 2.0,
+        )
     icon = (
         render_builtin_icon(icon_id, icon_height_mm or style.typography.height_mm)
         if has_icon
@@ -457,25 +505,40 @@ def render_label_artwork(
     )
     gap = icon_gap_mm if has_text and icon is not None else 0.0
     content_size = Size(
-        vectors.size.width + (icon.size.width if icon else 0.0) + gap,
-        max(vectors.size.height, icon.size.height if icon else 0.0),
+        text_stack_size.width + (icon.size.width if icon else 0.0) + gap,
+        max(text_stack_size.height, icon.size.height if icon else 0.0),
     )
 
-    text_centre = Point()
+    text_stack_centre = Point()
     icon_centre = Point()
     if has_text and icon is not None:
         if icon_position == "left":
             icon_centre = Point(-content_size.width / 2.0 + icon.size.width / 2.0, 0.0)
-            text_centre = Point(content_size.width / 2.0 - vectors.size.width / 2.0, 0.0)
+            text_stack_centre = Point(
+                content_size.width / 2.0 - text_stack_size.width / 2.0, 0.0
+            )
         else:
-            text_centre = Point(-content_size.width / 2.0 + vectors.size.width / 2.0, 0.0)
+            text_stack_centre = Point(
+                -content_size.width / 2.0 + text_stack_size.width / 2.0, 0.0
+            )
             icon_centre = Point(content_size.width / 2.0 - icon.size.width / 2.0, 0.0)
 
+    text_centre = Point(
+        text_stack_centre.x + primary_in_stack.x,
+        text_stack_centre.y + primary_in_stack.y,
+    )
+    subtitle_centre = Point(
+        text_stack_centre.x + subtitle_in_stack.x,
+        text_stack_centre.y + subtitle_in_stack.y,
+    )
     placed_text = tuple(_translate_polygon(polygon, text_centre) for polygon in vectors.polygons)
+    placed_subtitle = tuple(
+        _translate_polygon(polygon, subtitle_centre) for polygon in subtitle_vectors.polygons
+    )
     placed_icon = tuple(
         _translate_polygon(polygon, icon_centre) for polygon in (icon.polygons if icon else ())
     )
-    content_polygons = placed_text + placed_icon
+    content_polygons = placed_text + placed_subtitle + placed_icon
     if content_polygons:
         content_minimum, content_maximum = polygon_bounds(content_polygons)
         normalise = Point(
@@ -483,6 +546,9 @@ def render_label_artwork(
             -(content_minimum.y + content_maximum.y) / 2.0,
         )
         text_centre = Point(text_centre.x + normalise.x, text_centre.y + normalise.y)
+        subtitle_centre = Point(
+            subtitle_centre.x + normalise.x, subtitle_centre.y + normalise.y
+        )
         icon_centre = Point(icon_centre.x + normalise.x, icon_centre.y + normalise.y)
         content_polygons = tuple(
             _translate_polygon(polygon, normalise) for polygon in content_polygons
@@ -496,8 +562,17 @@ def render_label_artwork(
     # the objects after normalisation prevents an icon's nominal canvas or
     # asymmetric source bounds from leaving the text centred on its own.
     objects = []
-    if has_text:
+    if has_primary:
         objects.append(TextObject("text.primary", text, position=text_centre))
+    if has_subtitle:
+        objects.append(
+            TextObject(
+                "text.secondary",
+                subtitle_text,
+                position=subtitle_centre,
+                style_role="secondary",
+            )
+        )
     if icon is not None:
         objects.append(
             IconObject(
@@ -511,12 +586,17 @@ def render_label_artwork(
     if shape is None:
         if len(objects) > 1:
             objects.append(GroupObject("group.label", tuple(item.object_id for item in objects)))
+        artwork_style = DocumentStyle(
+            typography=style.typography,
+            shape=style.shape,
+            secondary_typography=secondary_typography if has_subtitle else None,
+        )
         document = CompositionDocument(
             objects=tuple(objects),
             output_layer=output_layer,
             size=content_size,
             alignment=style.typography.alignment,
-            style=style,
+            style=artwork_style,
         )
         return StudioArtwork(content_polygons, (), (), document)
 
@@ -564,14 +644,310 @@ def render_label_artwork(
         "group.label",
         (shape_object.object_id,) + tuple(item.object_id for item in placed_objects),
     )
+    artwork_style = DocumentStyle(
+        typography=style.typography,
+        shape=style.shape,
+        secondary_typography=secondary_typography if has_subtitle else None,
+    )
     document = CompositionDocument(
         objects=placed_objects + (shape_object, group),
         output_layer=output_layer,
         size=geometry.outer_size,
         alignment=style.typography.alignment,
-        style=style,
+        style=artwork_style,
     )
     return StudioArtwork(filled, strokes, (), document)
+
+
+def _component_cutout_contour(spec: ComponentCalloutSpec) -> Polygon:
+    """Return the physical keep-clear contour for one component."""
+    cutout_size = Size(spec.cutout_width_mm, spec.cutout_height_mm)
+    if spec.cutout_shape != "tactile_switch":
+        style = ShapeStyle(
+            corner_radius_mm=spec.cutout_radius_mm,
+            filled=True,
+            inverted=False,
+        )
+        return shape_contour(spec.cutout_shape, cutout_size, style)
+
+    # A 6 × 6 mm tactile switch has a square body and two terminals on each
+    # side. This stepped outline includes those four terminal wings while
+    # keeping the unused side areas available for artwork.
+    half_width = cutout_size.width / 2.0
+    half_height = cutout_size.height / 2.0
+    body_half_width = min(
+        half_width,
+        (min(spec.component_width_mm, 6.0) + 2.0 * spec.component_clearance_mm) / 2.0,
+    )
+    corner = min(
+        spec.cutout_radius_mm,
+        half_height * 0.25,
+        body_half_width * 0.25,
+    )
+    pin_half_height = min(0.8, half_height * 0.18)
+    pin_centre = min(half_height - pin_half_height - corner, half_height * 0.56)
+    return (
+        Point(-body_half_width + corner, -half_height),
+        Point(body_half_width - corner, -half_height),
+        Point(body_half_width, -half_height + corner),
+        Point(body_half_width, -pin_centre - pin_half_height),
+        Point(half_width, -pin_centre - pin_half_height),
+        Point(half_width, -pin_centre + pin_half_height),
+        Point(body_half_width, -pin_centre + pin_half_height),
+        Point(body_half_width, pin_centre - pin_half_height),
+        Point(half_width, pin_centre - pin_half_height),
+        Point(half_width, pin_centre + pin_half_height),
+        Point(body_half_width, pin_centre + pin_half_height),
+        Point(body_half_width, half_height - corner),
+        Point(body_half_width - corner, half_height),
+        Point(-body_half_width + corner, half_height),
+        Point(-body_half_width, half_height - corner),
+        Point(-body_half_width, pin_centre + pin_half_height),
+        Point(-half_width, pin_centre + pin_half_height),
+        Point(-half_width, pin_centre - pin_half_height),
+        Point(-body_half_width, pin_centre - pin_half_height),
+        Point(-body_half_width, -pin_centre + pin_half_height),
+        Point(-half_width, -pin_centre + pin_half_height),
+        Point(-half_width, -pin_centre - pin_half_height),
+        Point(-body_half_width, -pin_centre - pin_half_height),
+        Point(-body_half_width, -half_height + corner),
+    )
+
+
+def render_component_callout_artwork(
+    vectorizer: TextVectorizer,
+    spec: ComponentCalloutSpec,
+    icon_id: str = "",
+    icon_position: str = "left",
+    icon_height_mm: float = 0.0,
+    icon_gap_mm: float = 0.3,
+) -> StudioArtwork:
+    """Render one component callout or a regularly spaced component array."""
+    labels = tuple(spec.title.splitlines()) if spec.array_count > 1 else (spec.title,)
+    text_artworks = tuple(
+        render_label_artwork(
+            vectorizer,
+            label,
+            spec.style,
+            spec.output_layer,
+            shape=None,
+            icon_id=icon_id,
+            icon_position=icon_position,
+            icon_height_mm=icon_height_mm,
+            icon_gap_mm=icon_gap_mm,
+            subtitle_text=spec.subtitle if spec.array_count == 1 else "",
+            subtitle_typography=spec.style.secondary_typography,
+            subtitle_gap_mm=spec.subtitle_gap_mm,
+        )
+        for label in labels
+    )
+    max_text_size = Size(
+        max(item.document.size.width for item in text_artworks),
+        max(item.document.size.height for item in text_artworks),
+    )
+    cutout_size = Size(spec.cutout_width_mm, spec.cutout_height_mm)
+    component_beside_text = spec.component_position in ("left", "right")
+    cell_size = Size(
+        cutout_size.width + spec.component_to_text_gap_mm + max_text_size.width
+        if component_beside_text
+        else max(cutout_size.width, max_text_size.width),
+        max(cutout_size.height, max_text_size.height)
+        if component_beside_text
+        else cutout_size.height + spec.component_to_text_gap_mm + max_text_size.height,
+    )
+    if spec.array_count > 1:
+        minimum_pitch = (
+            cell_size.height if spec.array_orientation == "vertical" else cell_size.width
+        )
+        if spec.array_pitch_mm + 1e-9 < minimum_pitch:
+            raise ValueError(
+                "Component spacing must be at least {:.2f} mm for the current cutout and text".format(
+                    minimum_pitch
+                )
+            )
+    content_size = Size(
+        cell_size.width
+        if spec.array_orientation == "vertical"
+        else cell_size.width + (spec.array_count - 1) * spec.array_pitch_mm,
+        cell_size.height + (spec.array_count - 1) * spec.array_pitch_mm
+        if spec.array_orientation == "vertical"
+        else cell_size.height,
+    )
+
+    def aligned_text_x(text_width: float, slot_centre: float, slot_width: float) -> float:
+        alignment = spec.style.typography.alignment
+        if alignment == "left":
+            return slot_centre - slot_width / 2.0 + text_width / 2.0
+        if alignment == "right":
+            return slot_centre + slot_width / 2.0 - text_width / 2.0
+        return slot_centre
+
+    component_centres = []
+    text_centres = []
+    for index, artwork in enumerate(text_artworks):
+        axis_offset = (index - (spec.array_count - 1) / 2.0) * spec.array_pitch_mm
+        cell_centre = (
+            Point(0.0, axis_offset)
+            if spec.array_orientation == "vertical"
+            else Point(axis_offset, 0.0)
+        )
+        text_size = artwork.document.size
+        if spec.component_position == "left":
+            component = Point(-cell_size.width / 2.0 + cutout_size.width / 2.0, 0.0)
+            slot_centre = cell_size.width / 2.0 - max_text_size.width / 2.0
+            text = Point(aligned_text_x(text_size.width, slot_centre, max_text_size.width), 0.0)
+        elif spec.component_position == "right":
+            component = Point(cell_size.width / 2.0 - cutout_size.width / 2.0, 0.0)
+            slot_centre = -cell_size.width / 2.0 + max_text_size.width / 2.0
+            text = Point(aligned_text_x(text_size.width, slot_centre, max_text_size.width), 0.0)
+        elif spec.component_position == "above":
+            component = Point(0.0, -cell_size.height / 2.0 + cutout_size.height / 2.0)
+            text = Point(
+                aligned_text_x(text_size.width, 0.0, cell_size.width),
+                cell_size.height / 2.0 - text_size.height / 2.0,
+            )
+        else:
+            component = Point(0.0, cell_size.height / 2.0 - cutout_size.height / 2.0)
+            text = Point(
+                aligned_text_x(text_size.width, 0.0, cell_size.width),
+                -cell_size.height / 2.0 + text_size.height / 2.0,
+            )
+        component_centres.append(
+            Point(component.x + cell_centre.x, component.y + cell_centre.y)
+        )
+        text_centres.append(Point(text.x + cell_centre.x, text.y + cell_centre.y))
+
+    outer_object = ShapeObject(
+        "shape.background",
+        shape=spec.shape,
+        size=Size(spec.minimum_width_mm, spec.minimum_height_mm),
+    )
+    outer_geometry = render_shape(outer_object, spec.style.shape, content_size)
+    content_offset = _content_offset(outer_geometry.outer_size, content_size, spec.style)
+    component_centres = [
+        Point(item.x + content_offset.x, item.y + content_offset.y)
+        for item in component_centres
+    ]
+    text_centres = [
+        Point(item.x + content_offset.x, item.y + content_offset.y)
+        for item in text_centres
+    ]
+
+    average_component = Point(
+        sum(item.x for item in component_centres) / len(component_centres),
+        sum(item.y for item in component_centres) / len(component_centres),
+    )
+    anchor_shift = Point(-average_component.x, -average_component.y)
+    outer_centre = anchor_shift
+    component_centres = [
+        Point(item.x + anchor_shift.x, item.y + anchor_shift.y)
+        for item in component_centres
+    ]
+    text_centres = [
+        Point(item.x + anchor_shift.x, item.y + anchor_shift.y)
+        for item in text_centres
+    ]
+    outer = _translate_polygon(outer_geometry.regions[0].outer, outer_centre)
+
+    text_polygons = []
+    cutouts = []
+    placed_objects = []
+    guide_objects = []
+    base_cutout = _component_cutout_contour(spec)
+    for index, (artwork, text_centre, component_centre) in enumerate(
+        zip(text_artworks, text_centres, component_centres)
+    ):
+        text_polygons.extend(
+            _translate_polygon(polygon, text_centre)
+            for polygon in artwork.filled_polygons
+        )
+        cutout = _translate_polygon(base_cutout, component_centre)
+        cutouts.append(cutout)
+        suffix = "" if spec.array_count == 1 else ".{}".format(index + 1)
+        for item in artwork.document.objects:
+            if isinstance(item, TextObject):
+                object_id = (
+                    item.object_id if spec.array_count == 1 else "text.row{}".format(suffix)
+                )
+                placed_objects.append(
+                    TextObject(
+                        object_id,
+                        item.text,
+                        position=Point(
+                            item.position.x + text_centre.x,
+                            item.position.y + text_centre.y,
+                        ),
+                        rotation_deg=item.rotation_deg,
+                        style_role=item.style_role,
+                    )
+                )
+            elif isinstance(item, IconObject):
+                object_id = (
+                    item.object_id if spec.array_count == 1 else "icon.row{}".format(suffix)
+                )
+                placed_objects.append(
+                    IconObject(
+                        object_id,
+                        item.asset_id,
+                        position=Point(
+                            item.position.x + text_centre.x,
+                            item.position.y + text_centre.y,
+                        ),
+                        size=item.size,
+                        rotation_deg=item.rotation_deg,
+                    )
+                )
+        guide_objects.append(
+            GuideObject(
+                "component.safe-zone{}".format(suffix),
+                guide_type=spec.cutout_shape,
+                position=component_centre,
+                size=cutout_size,
+            )
+        )
+
+    text_polygons_tuple = tuple(text_polygons)
+    cutouts_tuple = tuple(cutouts)
+    if spec.style.shape.filled and not spec.style.shape.inverted:
+        filled = _knockout_regions(outer, cutouts_tuple) + text_polygons_tuple
+        strokes = ()
+    else:
+        filled, strokes = _shape_layers(
+            outer,
+            text_polygons_tuple,
+            spec.style,
+            cutouts_tuple,
+        )
+
+    content_ids = tuple(item.object_id for item in placed_objects)
+    shape_object = ShapeObject(
+        "shape.background",
+        shape=spec.shape,
+        position=outer_centre,
+        size=outer_geometry.outer_size,
+        content_ids=content_ids,
+    )
+    all_objects = tuple(placed_objects) + (shape_object,) + tuple(guide_objects)
+    group = GroupObject(
+        "group.component-array" if spec.array_count > 1 else "group.component-callout",
+        tuple(item.object_id for item in all_objects),
+    )
+    document = CompositionDocument(
+        objects=all_objects + (group,),
+        output_layer=spec.output_layer,
+        anchor=Point(),
+        origin=outer_centre,
+        size=outer_geometry.outer_size,
+        alignment=spec.style.typography.alignment,
+        style=text_artworks[0].document.style,
+    )
+    return StudioArtwork(
+        filled_polygons=filled,
+        strokes=strokes,
+        guides=cutouts_tuple,
+        document=document,
+        component_callout=spec,
+    )
 
 
 def render_machine_code_artwork(

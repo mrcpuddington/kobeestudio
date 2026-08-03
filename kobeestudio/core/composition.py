@@ -128,6 +128,7 @@ class ShapeStyle:
 class DocumentStyle:
     typography: TypographyStyle = field(default_factory=TypographyStyle)
     shape: ShapeStyle = field(default_factory=ShapeStyle)
+    secondary_typography: Union[TypographyStyle, None] = None
 
 
 @dataclass(frozen=True)
@@ -349,6 +350,35 @@ def _object_to_dict(item: CompositionObject) -> Dict[str, Any]:
 def document_to_dict(document: CompositionDocument) -> Dict[str, Any]:
     shape = document.style.shape
     typography = document.style.typography
+    style_data = {
+        "typography": {
+            "font_name": typography.font_name,
+            "height_mm": typography.height_mm,
+            "width_mm": typography.width_mm,
+            "line_spacing": typography.line_spacing,
+            "alignment": typography.alignment,
+        },
+        "shape": {
+            "padding": _padding_dict(shape.padding),
+            "border_thickness_mm": shape.border_thickness_mm,
+            "corner_radius_mm": shape.corner_radius_mm,
+            "feature_size_mm": shape.feature_size_mm,
+            "filled": shape.filled,
+            "inverted": shape.inverted,
+            "direction": shape.direction,
+            "start_cap": shape.start_cap,
+            "end_cap": shape.end_cap,
+        },
+    }
+    if document.style.secondary_typography is not None:
+        secondary = document.style.secondary_typography
+        style_data["secondary_typography"] = {
+            "font_name": secondary.font_name,
+            "height_mm": secondary.height_mm,
+            "width_mm": secondary.width_mm,
+            "line_spacing": secondary.line_spacing,
+            "alignment": secondary.alignment,
+        }
     return {
         "schema_version": document.schema_version,
         "generator_version": document.generator_version,
@@ -358,26 +388,7 @@ def document_to_dict(document: CompositionDocument) -> Dict[str, Any]:
         "size": _size_dict(document.size),
         "rotation_deg": document.rotation_deg,
         "alignment": document.alignment,
-        "style": {
-            "typography": {
-                "font_name": typography.font_name,
-                "height_mm": typography.height_mm,
-                "width_mm": typography.width_mm,
-                "line_spacing": typography.line_spacing,
-                "alignment": typography.alignment,
-            },
-            "shape": {
-                "padding": _padding_dict(shape.padding),
-                "border_thickness_mm": shape.border_thickness_mm,
-                "corner_radius_mm": shape.corner_radius_mm,
-                "feature_size_mm": shape.feature_size_mm,
-                "filled": shape.filled,
-                "inverted": shape.inverted,
-                "direction": shape.direction,
-                "start_cap": shape.start_cap,
-                "end_cap": shape.end_cap,
-            },
-        },
+        "style": style_data,
         "objects": [_object_to_dict(item) for item in document.objects],
     }
 
@@ -436,6 +447,7 @@ def document_from_dict(data: Mapping[str, Any]) -> CompositionDocument:
 
     style_data = data.get("style", {})
     typography_data = style_data.get("typography", {})
+    secondary_typography_data = style_data.get("secondary_typography")
     shape_data = style_data.get("shape", {})
     style = DocumentStyle(
         typography=TypographyStyle(
@@ -444,6 +456,17 @@ def document_from_dict(data: Mapping[str, Any]) -> CompositionDocument:
             width_mm=float(typography_data.get("width_mm", 0.0)),
             line_spacing=float(typography_data.get("line_spacing", 1.5)),
             alignment=str(typography_data.get("alignment", "center")).lower(),
+        ),
+        secondary_typography=(
+            TypographyStyle(
+                font_name=str(secondary_typography_data.get("font_name", "UbuntuMono-B")),
+                height_mm=float(secondary_typography_data.get("height_mm", 1.0)),
+                width_mm=float(secondary_typography_data.get("width_mm", 0.0)),
+                line_spacing=float(secondary_typography_data.get("line_spacing", 1.2)),
+                alignment=str(secondary_typography_data.get("alignment", "center")).lower(),
+            )
+            if isinstance(secondary_typography_data, Mapping)
+            else None
         ),
         shape=ShapeStyle(
             padding=_padding_from(shape_data.get("padding", {})),

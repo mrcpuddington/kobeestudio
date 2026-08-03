@@ -9,6 +9,10 @@ import wx
 from .base.dialog import Dialog as UpstreamDialog
 
 from ..core.composition import DocumentStyle, Padding, ShapeStyle, TypographyStyle
+from ..core.component_callout import (
+    COMPONENT_PRESETS,
+    ComponentCalloutSpec,
+)
 from ..core.icon_catalog import BUILTIN_ICONS, LABEL_PRESETS, PRESET_BY_ID
 from ..core.machine_codes import (
     CODE128_DEFAULT_HEIGHT_MM,
@@ -23,6 +27,7 @@ from ..core.studio_artwork import (
     render_header_artwork,
     render_label_artwork,
     render_machine_code_artwork,
+    render_component_callout_artwork,
 )
 from ..core.transforms import (
     BOTTOM_COPPER,
@@ -89,6 +94,8 @@ del HEADER_SHAPE_LABELS["Independent ends"]
 header_shapes = list(HEADER_SHAPE_LABELS.items())
 header_shapes.insert(3, ("Independent long edges", "custom_long_edges"))
 HEADER_SHAPE_LABELS = dict(header_shapes)
+COMPONENT_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
+del COMPONENT_SHAPE_LABELS["No container"]
 VARIANT_LABELS = ("Inverted fill", "Outline")
 CAP_LABELS = ("Square", "Rounded", "Chamfered", "Point", "Notch")
 HEADER_CAP_LABELS = ("Square", "Rounded")
@@ -112,6 +119,39 @@ QR_PRESENTATION_LABELS = {
     "Rounded frame": "rounded_frame",
     "Rounded frame + footer": "rounded_caption",
 }
+CONTENT_LAYOUT_LABELS = ("Single text", "Title + subtitle")
+MATCH_MAIN_TYPEFACE = "Match main typeface"
+COMPONENT_PRESET_LABELS = {"Custom dimensions": "custom"}
+COMPONENT_PRESET_LABELS.update({item.label: item.preset_id for item in COMPONENT_PRESETS})
+COMPONENT_PRESET_BY_LABEL = {item.label: item for item in COMPONENT_PRESETS}
+COMPONENT_POSITION_LABELS = {
+    "Left of text": "left",
+    "Right of text": "right",
+    "Above text": "above",
+    "Below text": "below",
+}
+COMPONENT_CUTOUT_LABELS = {
+    "Rectangle": "rectangle",
+    "Rounded rectangle": "rounded_rectangle",
+    "Pill / oval": "pill",
+}
+COMPONENT_CUTOUT_ID_TO_LABEL = {value: label for label, value in COMPONENT_CUTOUT_LABELS.items()}
+# Compatibility for artwork made before the tactile-switch preset was simplified.
+# Old items still reopen and render; new items use a plain rounded envelope.
+COMPONENT_CUTOUT_ID_TO_LABEL["tactile_switch"] = "Rounded rectangle"
+COMPONENT_ARRAY_ORIENTATION_LABELS = {
+    "Vertical stack": "vertical",
+    "Horizontal row": "horizontal",
+}
+COMPONENT_STYLE_DEFAULTS = {
+    "font": "FreddySpark-Regular",
+    "height_mm": 3.0,
+    "alignment": "Right",
+    "padding_mm": 1.0,
+    "outer_radius_mm": 1.0,
+    "cutout_radius_mm": 0.7,
+    "component_text_gap_mm": 2.6,
+}
 
 ICON_POSITION_LABELS = {
     "Left of text": "left",
@@ -119,7 +159,7 @@ ICON_POSITION_LABELS = {
     "Icon only": "only",
 }
 STUDIO_DIMENSIONS_VERSION = 2
-STUDIO_DEFAULTS_VERSION = 3
+STUDIO_DEFAULTS_VERSION = 6
 DEFAULT_LABEL_DIMENSIONS = {
     "HeightCtrl": 1.2,
     "PaddingTopCtrl": 0.5,
@@ -142,12 +182,18 @@ STUDIO_DEFAULTS = {
     "IconPositionChoice": "Left of text",
     "IconHeightCtrl": 0.0,
     "IconGapCtrl": 0.3,
+    "ContentLayoutChoice": "Single text",
+    "SubtitleCtrl": "",
+    "SubtitleFontChoice": MATCH_MAIN_TYPEFACE,
+    "SubtitleHeightCtrl": 0.8,
+    "SubtitleLineSpacingCtrl": 1.2,
+    "SubtitleGapCtrl": 0.25,
     "HeaderPinCountCtrl": 4,
-    "HeaderOrientationChoice": "Horizontal",
+    "HeaderOrientationChoice": "Vertical",
     "HeaderPin1Choice": "Start",
-    "HeaderPinSideChoice": "Top",
+    "HeaderPinSideChoice": "Left",
     "HeaderPadClearanceCtrl": 2.0,
-    "HeaderOpeningChoice": "None",
+    "HeaderOpeningChoice": "Continuous plug opening",
     "HeaderOpeningEndPaddingCtrl": 0.0,
     "HeaderLeadingPaddingCtrl": 0.3,
     "HeaderTrailingPaddingCtrl": 0.3,
@@ -157,6 +203,19 @@ STUDIO_DEFAULTS = {
     "HeaderLabelOuterPaddingCtrl": 0.3,
     "HeaderCrossSizeCtrl": 0.0,
     "HeaderPin1MarkerCheckbox": True,
+    "ComponentPresetChoice": "0603 / 1608 metric",
+    "ComponentPositionChoice": "Left of text",
+    "ComponentCutoutChoice": "Rounded rectangle",
+    "ComponentWidthCtrl": 2.2,
+    "ComponentHeightCtrl": 1.1,
+    "ComponentClearanceCtrl": 0.3,
+    "ComponentCutoutRadiusCtrl": 0.2,
+    "ComponentTextGapCtrl": 2.6,
+    "ComponentMinWidthCtrl": 0.0,
+    "ComponentMinHeightCtrl": 0.0,
+    "ComponentArrayCountCtrl": 3,
+    "ComponentArrayOrientationChoice": "Vertical stack",
+    "ComponentArrayPitchCtrl": 5.0,
     "MachineCodeTypeChoice": "QR Code",
     "MachineCodeModuleSizeCtrl": QR_MIN_MODULE_MM,
     "MachineCodeBarHeightCtrl": CODE128_DEFAULT_HEIGHT_MM,
@@ -167,8 +226,87 @@ STUDIO_DEFAULTS = {
 }
 
 
+MODE_DEFAULTS = {
+    "Label": {
+        "MultiLineText": "LABEL",
+        "FontComboBox": "FreddySpark-Regular",
+        "HeightCtrl": 1.2,
+        "AlignmentChoice": "Center",
+    },
+    "Component Callout": {
+        "MultiLineText": "COMPONENT",
+        "FontComboBox": COMPONENT_STYLE_DEFAULTS["font"],
+        "HeightCtrl": COMPONENT_STYLE_DEFAULTS["height_mm"],
+        "AlignmentChoice": COMPONENT_STYLE_DEFAULTS["alignment"],
+        "ShapeChoice": "Rounded rectangle",
+        "CornerRadiusCtrl": COMPONENT_STYLE_DEFAULTS["outer_radius_mm"],
+    },
+    "Component Array": {
+        "MultiLineText": "LED 1\nLED 2\nLED 3",
+        "FontComboBox": COMPONENT_STYLE_DEFAULTS["font"],
+        "HeightCtrl": COMPONENT_STYLE_DEFAULTS["height_mm"],
+        "AlignmentChoice": COMPONENT_STYLE_DEFAULTS["alignment"],
+        "ShapeChoice": "Rounded rectangle",
+        "CornerRadiusCtrl": COMPONENT_STYLE_DEFAULTS["outer_radius_mm"],
+        "ComponentArrayCountCtrl": 3,
+        "ComponentArrayOrientationChoice": "Vertical stack",
+    },
+    "2.54 mm Pin Header": {
+        "MultiLineText": "Pin 1\nPin 2\nPin 3\nPin 4",
+        "HeightCtrl": 1.2,
+        "HeaderPinCountCtrl": 4,
+        "HeaderOrientationChoice": "Vertical",
+        "HeaderPin1Choice": "Start",
+        "HeaderPinSideChoice": "Left",
+        "HeaderOpeningChoice": "Continuous plug opening",
+        "ShapeChoice": "Rounded rectangle",
+    },
+    "QR / Barcode": {
+        "MultiLineText": "https://kobee.com.au",
+        "MachineCodeTypeChoice": "QR Code",
+        "MachineCodePresentationChoice": "Rounded frame + footer",
+        "MachineCodeCaptionCtrl": "SCAN ME",
+    },
+}
+
+
+def mode_defaults(mode):
+    """Return an independent, renderable first-use profile for an artwork mode."""
+    settings = dict(STUDIO_DEFAULTS)
+    settings.update(MODE_DEFAULTS.get(mode, MODE_DEFAULTS["Label"]))
+    settings["StudioModeChoice"] = mode if mode in MODE_DEFAULTS else "Label"
+    settings["PresetLabelChoice"] = "Custom label"
+    settings["IconChoice"] = "No icon"
+    settings["IconPositionChoice"] = "Left of text"
+    settings["ContentLayoutChoice"] = "Single text"
+    settings["SubtitleCtrl"] = ""
+    settings["advancedCheckbox"] = False
+    return settings
+
+
+def _subtitle_font_name(selection, main_font):
+    """Resolve the optional subtitle override to a concrete typeface."""
+    return main_font if not selection or selection == MATCH_MAIN_TYPEFACE else selection
+
+
+def _launch_settings(params, config_defaults):
+    """Return isolated launch settings and whether this is an artwork edit."""
+    incoming = dict(params)
+    editing_existing = bool(incoming.get("_LoadedFootprintSettings"))
+    if editing_existing:
+        return incoming, True
+
+    # Session state is intentionally ignored until named presets exist.
+    # A fresh command invocation always starts from the factory label profile.
+    fresh = dict(config_defaults)
+    fresh["MultiLineText"] = MODE_DEFAULTS["Label"]["MultiLineText"]
+    fresh["LayerComboBox"] = FRONT_SILKSCREEN
+    fresh["advancedCheckbox"] = False
+    return fresh, False
+
+
 class MainDialog(UpstreamDialog):
-    """Preserve the proven KiBuzzard UI with explicit PCB layer choices."""
+    """Kobee Studio's responsive, mode-aware artwork editor."""
 
     config_defaults = dict(UpstreamDialog.config_defaults)
     config_defaults.update(
@@ -187,6 +325,8 @@ class MainDialog(UpstreamDialog):
         self._studio_controls_ready = False
         self._applying_label_preset = False
         self._dynamic_refit_pending = False
+        self._editing_existing_artwork = False
+        self._component_defaults_applied = False
         self.artwork = None
         self.stroke_polys = []
         self.guide_polys = []
@@ -207,14 +347,16 @@ class MainDialog(UpstreamDialog):
         self.m_LayerComboBox.Bind(wx.EVT_COMBOBOX, self._on_layer_changed)
         self.m_LayerComboBox.Hide()
         self.m_LayerComboBox1.Hide()
-        # Reuse the generated preview label.  Adding a new root-sizer item and
-        # fitting the dialog again was the first source of the macOS reflow.
         self.m_PreviewLabel.SetLabel("Live preview  ·  Kobee Studio {}".format(__version__))
         self.m_PreviewPanel.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self._update_mode_ui(refit=False)
+        self._rebuild_studio_layout()
+        if self._editing_existing_artwork:
+            self._update_mode_ui(refit=False)
+        else:
+            self._apply_mode_defaults("Label", refit=False)
         self._stabilise_dialog_layout()
-        # Reopening a placed icon is still an edit of its label.  Keeping the
-        # text field focused avoids the surprising jump back into symbols.
+        # Reopening a placed icon is still an edit of its label. Keeping the
+        # main field focused avoids jumping back into symbol selection.
         wx.CallAfter(self.m_MultiLineText.SetFocus)
 
     def _build_studio_controls(self):
@@ -230,7 +372,13 @@ class MainDialog(UpstreamDialog):
 
         self.m_StudioModeChoice = wx.Choice(
             panel,
-            choices=("Label", "2.54 mm Pin Header", "QR / Barcode"),
+            choices=(
+                "Label",
+                "Component Callout",
+                "Component Array",
+                "2.54 mm Pin Header",
+                "QR / Barcode",
+            ),
         )
         self.m_ShapeChoice = wx.Choice(panel, choices=tuple(LABEL_SHAPE_LABELS.keys()))
         self.m_ShapeVariantChoice = wx.Choice(panel, choices=VARIANT_LABELS)
@@ -246,6 +394,8 @@ class MainDialog(UpstreamDialog):
         mode_row.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         mode_row.Add(self.m_StudioModeChoice, 1, wx.EXPAND)
         box.Add(mode_row, 0, wx.EXPAND | wx.ALL, 5)
+        self.m_ArtworkTypeLabel = mode_label
+        self.m_ArtworkTypeRow = mode_row
         self._add_control(grid, panel, "Shape:", self.m_ShapeChoice)
         self._add_control(grid, panel, "Appearance:", self.m_ShapeVariantChoice)
         self.m_BorderThicknessLabel = self._add_control(
@@ -275,6 +425,19 @@ class MainDialog(UpstreamDialog):
         self.m_IconPositionChoice = wx.Choice(panel, choices=tuple(ICON_POSITION_LABELS.keys()))
         self.m_IconHeightCtrl = self._double_control(panel, 0.0, 20.0, 0.0, 0.1, 2)
         self.m_IconGapCtrl = self._double_control(panel, 0.0, 20.0, 0.3, 0.1, 2)
+        self.m_ContentLayoutChoice = wx.Choice(panel, choices=CONTENT_LAYOUT_LABELS)
+        self.m_SubtitleCtrl = wx.TextCtrl(panel, value="")
+        self.m_SubtitleCtrl.SetMaxLength(256)
+        self.m_SubtitleFontChoice = wx.Choice(
+            panel,
+            choices=(MATCH_MAIN_TYPEFACE,) + tuple(self.m_FontComboBox.GetItems()),
+        )
+        self.m_SubtitleHeightCtrl = self._double_control(panel, 0.1, 128.0, 0.8, 0.1, 2)
+        self.m_SubtitleLineSpacingCtrl = self._double_control(panel, 0.1, 10.0, 1.2, 0.1, 2)
+        self.m_SubtitleGapCtrl = self._double_control(panel, 0.0, 20.0, 0.25, 0.05, 2)
+        self.m_ContentLayoutLabel = self._add_control(
+            asset_grid, panel, "Text layout:", self.m_ContentLayoutChoice
+        )
         self._add_control(asset_grid, panel, "Text preset:", self.m_PresetPickerButton)
         self._add_control(asset_grid, panel, "Symbol:", self.m_IconPickerButton)
         self.m_IconPositionLabel = self._add_control(
@@ -286,8 +449,29 @@ class MainDialog(UpstreamDialog):
         self.m_IconGapLabel = self._add_control(
             asset_grid, panel, "Icon gap (mm):", self.m_IconGapCtrl
         )
+        self.m_SubtitleLabel = self._add_control(
+            asset_grid, panel, "Subtitle text:", self.m_SubtitleCtrl
+        )
+        self.m_SubtitleFontLabel = self._add_control(
+            asset_grid, panel, "Subtitle typeface:", self.m_SubtitleFontChoice
+        )
+        self.m_SubtitleHeightLabel = self._add_control(
+            asset_grid, panel, "Subtitle height (mm):", self.m_SubtitleHeightCtrl
+        )
+        self.m_SubtitleLineSpacingLabel = self._add_control(
+            asset_grid, panel, "Subtitle line spacing:", self.m_SubtitleLineSpacingCtrl
+        )
+        self.m_SubtitleGapLabel = self._add_control(
+            asset_grid, panel, "Title/subtitle gap (mm):", self.m_SubtitleGapCtrl
+        )
         self.m_IconHeightCtrl.SetToolTip("0 matches the current text height; otherwise this is millimetres.")
         self.m_IconGapCtrl.SetToolTip("Space between the icon and text in millimetres.")
+        self.m_ContentLayoutChoice.SetToolTip(
+            "Use the main text alone, or add an independently sized subtitle beneath it."
+        )
+        self.m_SubtitleCtrl.SetToolTip(
+            "Secondary text beneath the main label. Its typeface matches the main text by default."
+        )
         self.m_FeatureSizeCtrl.SetToolTip(
             "Controls the depth of the point, notch, tab, chamfer, or hexagon end."
         )
@@ -408,12 +592,145 @@ class MainDialog(UpstreamDialog):
         header_panel.SetSizer(header_box)
         root_sizer.Insert(3, header_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.m_HeaderPanel = header_panel
+
+        component_panel = wx.Panel(self)
+        component_box = wx.StaticBoxSizer(
+            wx.StaticBox(component_panel, label="Component safe zone"), wx.VERTICAL
+        )
+        component_grid = wx.FlexGridSizer(0, 4, 4, 8)
+        component_grid.AddGrowableCol(1)
+        component_grid.AddGrowableCol(3)
+        self.m_ComponentPresetChoice = wx.Choice(
+            component_panel, choices=tuple(COMPONENT_PRESET_LABELS.keys())
+        )
+        self.m_ComponentPositionChoice = wx.Choice(
+            component_panel, choices=tuple(COMPONENT_POSITION_LABELS.keys())
+        )
+        self.m_ComponentCutoutChoice = wx.Choice(
+            component_panel, choices=tuple(COMPONENT_CUTOUT_LABELS.keys())
+        )
+        self.m_ComponentWidthCtrl = self._double_control(component_panel, 0.1, 100.0, 2.2, 0.1, 2)
+        self.m_ComponentHeightCtrl = self._double_control(component_panel, 0.1, 100.0, 1.1, 0.1, 2)
+        self.m_ComponentClearanceCtrl = self._double_control(component_panel, 0.0, 50.0, 0.3, 0.05, 2)
+        self.m_ComponentCutoutRadiusCtrl = self._double_control(component_panel, 0.0, 50.0, 0.7, 0.05, 2)
+        self.m_ComponentTextGapCtrl = self._double_control(component_panel, 0.0, 100.0, 2.6, 0.1, 2)
+        self.m_ComponentMinWidthCtrl = self._double_control(component_panel, 0.0, 200.0, 0.0, 0.5, 2)
+        self.m_ComponentMinHeightCtrl = self._double_control(component_panel, 0.0, 200.0, 0.0, 0.5, 2)
+        for attribute, label, control in (
+            ("m_ComponentPresetLabel", "Package / envelope:", self.m_ComponentPresetChoice),
+            ("m_ComponentPositionLabel", "Component position:", self.m_ComponentPositionChoice),
+            ("m_ComponentCutoutLabel", "Safe-zone shape:", self.m_ComponentCutoutChoice),
+            ("m_ComponentWidthLabel", "Envelope width (mm):", self.m_ComponentWidthCtrl),
+            ("m_ComponentHeightLabel", "Envelope height (mm):", self.m_ComponentHeightCtrl),
+            (
+                "m_ComponentClearanceLabel",
+                "Extra clearance (mm):",
+                self.m_ComponentClearanceCtrl,
+            ),
+        ):
+            setattr(
+                self,
+                attribute,
+                self._add_control(component_grid, component_panel, label, control),
+            )
+        self.m_ComponentCutoutRadiusLabel = self._add_control(
+            component_grid,
+            component_panel,
+            "Safe-zone radius (mm):",
+            self.m_ComponentCutoutRadiusCtrl,
+        )
+        self.m_ComponentTextGapLabel = self._add_control(
+            component_grid,
+            component_panel,
+            "Component-to-text gap (mm):",
+            self.m_ComponentTextGapCtrl,
+        )
+        self.m_ComponentMinWidthLabel = self._add_control(
+            component_grid, component_panel, "Minimum width (mm):", self.m_ComponentMinWidthCtrl
+        )
+        self.m_ComponentMinHeightLabel = self._add_control(
+            component_grid, component_panel, "Minimum height (mm):", self.m_ComponentMinHeightCtrl
+        )
+        component_box.Add(component_grid, 0, wx.EXPAND | wx.ALL, 5)
+        component_help = wx.StaticText(
+            component_panel,
+            label=(
+                "Preset sizes are editable footprint envelopes. The preview guide and placement origin "
+                "mark the real component centre; guide geometry is never exported."
+            ),
+        )
+        component_help.Wrap(720)
+        component_box.Add(component_help, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 7)
+        component_panel.SetSizer(component_box)
+        root_sizer.Insert(
+            4,
+            component_panel,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            10,
+        )
+        self.m_ComponentPanel = component_panel
+
+        array_panel = wx.Panel(self)
+        array_box = wx.StaticBoxSizer(
+            wx.StaticBox(array_panel, label="Component array"), wx.VERTICAL
+        )
+        array_grid = wx.FlexGridSizer(0, 4, 4, 8)
+        array_grid.AddGrowableCol(1)
+        array_grid.AddGrowableCol(3)
+        self.m_ComponentArrayCountCtrl = wx.SpinCtrl(
+            array_panel, min=2, max=16, initial=3
+        )
+        self.m_ComponentArrayOrientationChoice = wx.Choice(
+            array_panel, choices=tuple(COMPONENT_ARRAY_ORIENTATION_LABELS.keys())
+        )
+        self.m_ComponentArrayPitchCtrl = self._double_control(
+            array_panel, 0.1, 100.0, 5.0, 0.1, 2
+        )
+        self.m_ComponentArrayFillButton = wx.Button(
+            array_panel, label="Fill labels 1…N"
+        )
+        self._add_control(
+            array_grid, array_panel, "Component count:", self.m_ComponentArrayCountCtrl
+        )
+        self._add_control(
+            array_grid,
+            array_panel,
+            "Array direction:",
+            self.m_ComponentArrayOrientationChoice,
+        )
+        self._add_control(
+            array_grid,
+            array_panel,
+            "Centre spacing (mm):",
+            self.m_ComponentArrayPitchCtrl,
+        )
+        array_grid.Add(self.m_ComponentArrayFillButton, 0, wx.EXPAND)
+        array_box.Add(array_grid, 0, wx.EXPAND | wx.ALL, 5)
+        array_help = wx.StaticText(
+            array_panel,
+            label=(
+                "Enter one label per component. Centre spacing is checked against "
+                "the selected opening and rendered text so rows cannot overlap."
+            ),
+        )
+        array_help.Wrap(720)
+        array_box.Add(array_help, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 7)
+        array_panel.SetSizer(array_box)
+        root_sizer.Insert(
+            5,
+            array_panel,
+            0,
+            wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
+            10,
+        )
+        self.m_ComponentArrayPanel = array_panel
         # Header mode has its own label padding, so the ordinary four-sided
         # padding grid and its dividers can disappear and return as one unit.
         self._ordinary_padding_items = (
-            root_sizer.GetItem(5),
             root_sizer.GetItem(6),
             root_sizer.GetItem(7),
+            root_sizer.GetItem(8),
         )
 
         self._studio_controls = {
@@ -431,6 +748,12 @@ class MainDialog(UpstreamDialog):
             "IconPositionChoice": self.m_IconPositionChoice,
             "IconHeightCtrl": self.m_IconHeightCtrl,
             "IconGapCtrl": self.m_IconGapCtrl,
+            "ContentLayoutChoice": self.m_ContentLayoutChoice,
+            "SubtitleCtrl": self.m_SubtitleCtrl,
+            "SubtitleFontChoice": self.m_SubtitleFontChoice,
+            "SubtitleHeightCtrl": self.m_SubtitleHeightCtrl,
+            "SubtitleLineSpacingCtrl": self.m_SubtitleLineSpacingCtrl,
+            "SubtitleGapCtrl": self.m_SubtitleGapCtrl,
             "HeaderPinCountCtrl": self.m_HeaderPinCountCtrl,
             "HeaderOrientationChoice": self.m_HeaderOrientationChoice,
             "HeaderPin1Choice": self.m_HeaderPin1Choice,
@@ -446,6 +769,19 @@ class MainDialog(UpstreamDialog):
             "HeaderLabelOuterPaddingCtrl": self.m_HeaderLabelOuterPaddingCtrl,
             "HeaderCrossSizeCtrl": self.m_HeaderCrossSizeCtrl,
             "HeaderPin1MarkerCheckbox": self.m_HeaderPin1MarkerCheckbox,
+            "ComponentPresetChoice": self.m_ComponentPresetChoice,
+            "ComponentPositionChoice": self.m_ComponentPositionChoice,
+            "ComponentCutoutChoice": self.m_ComponentCutoutChoice,
+            "ComponentWidthCtrl": self.m_ComponentWidthCtrl,
+            "ComponentHeightCtrl": self.m_ComponentHeightCtrl,
+            "ComponentClearanceCtrl": self.m_ComponentClearanceCtrl,
+            "ComponentCutoutRadiusCtrl": self.m_ComponentCutoutRadiusCtrl,
+            "ComponentTextGapCtrl": self.m_ComponentTextGapCtrl,
+            "ComponentMinWidthCtrl": self.m_ComponentMinWidthCtrl,
+            "ComponentMinHeightCtrl": self.m_ComponentMinHeightCtrl,
+            "ComponentArrayCountCtrl": self.m_ComponentArrayCountCtrl,
+            "ComponentArrayOrientationChoice": self.m_ComponentArrayOrientationChoice,
+            "ComponentArrayPitchCtrl": self.m_ComponentArrayPitchCtrl,
         }
         self.m_StudioModeChoice.Bind(wx.EVT_CHOICE, self._on_mode_changed)
         self.m_HeaderOrientationChoice.Bind(wx.EVT_CHOICE, self._on_header_orientation_changed)
@@ -458,8 +794,16 @@ class MainDialog(UpstreamDialog):
         self.m_PresetPickerButton.Bind(wx.EVT_BUTTON, self._open_label_picker)
         self.m_IconPickerButton.Bind(wx.EVT_BUTTON, self._open_icon_picker)
         self.m_IconPositionChoice.Bind(wx.EVT_CHOICE, self._on_icon_changed)
+        self.m_ContentLayoutChoice.Bind(wx.EVT_CHOICE, self._on_content_layout_changed)
+        self.m_ComponentPresetChoice.Bind(wx.EVT_CHOICE, self._on_component_preset_changed)
+        self.m_ComponentCutoutChoice.Bind(wx.EVT_CHOICE, self._on_component_cutout_changed)
+        self.m_ComponentArrayOrientationChoice.Bind(
+            wx.EVT_CHOICE, self._on_component_array_orientation_changed
+        )
         self.m_MultiLineText.Bind(wx.EVT_TEXT, self._on_label_text_edited)
+        self.m_SubtitleCtrl.Bind(wx.EVT_TEXT, self._on_label_text_edited)
         self.m_HeaderFillLabelsButton.Bind(wx.EVT_BUTTON, self._fill_header_labels)
+        self.m_ComponentArrayFillButton.Bind(wx.EVT_BUTTON, self._fill_component_labels)
 
     def _build_machine_code_controls(self):
         root_sizer = self.GetSizer()
@@ -529,7 +873,7 @@ class MainDialog(UpstreamDialog):
         )
         panel.SetSizer(box)
         root_sizer.Insert(
-            4,
+            6,
             panel,
             0,
             wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM,
@@ -623,7 +967,7 @@ class MainDialog(UpstreamDialog):
         )
 
         self.m_StudioModeChoice.SetToolTip(
-            "Choose a single label or a labelled 2.54 mm connector rail."
+            "Choose labels, component callouts, connector rails, QR codes, or barcodes."
         )
         self.m_ShapeChoice.SetToolTip("Choose the outer container geometry.")
         self.m_ShapeVariantChoice.SetToolTip(
@@ -689,6 +1033,165 @@ class MainDialog(UpstreamDialog):
             self._ordinary_padding_items = (typography_box.GetItem(1),)
             self.m_TypographyBox = typography_box
 
+    @staticmethod
+    def _sizer_contains_window(sizer, target):
+        if sizer is None:
+            return False
+        for item in sizer.GetChildren():
+            if item.GetWindow() is target:
+                return True
+            if item.GetSizer() is not None and MainDialog._sizer_contains_window(
+                item.GetSizer(), target
+            ):
+                return True
+        return False
+
+    def _take_root_item_containing(self, root_sizer, target):
+        """Detach and return the top-level sizer item containing a window."""
+        for index in range(root_sizer.GetItemCount()):
+            item = root_sizer.GetItem(index)
+            nested = item.GetSizer()
+            if item.GetWindow() is target or self._sizer_contains_window(nested, target):
+                payload = nested or item.GetWindow()
+                root_sizer.Detach(index)
+                return payload
+        return None
+
+    def _reparent_sizer_windows(self, sizer, parent):
+        """Move direct dialog children into the settings scroller."""
+        if isinstance(sizer, wx.StaticBoxSizer):
+            static_box = sizer.GetStaticBox()
+            if static_box.GetParent() is self:
+                static_box.Reparent(parent)
+        for item in sizer.GetChildren():
+            window = item.GetWindow()
+            nested = item.GetSizer()
+            if window is not None and window.GetParent() is self:
+                window.Reparent(parent)
+            elif nested is not None:
+                self._reparent_sizer_windows(nested, parent)
+
+    def _rebuild_studio_layout(self):
+        """Replace the legacy growing form with a fixed workspace and scroller."""
+        legacy_root = self.GetSizer()
+        self._take_root_item_containing(legacy_root, self.m_LayerSelector)
+        text_sizer = self._take_root_item_containing(legacy_root, self.m_MultiLineText)
+        preview_sizer = self._take_root_item_containing(legacy_root, self.m_PreviewPanel)
+        self._take_root_item_containing(legacy_root, self.m_sdbSizerOK)
+        if text_sizer is None or preview_sizer is None:
+            raise RuntimeError("Could not rebuild the Kobee Studio workspace")
+
+        for button in (self.m_sdbSizerCancel, self.m_sdbSizerOK):
+            containing = button.GetContainingSizer()
+            if containing is not None:
+                containing.Detach(button)
+        advanced_sizer = self.m_advancedCheckbox.GetContainingSizer()
+        if advanced_sizer is not None:
+            advanced_sizer.Detach(self.m_advancedCheckbox)
+
+        # Subtitle entry belongs with the main text, not among geometry controls.
+        for control in (self.m_SubtitleLabel, self.m_SubtitleCtrl):
+            containing = control.GetContainingSizer()
+            if containing is not None:
+                containing.Detach(control)
+            control.Reparent(self)
+
+        # The generated sizer becomes the content of one vertical scroller.
+        # Existing controls keep all bindings and settings behaviour.
+        self.SetSizer(None, deleteOld=False)
+        scroller = wx.ScrolledWindow(
+            self,
+            style=wx.VSCROLL | wx.TAB_TRAVERSAL | wx.BORDER_NONE,
+        )
+        scroller.SetBackgroundColour(self.GetBackgroundColour())
+        scroller.SetScrollRate(0, 12)
+        scroller.SetMinSize(wx.Size(1, 180))
+        self._reparent_sizer_windows(legacy_root, scroller)
+        self.m_advancedCheckbox.Reparent(self)
+        self.m_advancedCheckbox.SetLabel("Show advanced settings")
+        self.m_advancedCheckbox.SetToolTip(
+            "Reveal exact geometry, spacing and typography controls."
+        )
+        scroller.SetSizer(legacy_root)
+        self.m_SettingsScroller = scroller
+
+        # Artwork type is the first decision. Keep it above layer selection and
+        # outside the scrollable settings area so it remains discoverable.
+        studio_box = self.m_StudioPanel.GetSizer()
+        studio_box.Detach(self.m_ArtworkTypeRow)
+        self.m_ArtworkTypeLabel.Hide()
+        self.m_StudioModeChoice.Reparent(self)
+        artwork_bar = wx.StaticBoxSizer(wx.StaticBox(self, label="Artwork type"), wx.HORIZONTAL)
+        artwork_bar.Add(self.m_StudioModeChoice, 1, wx.EXPAND | wx.ALL, 5)
+
+        root = wx.BoxSizer(wx.VERTICAL)
+        root.Add(artwork_bar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        root.Add(self.m_LayerSelector, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        layer_help = wx.StaticText(
+            self,
+            label=(
+                "Each artwork item is placed on one layer. To repeat it on another layer, "
+                "duplicate the placed artwork, reopen it, then choose the new layer."
+            ),
+        )
+        layer_help.Wrap(860)
+        root.Add(layer_help, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+
+        workspace = wx.BoxSizer(wx.HORIZONTAL)
+        text_editor = wx.BoxSizer(wx.VERTICAL)
+        text_editor.Add(text_sizer, 1, wx.EXPAND)
+        subtitle_editor = wx.BoxSizer(wx.VERTICAL)
+        subtitle_editor.Add(self.m_SubtitleLabel, 0, wx.BOTTOM, 2)
+        subtitle_editor.Add(self.m_SubtitleCtrl, 0, wx.EXPAND)
+        text_editor.Add(subtitle_editor, 0, wx.EXPAND | wx.TOP, 6)
+        workspace.Add(text_editor, 1, wx.EXPAND | wx.RIGHT, 6)
+        workspace.Add(preview_sizer, 1, wx.EXPAND | wx.LEFT, 6)
+        root.Add(workspace, 0, wx.EXPAND | wx.ALL, 10)
+        # This bar deliberately sits outside the scroller, so advanced controls
+        # can always be reached no matter how far down a long mode is scrolled.
+        settings_bar = wx.BoxSizer(wx.HORIZONTAL)
+        heading = wx.StaticText(self, label="Settings")
+        heading.SetFont(heading.GetFont().Bold())
+        settings_bar.Add(heading, 0, wx.ALIGN_CENTER_VERTICAL)
+        settings_bar.AddStretchSpacer(1)
+        settings_bar.Add(self.m_advancedCheckbox, 0, wx.ALIGN_CENTER_VERTICAL)
+        root.Add(settings_bar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        root.Add(scroller, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        root.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.TOP, 8)
+
+        footer = wx.BoxSizer(wx.HORIZONTAL)
+        shortcut = wx.StaticText(self, label="Ctrl/Shift + Enter places artwork")
+        footer.Add(shortcut, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        buttons = wx.StdDialogButtonSizer()
+        buttons.AddButton(self.m_sdbSizerCancel)
+        buttons.AddButton(self.m_sdbSizerOK)
+        buttons.Realize()
+        footer.Add(buttons, 0, wx.ALIGN_CENTER_VERTICAL)
+        root.Add(footer, 0, wx.EXPAND | wx.ALL, 10)
+
+        self.SetSizer(root)
+        self.m_MainStudioSizer = root
+        self.m_WorkspaceSizer = workspace
+        self.m_SubtitleEditorSizer = subtitle_editor
+        self.m_FooterSizer = footer
+
+    def _advanced_visible(self):
+        return bool(self.m_advancedCheckbox.IsChecked())
+
+    def _refresh_settings_layout(self):
+        """Refresh scrolling without changing the outer dialog size."""
+        if not hasattr(self, "m_SettingsScroller"):
+            return
+        self.m_StudioPanel.Layout()
+        self.m_HeaderPanel.Layout()
+        self.m_ComponentPanel.Layout()
+        self.m_ComponentArrayPanel.Layout()
+        self.m_MachineCodePanel.Layout()
+        self.m_SettingsScroller.GetSizer().Layout()
+        self.m_SettingsScroller.FitInside()
+        self.m_SettingsScroller.Layout()
+        self.Layout()
+
     def _apply_studio_settings(self, settings):
         if not self._studio_controls_ready:
             return
@@ -729,7 +1232,13 @@ class MainDialog(UpstreamDialog):
             self.m_HeaderPinSideChoice.SetSelection(0)
 
     def _on_mode_changed(self, event):
-        self._update_mode_ui(refit=True)
+        mode = self.m_StudioModeChoice.GetStringSelection()
+        if not self._editing_existing_artwork:
+            self._apply_mode_defaults(mode, refit=False)
+        else:
+            self._update_mode_ui(refit=True)
+        if hasattr(self, "m_SettingsScroller"):
+            self.m_SettingsScroller.Scroll(0, 0)
         self.ReGenerateFlag(event)
         self.ReGeneratePreview()
         event.Skip()
@@ -747,14 +1256,49 @@ class MainDialog(UpstreamDialog):
         event.Skip()
 
     def _on_header_details_changed(self, event):
-        show_details = self.m_HeaderDetailsCheckbox.IsChecked()
+        show_details = (
+            self._advanced_visible()
+            and self.m_HeaderDetailsCheckbox.IsChecked()
+            and self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header"
+        )
         self.m_HeaderDetailBox.GetStaticBox().Show(show_details)
         self.m_HeaderDetailBox.ShowItems(show_details)
-        self.m_HeaderPanel.Layout()
-        self.SetMinSize(wx.DefaultSize)
-        self.Fit()
-        self.GetSizer().SetSizeHints(self)
-        self.Layout()
+        self._schedule_dynamic_refit()
+        event.Skip()
+
+    def _on_content_layout_changed(self, event):
+        self._update_content_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_component_preset_changed(self, event):
+        preset = COMPONENT_PRESET_BY_LABEL.get(
+            self.m_ComponentPresetChoice.GetStringSelection()
+        )
+        if preset is not None:
+            self.m_ComponentWidthCtrl.SetValue(preset.width_mm)
+            self.m_ComponentHeightCtrl.SetValue(preset.height_mm)
+            self.m_ComponentCutoutChoice.SetStringSelection(
+                COMPONENT_CUTOUT_ID_TO_LABEL[preset.cutout_shape]
+            )
+            self.m_ComponentCutoutRadiusCtrl.SetValue(preset.cutout_radius_mm)
+            self._ensure_component_array_pitch()
+        self._update_component_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_component_cutout_changed(self, event):
+        self._update_component_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_component_array_orientation_changed(self, event):
+        self._ensure_component_array_pitch()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
         event.Skip()
 
     def _on_machine_code_type_changed(self, event):
@@ -857,7 +1401,7 @@ class MainDialog(UpstreamDialog):
         if (
             self._studio_controls_ready
             and not self._applying_label_preset
-            and self.m_StudioModeChoice.GetStringSelection() == "Label"
+            and self.m_StudioModeChoice.GetStringSelection() in ("Label", "Component Callout")
         ):
             self.m_PresetLabelChoice.SetStringSelection("Custom label")
             self._update_asset_button_labels()
@@ -931,7 +1475,11 @@ class MainDialog(UpstreamDialog):
                 control.SetStringSelection("Square")
 
     def _update_icon_ui(self):
-        label_mode = self.m_StudioModeChoice.GetStringSelection() == "Label"
+        label_mode = self.m_StudioModeChoice.GetStringSelection() in (
+            "Label",
+            "Component Callout",
+        )
+        advanced = self._advanced_visible()
         icon_id = ICON_LABELS.get(self.m_IconChoice.GetStringSelection(), "")
         icon_only = self.m_IconPositionChoice.GetStringSelection() == "Icon only"
         self.m_PresetLabelChoice.Enable(label_mode)
@@ -939,23 +1487,75 @@ class MainDialog(UpstreamDialog):
         self.m_PresetPickerButton.Enable(label_mode)
         self.m_IconPickerButton.Enable(label_mode)
         show_icon_options = label_mode and bool(icon_id)
-        show_icon_gap = show_icon_options and not icon_only
-        for control in (
-            self.m_IconPositionLabel,
-            self.m_IconPositionChoice,
-            self.m_IconHeightLabel,
-            self.m_IconHeightCtrl,
-        ):
+        for control in (self.m_IconPositionLabel, self.m_IconPositionChoice):
             control.Show(show_icon_options)
+        for control in (self.m_IconHeightLabel, self.m_IconHeightCtrl):
+            control.Show(show_icon_options and advanced)
+        show_icon_gap = show_icon_options and not icon_only and advanced
         self.m_IconGapLabel.Show(show_icon_gap)
         self.m_IconGapCtrl.Show(show_icon_gap)
         self._update_asset_button_labels()
         self.m_StudioPanel.Layout()
         self._schedule_dynamic_refit()
 
+    def _update_content_ui(self):
+        if not hasattr(self, "m_ContentLayoutChoice"):
+            return
+        content_mode = self.m_StudioModeChoice.GetStringSelection() in (
+            "Label",
+            "Component Callout",
+        )
+        subtitle_mode = (
+            content_mode
+            and self.m_ContentLayoutChoice.GetStringSelection() == "Title + subtitle"
+        )
+        advanced = self._advanced_visible()
+        for control in (
+            self.m_SubtitleLabel,
+            self.m_SubtitleCtrl,
+            self.m_SubtitleHeightLabel,
+            self.m_SubtitleHeightCtrl,
+        ):
+            control.Show(subtitle_mode)
+        for control in (
+            self.m_SubtitleFontLabel,
+            self.m_SubtitleFontChoice,
+            self.m_SubtitleLineSpacingLabel,
+            self.m_SubtitleLineSpacingCtrl,
+            self.m_SubtitleGapLabel,
+            self.m_SubtitleGapCtrl,
+        ):
+            control.Show(subtitle_mode and advanced)
+        if content_mode:
+            self.textLabel.SetLabel("Main text:" if subtitle_mode else "Label text:")
+        self.m_StudioPanel.Layout()
+        self._schedule_dynamic_refit()
+
+    def _update_component_ui(self):
+        if not hasattr(self, "m_ComponentPanel"):
+            return
+        advanced = self._advanced_visible()
+        advanced_pairs = (
+            (self.m_ComponentWidthLabel, self.m_ComponentWidthCtrl),
+            (self.m_ComponentHeightLabel, self.m_ComponentHeightCtrl),
+            (self.m_ComponentClearanceLabel, self.m_ComponentClearanceCtrl),
+            (self.m_ComponentTextGapLabel, self.m_ComponentTextGapCtrl),
+            (self.m_ComponentMinWidthLabel, self.m_ComponentMinWidthCtrl),
+            (self.m_ComponentMinHeightLabel, self.m_ComponentMinHeightCtrl),
+        )
+        for label, control in advanced_pairs:
+            label.Show(advanced)
+            control.Show(advanced)
+        rounded = self.m_ComponentCutoutChoice.GetStringSelection() == "Rounded rectangle"
+        self.m_ComponentCutoutRadiusLabel.Show(advanced and rounded)
+        self.m_ComponentCutoutRadiusCtrl.Show(advanced and rounded)
+        self.m_ComponentPanel.Layout()
+        self._schedule_dynamic_refit()
+
     def _update_machine_code_ui(self):
         if not hasattr(self, "m_MachineCodePanel"):
             return
+        advanced = self._advanced_visible()
         kind = MACHINE_CODE_LABELS.get(
             self.m_MachineCodeTypeChoice.GetStringSelection(), "qr"
         )
@@ -968,40 +1568,39 @@ class MainDialog(UpstreamDialog):
         if self.m_MachineCodeBarHeightCtrl.GetValue() < CODE128_MIN_HEIGHT_MM:
             self.m_MachineCodeBarHeightCtrl.SetValue(CODE128_DEFAULT_HEIGHT_MM)
 
-        self.m_MachineCodeBarHeightLabel.Show(code128)
-        self.m_MachineCodeBarHeightCtrl.Show(code128)
+        self.m_MachineCodeModuleSizeLabel.Show(advanced)
+        self.m_MachineCodeModuleSizeCtrl.Show(advanced)
+        self.m_MachineCodeBarHeightLabel.Show(code128 and advanced)
+        self.m_MachineCodeBarHeightCtrl.Show(code128 and advanced)
         self.m_MachineCodePresentationLabel.Show(not code128)
         self.m_MachineCodePresentationChoice.Show(not code128)
         presentation = QR_PRESENTATION_LABELS.get(
             self.m_MachineCodePresentationChoice.GetStringSelection(), "plain"
         )
         framed_mode = not code128 and presentation != "plain"
-        self.m_MachineCodeFramePaddingLabel.Show(framed_mode)
-        self.m_MachineCodeFramePaddingCtrl.Show(framed_mode)
+        self.m_MachineCodeFramePaddingLabel.Show(framed_mode and advanced)
+        self.m_MachineCodeFramePaddingCtrl.Show(framed_mode and advanced)
         caption_mode = not code128 and presentation == "rounded_caption"
-        for control in (
-            self.m_MachineCodeCaptionLabel,
-            self.m_MachineCodeCaptionCtrl,
-            self.m_MachineCodeCaptionHeightLabel,
-            self.m_MachineCodeCaptionHeightCtrl,
-        ):
-            control.Show(caption_mode)
+        self.m_MachineCodeCaptionLabel.Show(caption_mode)
+        self.m_MachineCodeCaptionCtrl.Show(caption_mode)
+        self.m_MachineCodeCaptionHeightLabel.Show(caption_mode and advanced)
+        self.m_MachineCodeCaptionHeightCtrl.Show(caption_mode and advanced)
 
         if code128:
             self.m_MachineCodeHelp.SetLabel(
-                "Printable ASCII, maximum 48 characters. Default 0.25 mm modules and 4.0 mm bars; "
-                "minimum 0.20 mm and 3.0 mm. Check the finished board with your fabricator and scanner."
+                "Printable ASCII, maximum 48 characters. Defaults are fabrication-safe; "
+                "open advanced settings to tune module width and bar height."
             )
         else:
             self.m_MachineCodeHelp.SetLabel(
-                "UTF-8 payload, maximum 512 bytes. QR error correction M and the required four-module "
-                "quiet zone are automatic. Rounded frames remain outside that protected area."
+                "UTF-8 payload, maximum 512 bytes. Quiet-zone and readability safeguards "
+                "are automatic; advanced settings expose exact sizing."
             )
         self.m_MachineCodePanel.Layout()
         self._schedule_dynamic_refit()
 
     def _schedule_dynamic_refit(self):
-        """Grow the dialog once after dynamic controls become visible."""
+        """Coalesce scroll-layout updates after controls change visibility."""
         if not self._studio_controls_ready or self._dynamic_refit_pending:
             return
         self._dynamic_refit_pending = True
@@ -1011,19 +1610,7 @@ class MainDialog(UpstreamDialog):
         self._dynamic_refit_pending = False
         if not self:
             return
-        panel_sizer = self.m_StudioPanel.GetSizer()
-        self.m_StudioPanel.SetMinSize(wx.DefaultSize)
-        panel_sizer.Layout()
-        self.m_StudioPanel.SetMinSize(panel_sizer.CalcMin())
-        root_sizer = self.GetSizer()
-        root_sizer.Layout()
-        needed = root_sizer.CalcMin()
-        current = self.GetSize()
-        target = wx.Size(max(current.width, needed.width), max(current.height, needed.height))
-        if target != current:
-            self.SetSize(target)
-        self.SetMinSize(needed)
-        self.Layout()
+        self._refresh_settings_layout()
 
     @staticmethod
     def _set_picker_button(button, selected_label, empty_label, item_kind):
@@ -1062,7 +1649,16 @@ class MainDialog(UpstreamDialog):
         )
 
     def _sync_shape_choices(self, header_mode):
-        choices = HEADER_SHAPE_LABELS if header_mode else LABEL_SHAPE_LABELS
+        component_mode = (
+            self.m_StudioModeChoice.GetStringSelection() in ("Component Callout", "Component Array")
+        )
+        choices = (
+            HEADER_SHAPE_LABELS
+            if header_mode
+            else COMPONENT_SHAPE_LABELS
+            if component_mode
+            else LABEL_SHAPE_LABELS
+        )
         current = self.m_ShapeChoice.GetStringSelection()
         if current == "Independent ends" and header_mode:
             current = "Independent long edges"
@@ -1076,9 +1672,12 @@ class MainDialog(UpstreamDialog):
             self.m_ShapeChoice.SetStringSelection("Rounded rectangle")
 
     def _selected_shape(self):
+        mode = self.m_StudioModeChoice.GetStringSelection()
         choices = (
             HEADER_SHAPE_LABELS
-            if self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header"
+            if mode == "2.54 mm Pin Header"
+            else COMPONENT_SHAPE_LABELS
+            if mode in ("Component Callout", "Component Array")
             else LABEL_SHAPE_LABELS
         )
         return choices[self.m_ShapeChoice.GetStringSelection()]
@@ -1088,12 +1687,102 @@ class MainDialog(UpstreamDialog):
         self.m_MultiLineText.SetValue("\n".join(str(index + 1) for index in range(count)))
         self.ReGenerateFlag(event)
 
+    def _fill_component_labels(self, event):
+        count = self.m_ComponentArrayCountCtrl.GetValue()
+        self.m_MultiLineText.SetValue("\n".join(str(index + 1) for index in range(count)))
+        self.ReGenerateFlag(event)
+
+    def _ensure_component_array_pitch(self):
+        if self.m_StudioModeChoice.GetStringSelection() != "Component Array":
+            return
+        vertical = (
+            self.m_ComponentArrayOrientationChoice.GetStringSelection()
+            == "Vertical stack"
+        )
+        opening_size = (
+            self.m_ComponentHeightCtrl.GetValue()
+            if vertical
+            else self.m_ComponentWidthCtrl.GetValue()
+        ) + 2.0 * self.m_ComponentClearanceCtrl.GetValue()
+        if vertical:
+            opening_size = max(opening_size, self.m_HeightCtrl.GetValue())
+        recommended = opening_size + 0.5
+        if self.m_ComponentArrayPitchCtrl.GetValue() < recommended:
+            self.m_ComponentArrayPitchCtrl.SetValue(recommended)
+
+    def _apply_mode_defaults(self, mode, refit=True):
+        """Reset a new artwork mode to a useful, valid starting design.
+
+        Existing placed artwork is deliberately never passed through here: its
+        embedded settings remain the source of truth when reopened for editing.
+        """
+        settings = mode_defaults(mode)
+        self.m_StudioModeChoice.SetStringSelection(settings["StudioModeChoice"])
+        self._sync_shape_choices(mode == "2.54 mm Pin Header")
+        self._apply_studio_settings(settings)
+        self.m_MultiLineText.SetValue(settings["MultiLineText"])
+        self.m_SubtitleCtrl.SetValue(settings["SubtitleCtrl"])
+        if not self.m_FontComboBox.SetStringSelection(settings.get("FontComboBox", "")):
+            self.m_FontComboBox.SetValue(settings.get("FontComboBox", ""))
+        self.m_HeightCtrl.SetValue(settings.get("HeightCtrl", 1.2))
+        self.m_WidthCtrl.SetValue(0.0)
+        self.m_AlignmentChoice.SetStringSelection(settings.get("AlignmentChoice", "Center"))
+        self.m_LineSpacingCtrl.SetValue(1.5)
+        self.m_advancedCheckbox.SetValue(False)
+
+        padding = COMPONENT_STYLE_DEFAULTS["padding_mm"] if mode in (
+            "Component Callout", "Component Array"
+        ) else None
+        if padding is None:
+            padding_values = DEFAULT_LABEL_DIMENSIONS
+        else:
+            padding_values = {
+                "PaddingTopCtrl": padding,
+                "PaddingLeftCtrl": padding,
+                "PaddingRightCtrl": padding,
+                "PaddingBottomCtrl": padding,
+            }
+        for key, control in (
+            ("PaddingTopCtrl", self.m_PaddingTopCtrl),
+            ("PaddingLeftCtrl", self.m_PaddingLeftCtrl),
+            ("PaddingRightCtrl", self.m_PaddingRightCtrl),
+            ("PaddingBottomCtrl", self.m_PaddingBottomCtrl),
+        ):
+            control.SetValue(padding_values[key])
+
+        self._component_defaults_applied = mode in ("Component Callout", "Component Array")
+        self._update_mode_ui(refit=refit)
+
+    def _apply_component_design_defaults(self):
+        defaults = COMPONENT_STYLE_DEFAULTS
+        if not self.m_FontComboBox.SetStringSelection(defaults["font"]):
+            self.m_FontComboBox.SetValue(defaults["font"])
+        self.m_HeightCtrl.SetValue(defaults["height_mm"])
+        self.m_AlignmentChoice.SetStringSelection(defaults["alignment"])
+        self.m_CornerRadiusCtrl.SetValue(defaults["outer_radius_mm"])
+        self.m_ComponentCutoutRadiusCtrl.SetValue(defaults["cutout_radius_mm"])
+        self.m_ComponentTextGapCtrl.SetValue(defaults["component_text_gap_mm"])
+        for control in (
+            self.m_PaddingTopCtrl,
+            self.m_PaddingLeftCtrl,
+            self.m_PaddingRightCtrl,
+            self.m_PaddingBottomCtrl,
+        ):
+            control.SetValue(defaults["padding_mm"])
+        self._component_defaults_applied = True
+        self._ensure_component_array_pitch()
+
     def _update_mode_ui(self, refit=True):
         selection = self.m_StudioModeChoice.GetStringSelection()
         label_mode = selection == "Label"
+        component_mode = selection == "Component Callout"
+        component_array_mode = selection == "Component Array"
         header_mode = selection == "2.54 mm Pin Header"
         code_mode = selection == "QR / Barcode"
+        advanced = self._advanced_visible()
         self._sync_shape_choices(header_mode)
+        if (component_mode or component_array_mode) and self.m_ShapeChoice.GetStringSelection() == "No container":
+            self.m_ShapeChoice.SetStringSelection("Rounded rectangle")
         if header_mode:
             height_limit = maximum_pin_label_height(2.54)
             self.m_HeightCtrl.SetRange(0.0, height_limit)
@@ -1109,86 +1798,76 @@ class MainDialog(UpstreamDialog):
             self.m_HeightCtrl.SetToolTip("Capital-letter height in millimetres.")
         self._sync_cap_choices(header_mode)
         self.m_HeaderPanel.Show(header_mode)
+        self.m_ComponentPanel.Show(component_mode or component_array_mode)
+        self.m_ComponentArrayPanel.Show(component_array_mode)
         self.m_MachineCodePanel.Show(code_mode)
         for group, show in (
-            (self.m_ContentBox, label_mode),
+            (self.m_ContentBox, label_mode or component_mode),
             (self.m_ContainerBox, not code_mode),
             (self.m_TypographyBox, not code_mode),
         ):
             group.GetStaticBox().Show(show)
             group.ShowItems(show)
         for item in self._ordinary_padding_items:
-            item.Show(label_mode)
+            item.Show((label_mode or component_mode or component_array_mode) and advanced)
 
         self.textLabel.SetLabel(
             "Pin labels (one per line):"
             if header_mode
+            else "Component labels (one per line):"
+            if component_array_mode
             else "Payload:"
             if code_mode
+            else "Main text:"
+            if self.m_ContentLayoutChoice.GetStringSelection() == "Title + subtitle"
             else "Label text:"
         )
-        for control in (
-            self.m_WidthCtrl,
-            self.m_WidthLabel,
-            self.m_WidthUnits,
-            self.m_AlignmentChoice,
-            self.m_AlignmentLabel,
-        ):
+        for control in (self.m_WidthCtrl, self.m_WidthLabel, self.m_WidthUnits):
+            control.Show(label_mode and advanced)
             control.Enable(label_mode)
-        self.m_advancedCheckbox.Show(not code_mode)
-        if code_mode:
-            self.m_lineoverPanel.Hide()
-            self.m_spCharPanel.Hide()
-            self.m_AdvancedDivider.Hide()
-        elif self.m_advancedCheckbox.IsChecked():
-            self.m_lineoverPanel.Show()
-            self.m_spCharPanel.Show()
-            self.m_AdvancedDivider.Show()
-        else:
-            self.m_lineoverPanel.Hide()
-            self.m_spCharPanel.Hide()
-            self.m_AdvancedDivider.Hide()
+        for control in (self.m_lineSpacingLabel, self.m_LineSpacingCtrl):
+            control.Show(not code_mode and advanced)
+        self.m_AlignmentChoice.Enable(label_mode or component_mode or component_array_mode)
+        self.m_AlignmentLabel.Enable(label_mode or component_mode or component_array_mode)
+        self.m_advancedCheckbox.Show(True)
+
+        legacy_advanced = advanced and not code_mode
+        self.m_lineoverPanel.Show(legacy_advanced)
+        self.m_spCharPanel.Show(legacy_advanced)
+        self.m_AdvancedDivider.Show(legacy_advanced)
+        self.m_HeaderDetailsCheckbox.Show(header_mode and advanced)
+        header_details = (
+            header_mode and advanced and self.m_HeaderDetailsCheckbox.IsChecked()
+        )
+        self.m_HeaderDetailBox.GetStaticBox().Show(header_details)
+        self.m_HeaderDetailBox.ShowItems(header_details)
 
         self._update_opening_ui()
         self._update_shape_ui()
         self._update_icon_ui()
+        self._update_content_ui()
+        self._update_component_ui()
         self._update_machine_code_ui()
         if header_mode and not self.m_MultiLineText.GetValue().strip():
             self._fill_header_labels(wx.CommandEvent())
+        elif component_array_mode and not self.m_MultiLineText.GetValue().strip():
+            self._fill_component_labels(wx.CommandEvent())
         if refit:
-            self.SetMinSize(wx.DefaultSize)
-            self.Fit()
-            self.GetSizer().SetSizeHints(self)
-            self.Layout()
+            self._schedule_dynamic_refit()
 
     def _stabilise_dialog_layout(self):
-        """Reserve space for the settings section on macOS.
-
-        The legacy generated layout assigns weight 20 to both the text editor
-        and preview.  KiCad 10's Cocoa wx build also caches their large initial
-        sizes in the nested sizer items, allowing them to push fixed controls
-        below the modal dialog.  Give both live areas explicit stable sizes so
-        the settings always retain their required space.
-        """
-        root_sizer = self.GetSizer()
-        text_group = root_sizer.GetItem(1)
-        preview_group = root_sizer.GetItem(2)
-        text_group.SetProportion(0)
-        preview_group.SetProportion(0)
-
-        # wx caches the original child size in SizerItem.  Changing only the
-        # window min-size leaves that cached value untouched, which is why the
-        # preview still occupied hundreds of pixels after the first fix.
-        text_item = text_group.GetSizer().GetItem(1)
-        preview_item = preview_group.GetSizer().GetItem(1)
-        text_item.SetMinSize(wx.Size(1, 78))
-        preview_item.SetMinSize(wx.Size(1, 118))
-
-        # This happens once, after all controls are present—not while typing.
-        self.SetMinSize(wx.DefaultSize)
-        self.Fit()
-        root_sizer.SetSizeHints(self)
-        self.Layout()
+        """Choose a useful initial size while keeping the dialog on-screen."""
+        self.m_MultiLineText.SetMinSize(wx.Size(260, 112))
+        self.m_PreviewPanel.SetMinSize(wx.Size(260, 112))
+        display = wx.GetClientDisplayRect()
+        width = max(720, min(1100, display.width - 80))
+        height = max(560, min(780, display.height - 80))
+        minimum_width = min(760, max(560, display.width - 40))
+        minimum_height = min(600, max(480, display.height - 40))
+        self.SetMinSize(wx.Size(minimum_width, minimum_height))
+        self.SetSize(wx.Size(width, height))
+        self._refresh_settings_layout()
+        self.Centre(wx.BOTH)
 
     def _normalise_layer(self, value):
         return value if value in LAYER_LABELS else FRONT_SILKSCREEN
@@ -1219,7 +1898,8 @@ class MainDialog(UpstreamDialog):
         event.Skip()
 
     def LoadSettings(self, params):
-        params = dict(params)
+        params, loaded_footprint = _launch_settings(params, self.config_defaults)
+        self._editing_existing_artwork = loaded_footprint
         # Before Studio dimensions were versioned, the inherited padding
         # controls could contain KiBuzzard source-font units or early 0.3-dev
         # test values such as 3.2.  Neither is a sensible millimetre default.
@@ -1257,6 +1937,8 @@ class MainDialog(UpstreamDialog):
             params["PresetLabelChoice"] = "Custom label"
             params["IconChoice"] = "No icon"
             params["IconPositionChoice"] = "Left of text"
+            params["ContentLayoutChoice"] = "Single text"
+            params["SubtitleCtrl"] = ""
         # 0.3.0-dev briefly stored the side occupied by the labels.  The UI now
         # asks the much clearer question "Pins on", while the pure layout model
         # continues to receive the opposite label side.
@@ -1326,6 +2008,12 @@ class MainDialog(UpstreamDialog):
             vectorizer = TextVectorizer(self.buzzard)
             text = self.m_MultiLineText.GetValue()
             mode = self.m_StudioModeChoice.GetStringSelection()
+            subtitle = (
+                self.m_SubtitleCtrl.GetValue()
+                if mode in ("Label", "Component Callout")
+                and self.m_ContentLayoutChoice.GetStringSelection() == "Title + subtitle"
+                else ""
+            )
             if mode == "QR / Barcode":
                 kind = MACHINE_CODE_LABELS.get(
                     self.m_MachineCodeTypeChoice.GetStringSelection(), "qr"
@@ -1383,9 +2071,55 @@ class MainDialog(UpstreamDialog):
                     style=style,
                 )
                 self.artwork = render_header_artwork(vectorizer, spec)
+            elif mode in ("Component Callout", "Component Array"):
+                array_mode = mode == "Component Array"
+                icon_id = (
+                    ""
+                    if array_mode
+                    else ICON_LABELS.get(self.m_IconChoice.GetStringSelection(), "")
+                )
+                spec = ComponentCalloutSpec(
+                    title=text,
+                    subtitle=subtitle,
+                    preset_id=COMPONENT_PRESET_LABELS.get(
+                        self.m_ComponentPresetChoice.GetStringSelection(), "custom"
+                    ),
+                    component_width_mm=self.m_ComponentWidthCtrl.GetValue(),
+                    component_height_mm=self.m_ComponentHeightCtrl.GetValue(),
+                    component_clearance_mm=self.m_ComponentClearanceCtrl.GetValue(),
+                    cutout_shape=COMPONENT_CUTOUT_LABELS[
+                        self.m_ComponentCutoutChoice.GetStringSelection()
+                    ],
+                    cutout_radius_mm=self.m_ComponentCutoutRadiusCtrl.GetValue(),
+                    component_position=COMPONENT_POSITION_LABELS[
+                        self.m_ComponentPositionChoice.GetStringSelection()
+                    ],
+                    component_to_text_gap_mm=self.m_ComponentTextGapCtrl.GetValue(),
+                    array_count=(self.m_ComponentArrayCountCtrl.GetValue() if array_mode else 1),
+                    array_orientation=COMPONENT_ARRAY_ORIENTATION_LABELS[
+                        self.m_ComponentArrayOrientationChoice.GetStringSelection()
+                    ],
+                    array_pitch_mm=self.m_ComponentArrayPitchCtrl.GetValue(),
+                    subtitle_gap_mm=self.m_SubtitleGapCtrl.GetValue(),
+                    minimum_width_mm=self.m_ComponentMinWidthCtrl.GetValue(),
+                    minimum_height_mm=self.m_ComponentMinHeightCtrl.GetValue(),
+                    shape=self._selected_shape() or "rounded_rectangle",
+                    output_layer=self.output_layer,
+                    style=style,
+                )
+                self.artwork = render_component_callout_artwork(
+                    vectorizer,
+                    spec,
+                    icon_id=icon_id,
+                    icon_position=ICON_POSITION_LABELS[
+                        self.m_IconPositionChoice.GetStringSelection()
+                    ],
+                    icon_height_mm=self.m_IconHeightCtrl.GetValue(),
+                    icon_gap_mm=self.m_IconGapCtrl.GetValue(),
+                )
             else:
                 icon_id = ICON_LABELS.get(self.m_IconChoice.GetStringSelection(), "")
-                if not text and not icon_id:
+                if not text and not subtitle and not icon_id:
                     self.RePaint()
                     return
                 if len(text) > 512:
@@ -1406,6 +2140,9 @@ class MainDialog(UpstreamDialog):
                     ],
                     icon_height_mm=self.m_IconHeightCtrl.GetValue(),
                     icon_gap_mm=self.m_IconGapCtrl.GetValue(),
+                    subtitle_text=subtitle,
+                    subtitle_typography=style.secondary_typography,
+                    subtitle_gap_mm=self.m_SubtitleGapCtrl.GetValue(),
                 )
             self.polys = list(self.artwork.filled_polygons)
             self.stroke_polys = list(self.artwork.strokes)
@@ -1437,6 +2174,21 @@ class MainDialog(UpstreamDialog):
                 line_spacing=max(0.1, self.m_LineSpacingCtrl.GetValue()),
                 alignment=self.m_AlignmentChoice.GetStringSelection().lower(),
             ),
+            secondary_typography=(
+                TypographyStyle(
+                    font_name=_subtitle_font_name(
+                        self.m_SubtitleFontChoice.GetStringSelection(),
+                        self.m_FontComboBox.GetValue(),
+                    ),
+                    height_mm=max(0.01, self.m_SubtitleHeightCtrl.GetValue()),
+                    width_mm=0.0,
+                    line_spacing=max(0.1, self.m_SubtitleLineSpacingCtrl.GetValue()),
+                    alignment=self.m_AlignmentChoice.GetStringSelection().lower(),
+                )
+                if self.m_StudioModeChoice.GetStringSelection() in ("Label", "Component Callout")
+                and self.m_ContentLayoutChoice.GetStringSelection() == "Title + subtitle"
+                else None
+            ),
             shape=ShapeStyle(
                 padding=padding,
                 border_thickness_mm=0.0 if filled else border,
@@ -1465,11 +2217,10 @@ class MainDialog(UpstreamDialog):
         self.m_PreviewPanel.Refresh(False)
 
     def advancedModeChange(self, event):
-        """Keep the one deliberate layout pass needed when controls toggle."""
-        super(MainDialog, self).advancedModeChange(event)
-        self.SetMinSize(wx.DefaultSize)
-        self.Fit()
-        self.GetSizer().SetSizeHints(self)
+        """Toggle exact controls without resizing the outer dialog."""
+        self._update_mode_ui(refit=False)
+        self._refresh_settings_layout()
+        event.Skip()
 
     def OnPaint(self, event):
         dc = wx.AutoBufferedPaintDC(self.m_PreviewPanel)

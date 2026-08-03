@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0 — 2026-08-03
+
+- Made every new artwork mode begin with a useful, renderable starting design instead of an empty or invalid configuration. The 2.54 mm header tool now starts with four `Pin 1`–`Pin 4` labels, vertical orientation, pins on the left and a continuous plug opening.
+- Reordered the workspace so **Artwork type** comes before layer choice, and made the advanced-settings switch permanently available above the scrolling settings area.
+- Clarified that each placed artwork item belongs to one KiCad layer. To use matching artwork on another layer, duplicate the item and change its layer rather than accidentally emitting it on every layer.
+- Validated the KiCad 10 release workflow on both macOS and Windows. Linux testing remains the next platform-compatibility task.
+
+## 1.1.0 — 2026-08-03
+
+This release is mostly about making it easier to build more complete board graphics without making the editor harder to use.
+
+- Added component callouts for common passive sizes, LEDs, tactile switches and custom component envelopes. The component stays clear while the label, icon and container are built around it.
+- Added vertical and horizontal component arrays for repeated LEDs or other parts, with editable spacing and one label per component.
+- Added title-and-subtitle labels, with the subtitle following the main typeface by default and an optional typeface override when a different look is wanted.
+- Reworked the editor into a calmer workspace with a live preview, always-visible layer choice, a scrollable settings area and basic/advanced controls.
+- Simplified the tactile-switch callout to one clean rounded enclosure rather than separate cut-outs around the legs.
+- Added an editable Kobee Studio showcase board and refreshed the repository artwork to cover labels, symbols, component callouts, connector overlays, QR codes, barcodes and multilayer graphics.
+- Kept the existing label, symbol, header, QR and barcode workflows intact while making new artwork start from the everyday label tool.
+
 
 ## 1.0.0 — 2026-08-02
 

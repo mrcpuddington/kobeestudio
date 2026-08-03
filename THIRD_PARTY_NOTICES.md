@@ -1,9 +1,6 @@
 # Third-party notices
 
-Kobee Studio is a substantial evolution of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)**,
-originally created by Greg Davill. The font-to-vector renderer and base dialog
-began in that project; their source provenance is retained in comments and
-commit history.
+Kobee Studio is distributed under GPL-2.0 because the packaged plugin directly uses the GPL-2.0 svg2mod runtime. It is also a substantial evolution of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)**, originally created by Greg Davill. The font-to-vector renderer and base dialog began in that project; their source provenance is retained in comments and commit history.
 
 The following runtime dependencies are bundled because KiCad plugins cannot
 assume a separate system Python environment:
