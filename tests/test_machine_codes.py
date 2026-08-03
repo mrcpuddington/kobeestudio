@@ -77,6 +77,57 @@ class MachineCodeTests(unittest.TestCase):
         self.assertNotIn("guide", footprint)
         self.assertIn("fp_poly", footprint)
 
+    def test_qr_can_show_editable_human_readable_text(self):
+        artwork = render_machine_code_artwork(
+            "https://www.coreybusuttil.com/kobeestudio/docs/",
+            "qr",
+            QR_MIN_MODULE_MM,
+            CODE128_DEFAULT_HEIGHT_MM,
+            "F.SilkS",
+            vectorizer=self.vectorizer,
+            show_content_text=True,
+            content_text="Kobee Studio docs",
+            content_height_mm=0.9,
+            content_gap_mm=0.5,
+        )
+        content = next(
+            item for item in artwork.document.objects
+            if isinstance(item, TextObject) and item.object_id == "code.content-text"
+        )
+        self.assertEqual("Kobee Studio docs", content.text)
+        self.assertGreater(content.position.y, artwork.guides[0][2].y)
+
+    def test_code128_content_text_is_independent_from_encoded_payload(self):
+        artwork = render_machine_code_artwork(
+            "ASSET-00042",
+            "code128",
+            CODE128_DEFAULT_MODULE_MM,
+            CODE128_DEFAULT_HEIGHT_MM,
+            "F.SilkS",
+            vectorizer=self.vectorizer,
+            show_content_text=True,
+            content_text="Board 42",
+        )
+        content = next(
+            item for item in artwork.document.objects
+            if isinstance(item, TextObject) and item.object_id == "code.content-text"
+        )
+        self.assertEqual("Board 42", content.text)
+        self.assertGreater(artwork.document.size.height, CODE128_DEFAULT_HEIGHT_MM)
+
+    def test_machine_code_content_text_validation(self):
+        with self.assertRaisesRegex(ValueError, "single line"):
+            render_machine_code_artwork(
+                "HELLO",
+                "qr",
+                QR_MIN_MODULE_MM,
+                CODE128_DEFAULT_HEIGHT_MM,
+                "F.SilkS",
+                vectorizer=self.vectorizer,
+                show_content_text=True,
+                content_text="ONE\nTWO",
+            )
+
     def test_rounded_qr_frame_stays_outside_quiet_zone(self):
         code = render_qr_code("https://kobee.com.au", QR_MIN_MODULE_MM)
         compact = render_machine_code_artwork(

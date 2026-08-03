@@ -5,11 +5,12 @@ Kobee Studio began as a maintained evolution of [KiBuzzard](https://github.com/g
 This is a working roadmap, not a promise that every idea will ship. The order matters: reliable, editable board artwork and a calm workflow come before clever automation.
 
 ### Next Up
-- [ ] Migrate to the new IPC API plugin away from depricate Python SWIG bindings
-- [ ] Back compatible testing of IPC API with KiCad 10
+- [x] Migrate to the new IPC API plugin away from deprecated Python SWIG bindings.
+- [x] Complete backward-compatible IPC testing with existing Kobee Studio artwork on KiCad 10 for macOS.
+- [ ] Repeat the complete IPC workflow on KiCad 10 for Windows.
 - [ ] Test the complete KiCad 11 workflow.
 
-## What 1.2.1 includes
+## What 1.3.0 development includes
 
 The following is the expanded version of the feature checklist shown on the main project page.
 
@@ -18,6 +19,8 @@ The following is the expanded version of the feature checklist shown on the main
 - [x] Parametric labels with plain text, rectangles, rounded rectangles, pills, flags, tabs, pointers, chamfers and hexagons.
 - [x] Filled, inverted and outline appearances with independent padding, border thickness and corner-radius controls.
 - [x] Mixed end treatments, including independent square/rounded ends where a shape supports them.
+- [x] Optional exported underline geometry beneath the main label text.
+- [x] Forward-slash and backslash insertion alongside the existing special-character shortcuts.
 - [x] Text-plus-icon and icon-only layouts; icons can also be placed without a container.
 - [x] Searchable quick-label picker with common power, test, programming, interface, signal and control labels.
 - [x] A first PCB-safe icon set covering power, ground, polarity, warning, LED, battery, input/output, buttons and test points.
@@ -34,6 +37,7 @@ The following is the expanded version of the feature checklist shown on the main
 
 - [x] QR codes with payload checks, four-module quiet zones, rounded frames, adjustable frame spacing and optional knockout footer text.
 - [x] Compact Code 128 barcodes with minimum module/bar-height safeguards.
+- [x] Optional editable human-readable text below QR codes and Code 128 barcodes, independent from the encoded payload.
 - [x] Front and bottom silkscreen, copper and solder-mask output, including correct single mirroring on the bottom side.
 - [x] Generated artwork is editable KiCad footprint geometry and existing Kobee Studio items can be reopened for editing.
 
@@ -43,9 +47,10 @@ The following is the expanded version of the feature checklist shown on the main
 - [x] Stable buffered preview and automated KiCad/Gerber regression coverage.
 - [x] An always-visible in-app **Need help?** link to the hosted Kobee Studio documentation hub.
 - [x] Versioned 1.2.1 PCM package and release notes prepared for manual installation.
+- [x] A KiCad schema-valid IPC PCM development package using `com.github.mrcpuddington.kobeestudio`, a direct `plugins/` layout and a 64 × 64 catalog icon.
 - [x] Attribution, licensing and a contributor-friendly source installation path.
 
-## Next: make 1.2 dependable
+## Next: make 1.3 dependable
 
 These are the highest-value, least speculative improvements. They should be finished before adding a large new tool category.
 
@@ -112,7 +117,8 @@ These features fit the core product well once the current release is stable acro
 
 ### Distribution and project health
 
-- [ ] Make the source and release process suitable for an official public KiCad Plugin and Content Manager submission.
+- [x] Make the source and release process suitable for an official public KiCad Plugin and Content Manager submission.
+- [ ] Complete Windows IPC validation, publish the stable 1.3 package, and submit its metadata to KiCad's official package repository.
 - [ ] Publish release notes, checksums and a known-good example board for every release.
 - [ ] Add a lightweight crash/error report template that captures KiCad version, platform and reproducible inputs.
 - [ ] Document a migration and compatibility policy before presets or project files become common.

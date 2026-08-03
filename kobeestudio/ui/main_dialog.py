@@ -164,7 +164,7 @@ ICON_POSITION_LABELS = {
     "Icon only": "only",
 }
 STUDIO_DIMENSIONS_VERSION = 2
-STUDIO_DEFAULTS_VERSION = 6
+STUDIO_DEFAULTS_VERSION = 7
 DEFAULT_LABEL_DIMENSIONS = {
     "HeightCtrl": 1.2,
     "PaddingTopCtrl": 0.5,
@@ -193,6 +193,9 @@ STUDIO_DEFAULTS = {
     "SubtitleHeightCtrl": 0.8,
     "SubtitleLineSpacingCtrl": 1.2,
     "SubtitleGapCtrl": 0.25,
+    "UnderlineCheckbox": False,
+    "UnderlineThicknessCtrl": 0.15,
+    "UnderlineGapCtrl": 0.12,
     "HeaderPinCountCtrl": 4,
     "HeaderOrientationChoice": "Vertical",
     "HeaderPin1Choice": "Start",
@@ -228,6 +231,10 @@ STUDIO_DEFAULTS = {
     "MachineCodeCaptionCtrl": "SCAN ME",
     "MachineCodeCaptionHeightCtrl": 1.2,
     "MachineCodeFramePaddingCtrl": 0.2,
+    "MachineCodeShowContentCheckbox": False,
+    "MachineCodeContentCtrl": "",
+    "MachineCodeContentHeightCtrl": 0.9,
+    "MachineCodeContentGapCtrl": 0.5,
 }
 
 
@@ -272,6 +279,7 @@ MODE_DEFAULTS = {
         "MachineCodeTypeChoice": "QR Code",
         "MachineCodePresentationChoice": "Rounded frame + footer",
         "MachineCodeCaptionCtrl": "SCAN ME",
+        "MachineCodeContentCtrl": "kobee.com.au",
     },
 }
 
@@ -325,19 +333,34 @@ class MainDialog(UpstreamDialog):
         }
     )
 
-    def __init__(self, parent, config, buzzard, func):
+    def __init__(
+        self,
+        parent,
+        config,
+        buzzard,
+        func,
+        editor_session=None,
+        build_label="",
+    ):
+        self._build_label = str(build_label or "").strip()
         self._loaded_output_layer = FRONT_SILKSCREEN
         self._loaded_studio_settings = dict(STUDIO_DEFAULTS)
         self._studio_controls_ready = False
         self._applying_label_preset = False
+        self._applying_mode_defaults = False
         self._dynamic_refit_pending = False
         self._editing_existing_artwork = False
         self._component_defaults_applied = False
         self.artwork = None
         self.stroke_polys = []
         self.guide_polys = []
-        super(MainDialog, self).__init__(parent, config, buzzard, func)
-        self.SetTitle("Kobee Studio")
+        super(MainDialog, self).__init__(
+            parent, config, buzzard, func, editor_session=editor_session
+        )
+        title = "Kobee Studio"
+        if self._build_label:
+            title = "{} — {}".format(title, self._build_label)
+        self.SetTitle(title)
         self._build_studio_controls()
         self._build_machine_code_controls()
         self._build_layer_selector()
@@ -353,7 +376,10 @@ class MainDialog(UpstreamDialog):
         self.m_LayerComboBox.Bind(wx.EVT_COMBOBOX, self._on_layer_changed)
         self.m_LayerComboBox.Hide()
         self.m_LayerComboBox1.Hide()
-        self.m_PreviewLabel.SetLabel("Live preview  ·  Kobee Studio {}".format(__version__))
+        preview_label = "Live preview  ·  Kobee Studio {}".format(__version__)
+        if self._build_label:
+            preview_label = "{}  ·  {}".format(preview_label, self._build_label)
+        self.m_PreviewLabel.SetLabel(preview_label)
         self.m_PreviewPanel.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self._rebuild_studio_layout()
         self._bind_live_artwork_controls()
@@ -442,6 +468,9 @@ class MainDialog(UpstreamDialog):
         self.m_SubtitleHeightCtrl = self._double_control(panel, 0.1, 128.0, 0.8, 0.1, 2)
         self.m_SubtitleLineSpacingCtrl = self._double_control(panel, 0.1, 10.0, 1.2, 0.1, 2)
         self.m_SubtitleGapCtrl = self._double_control(panel, 0.0, 20.0, 0.25, 0.05, 2)
+        self.m_UnderlineCheckbox = wx.CheckBox(panel, label="Underline main text")
+        self.m_UnderlineThicknessCtrl = self._double_control(panel, 0.05, 5.0, 0.15, 0.05, 2)
+        self.m_UnderlineGapCtrl = self._double_control(panel, 0.0, 10.0, 0.12, 0.05, 2)
         self.m_ContentLayoutLabel = self._add_control(
             asset_grid, panel, "Text layout:", self.m_ContentLayoutChoice
         )
@@ -470,6 +499,14 @@ class MainDialog(UpstreamDialog):
         )
         self.m_SubtitleGapLabel = self._add_control(
             asset_grid, panel, "Title/subtitle gap (mm):", self.m_SubtitleGapCtrl
+        )
+        asset_grid.Add(self.m_UnderlineCheckbox, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
+        asset_grid.Add((0, 0), 1, wx.EXPAND)
+        self.m_UnderlineThicknessLabel = self._add_control(
+            asset_grid, panel, "Underline thickness (mm):", self.m_UnderlineThicknessCtrl
+        )
+        self.m_UnderlineGapLabel = self._add_control(
+            asset_grid, panel, "Underline gap (mm):", self.m_UnderlineGapCtrl
         )
         self.m_IconHeightCtrl.SetToolTip("0 matches the current text height; otherwise this is millimetres.")
         self.m_IconGapCtrl.SetToolTip("Space between the icon and text in millimetres.")
@@ -761,6 +798,9 @@ class MainDialog(UpstreamDialog):
             "SubtitleHeightCtrl": self.m_SubtitleHeightCtrl,
             "SubtitleLineSpacingCtrl": self.m_SubtitleLineSpacingCtrl,
             "SubtitleGapCtrl": self.m_SubtitleGapCtrl,
+            "UnderlineCheckbox": self.m_UnderlineCheckbox,
+            "UnderlineThicknessCtrl": self.m_UnderlineThicknessCtrl,
+            "UnderlineGapCtrl": self.m_UnderlineGapCtrl,
             "HeaderPinCountCtrl": self.m_HeaderPinCountCtrl,
             "HeaderOrientationChoice": self.m_HeaderOrientationChoice,
             "HeaderPin1Choice": self.m_HeaderPin1Choice,
@@ -809,6 +849,7 @@ class MainDialog(UpstreamDialog):
         )
         self.m_MultiLineText.Bind(wx.EVT_TEXT, self._on_label_text_edited)
         self.m_SubtitleCtrl.Bind(wx.EVT_TEXT, self._on_label_text_edited)
+        self.m_UnderlineCheckbox.Bind(wx.EVT_CHECKBOX, self._on_underline_changed)
         self.m_HeaderFillLabelsButton.Bind(wx.EVT_BUTTON, self._fill_header_labels)
         self.m_ComponentArrayFillButton.Bind(wx.EVT_BUTTON, self._fill_component_labels)
 
@@ -847,6 +888,17 @@ class MainDialog(UpstreamDialog):
         self.m_MachineCodeFramePaddingCtrl = self._double_control(
             panel, 0.0, 10.0, 0.2, 0.05, 2
         )
+        self.m_MachineCodeShowContentCheckbox = wx.CheckBox(
+            panel, label="Show editable text below code"
+        )
+        self.m_MachineCodeContentCtrl = wx.TextCtrl(panel, value="")
+        self.m_MachineCodeContentCtrl.SetMaxLength(96)
+        self.m_MachineCodeContentHeightCtrl = self._double_control(
+            panel, 0.6, 10.0, 0.9, 0.1, 1
+        )
+        self.m_MachineCodeContentGapCtrl = self._double_control(
+            panel, 0.0, 10.0, 0.5, 0.1, 1
+        )
         self.m_MachineCodeFramePaddingCtrl.SetToolTip(
             "Extra space outside the required QR quiet zone. Zero still preserves the full quiet zone."
         )
@@ -868,6 +920,17 @@ class MainDialog(UpstreamDialog):
         )
         self.m_MachineCodeCaptionHeightLabel = self._add_control(
             grid, panel, "Footer height (mm):", self.m_MachineCodeCaptionHeightCtrl
+        )
+        grid.Add(self.m_MachineCodeShowContentCheckbox, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
+        grid.Add((0, 0), 1, wx.EXPAND)
+        self.m_MachineCodeContentLabel = self._add_control(
+            grid, panel, "Text below code:", self.m_MachineCodeContentCtrl
+        )
+        self.m_MachineCodeContentHeightLabel = self._add_control(
+            grid, panel, "Text height (mm):", self.m_MachineCodeContentHeightCtrl
+        )
+        self.m_MachineCodeContentGapLabel = self._add_control(
+            grid, panel, "Text gap (mm):", self.m_MachineCodeContentGapCtrl
         )
         box.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
         self.m_MachineCodeHelp = wx.StaticText(panel, label="")
@@ -896,6 +959,10 @@ class MainDialog(UpstreamDialog):
                 "MachineCodeCaptionCtrl": self.m_MachineCodeCaptionCtrl,
                 "MachineCodeCaptionHeightCtrl": self.m_MachineCodeCaptionHeightCtrl,
                 "MachineCodeFramePaddingCtrl": self.m_MachineCodeFramePaddingCtrl,
+                "MachineCodeShowContentCheckbox": self.m_MachineCodeShowContentCheckbox,
+                "MachineCodeContentCtrl": self.m_MachineCodeContentCtrl,
+                "MachineCodeContentHeightCtrl": self.m_MachineCodeContentHeightCtrl,
+                "MachineCodeContentGapCtrl": self.m_MachineCodeContentGapCtrl,
             }
         )
         self.m_MachineCodeTypeChoice.Bind(
@@ -904,6 +971,10 @@ class MainDialog(UpstreamDialog):
         self.m_MachineCodePresentationChoice.Bind(
             wx.EVT_CHOICE, self._on_machine_code_presentation_changed
         )
+        self.m_MachineCodeShowContentCheckbox.Bind(
+            wx.EVT_CHECKBOX, self._on_machine_code_content_changed
+        )
+        self.m_MachineCodeContentCtrl.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
 
     def _build_layer_selector(self):
         self.m_LayerSelector = wx.RadioBox(
@@ -966,6 +1037,22 @@ class MainDialog(UpstreamDialog):
         self.m_PaddingLabel.SetLabel("Container padding (mm):")
         self.m_lineoverLabel.SetLabel("Overline:")
         self.m_spCharLabel.SetLabel("Insert character:")
+        self.m_spCharSlash = wx.Button(
+            self.m_spCharPanel, label=" / ", style=wx.BU_EXACTFIT
+        )
+        self.m_spCharBackslash = wx.Button(
+            self.m_spCharPanel, label=" \\ ", style=wx.BU_EXACTFIT
+        )
+        for button, character in (
+            (self.m_spCharSlash, "/"),
+            (self.m_spCharBackslash, "\\"),
+        ):
+            button.SetMinSize(wx.Size(52, -1))
+            button.Bind(
+                wx.EVT_BUTTON,
+                lambda event, value=character: self._append_text_character(value),
+            )
+            self.m_spCharPanel.GetSizer().Add(button, 0, wx.ALIGN_CENTER_VERTICAL)
         self.m_inlineFormatTextbox.SetLabel("Enable inline formatting")
         self.m_advancedCheckbox.SetLabel("Advanced typography")
         self.m_LayerSelector.SetLabel("Output layer")
@@ -1135,6 +1222,9 @@ class MainDialog(UpstreamDialog):
         # outside the scrollable settings area so it remains discoverable.
         studio_box = self.m_StudioPanel.GetSizer()
         studio_box.Detach(self.m_ArtworkTypeRow)
+        mode_sizer = self.m_StudioModeChoice.GetContainingSizer()
+        if mode_sizer is not None:
+            mode_sizer.Detach(self.m_StudioModeChoice)
         self.m_ArtworkTypeLabel.Hide()
         self.m_StudioModeChoice.Reparent(self)
         artwork_bar = wx.StaticBoxSizer(wx.StaticBox(self, label="Artwork type"), wx.HORIZONTAL)
@@ -1215,14 +1305,23 @@ class MainDialog(UpstreamDialog):
             self.m_PaddingBottomCtrl,
             self.m_BorderThicknessCtrl,
             self.m_CornerRadiusCtrl,
+            self.m_UnderlineThicknessCtrl,
+            self.m_UnderlineGapCtrl,
+            self.m_MachineCodeModuleSizeCtrl,
+            self.m_MachineCodeBarHeightCtrl,
+            self.m_MachineCodeCaptionHeightCtrl,
+            self.m_MachineCodeFramePaddingCtrl,
+            self.m_MachineCodeContentHeightCtrl,
+            self.m_MachineCodeContentGapCtrl,
         ):
             control.Bind(wx.EVT_SPINCTRLDOUBLE, self._on_live_artwork_changed)
             control.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
         self.m_FontComboBox.Bind(wx.EVT_COMBOBOX, self._on_live_artwork_changed)
         self.m_AlignmentChoice.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+        self.m_MachineCodeCaptionCtrl.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
 
     def _on_live_artwork_changed(self, event):
-        if self._studio_controls_ready:
+        if self._studio_controls_ready and not self._applying_mode_defaults:
             self.ReGenerateFlag(event)
             self.ReGeneratePreview()
         event.Skip()
@@ -1385,6 +1484,34 @@ class MainDialog(UpstreamDialog):
         self.ReGeneratePreview()
         event.Skip()
 
+    def _on_machine_code_content_changed(self, event):
+        if (
+            self.m_MachineCodeShowContentCheckbox.IsChecked()
+            and not self.m_MachineCodeContentCtrl.GetValue().strip()
+        ):
+            self.m_MachineCodeContentCtrl.SetValue(
+                self.m_MultiLineText.GetValue().strip()
+            )
+        self._update_machine_code_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_underline_changed(self, event):
+        self._update_content_ui()
+        self.ReGenerateFlag(event)
+        self.ReGeneratePreview()
+        event.Skip()
+
+    def _append_text_character(self, character):
+        control = self.m_MultiLineText
+        start, end = control.GetSelection()
+        value = control.GetValue()
+        control.SetValue(value[:start] + character + value[end:])
+        insertion = start + len(character)
+        control.SetSelection(insertion, insertion)
+        control.SetFocus()
+
     def _on_shape_changed(self, event):
         self._update_shape_ui()
         self.ReGenerateFlag(event)
@@ -1464,6 +1591,7 @@ class MainDialog(UpstreamDialog):
     def _on_label_text_edited(self, event):
         if (
             self._studio_controls_ready
+            and not self._applying_mode_defaults
             and not self._applying_label_preset
             and self.m_StudioModeChoice.GetStringSelection() in ("Label", "Component Callout")
         ):
@@ -1574,6 +1702,18 @@ class MainDialog(UpstreamDialog):
             and self.m_ContentLayoutChoice.GetStringSelection() == "Title + subtitle"
         )
         advanced = self._advanced_visible()
+        label_mode = self.m_StudioModeChoice.GetStringSelection() == "Label"
+        self.m_UnderlineCheckbox.Show(label_mode)
+        underline_details = (
+            label_mode and self.m_UnderlineCheckbox.IsChecked() and advanced
+        )
+        for control in (
+            self.m_UnderlineThicknessLabel,
+            self.m_UnderlineThicknessCtrl,
+            self.m_UnderlineGapLabel,
+            self.m_UnderlineGapCtrl,
+        ):
+            control.Show(underline_details)
         for control in (
             self.m_SubtitleLabel,
             self.m_SubtitleCtrl,
@@ -1649,6 +1789,13 @@ class MainDialog(UpstreamDialog):
         self.m_MachineCodeCaptionCtrl.Show(caption_mode)
         self.m_MachineCodeCaptionHeightLabel.Show(caption_mode and advanced)
         self.m_MachineCodeCaptionHeightCtrl.Show(caption_mode and advanced)
+        show_content = self.m_MachineCodeShowContentCheckbox.IsChecked()
+        self.m_MachineCodeContentLabel.Show(show_content)
+        self.m_MachineCodeContentCtrl.Show(show_content)
+        self.m_MachineCodeContentHeightLabel.Show(show_content and advanced)
+        self.m_MachineCodeContentHeightCtrl.Show(show_content and advanced)
+        self.m_MachineCodeContentGapLabel.Show(show_content and advanced)
+        self.m_MachineCodeContentGapCtrl.Show(show_content and advanced)
 
         if code128:
             self.m_MachineCodeHelp.SetLabel(
@@ -1781,40 +1928,44 @@ class MainDialog(UpstreamDialog):
         embedded settings remain the source of truth when reopened for editing.
         """
         settings = mode_defaults(mode)
-        self.m_StudioModeChoice.SetStringSelection(settings["StudioModeChoice"])
-        self._sync_shape_choices(mode == "2.54 mm Pin Header")
-        self._apply_studio_settings(settings)
-        self.m_MultiLineText.SetValue(settings["MultiLineText"])
-        self.m_SubtitleCtrl.SetValue(settings["SubtitleCtrl"])
-        if not self.m_FontComboBox.SetStringSelection(settings.get("FontComboBox", "")):
-            self.m_FontComboBox.SetValue(settings.get("FontComboBox", ""))
-        self.m_HeightCtrl.SetValue(settings.get("HeightCtrl", 1.2))
-        self.m_WidthCtrl.SetValue(0.0)
-        self.m_AlignmentChoice.SetStringSelection(settings.get("AlignmentChoice", "Center"))
-        self.m_LineSpacingCtrl.SetValue(1.5)
-        self.m_advancedCheckbox.SetValue(False)
+        self._applying_mode_defaults = True
+        try:
+            self.m_StudioModeChoice.SetStringSelection(settings["StudioModeChoice"])
+            self._sync_shape_choices(mode == "2.54 mm Pin Header")
+            self._apply_studio_settings(settings)
+            self.m_MultiLineText.SetValue(settings["MultiLineText"])
+            self.m_SubtitleCtrl.SetValue(settings["SubtitleCtrl"])
+            if not self.m_FontComboBox.SetStringSelection(settings.get("FontComboBox", "")):
+                self.m_FontComboBox.SetValue(settings.get("FontComboBox", ""))
+            self.m_HeightCtrl.SetValue(settings.get("HeightCtrl", 1.2))
+            self.m_WidthCtrl.SetValue(0.0)
+            self.m_AlignmentChoice.SetStringSelection(settings.get("AlignmentChoice", "Center"))
+            self.m_LineSpacingCtrl.SetValue(1.5)
+            self.m_advancedCheckbox.SetValue(False)
 
-        padding = COMPONENT_STYLE_DEFAULTS["padding_mm"] if mode in (
-            "Component Callout", "Component Array"
-        ) else None
-        if padding is None:
-            padding_values = DEFAULT_LABEL_DIMENSIONS
-        else:
-            padding_values = {
-                "PaddingTopCtrl": padding,
-                "PaddingLeftCtrl": padding,
-                "PaddingRightCtrl": padding,
-                "PaddingBottomCtrl": padding,
-            }
-        for key, control in (
-            ("PaddingTopCtrl", self.m_PaddingTopCtrl),
-            ("PaddingLeftCtrl", self.m_PaddingLeftCtrl),
-            ("PaddingRightCtrl", self.m_PaddingRightCtrl),
-            ("PaddingBottomCtrl", self.m_PaddingBottomCtrl),
-        ):
-            control.SetValue(padding_values[key])
+            padding = COMPONENT_STYLE_DEFAULTS["padding_mm"] if mode in (
+                "Component Callout", "Component Array"
+            ) else None
+            if padding is None:
+                padding_values = DEFAULT_LABEL_DIMENSIONS
+            else:
+                padding_values = {
+                    "PaddingTopCtrl": padding,
+                    "PaddingLeftCtrl": padding,
+                    "PaddingRightCtrl": padding,
+                    "PaddingBottomCtrl": padding,
+                }
+            for key, control in (
+                ("PaddingTopCtrl", self.m_PaddingTopCtrl),
+                ("PaddingLeftCtrl", self.m_PaddingLeftCtrl),
+                ("PaddingRightCtrl", self.m_PaddingRightCtrl),
+                ("PaddingBottomCtrl", self.m_PaddingBottomCtrl),
+            ):
+                control.SetValue(padding_values[key])
 
-        self._component_defaults_applied = mode in ("Component Callout", "Component Array")
+            self._component_defaults_applied = mode in ("Component Callout", "Component Array")
+        finally:
+            self._applying_mode_defaults = False
         self._update_mode_ui(refit=refit)
 
     def _apply_component_design_defaults(self):
@@ -2111,6 +2262,10 @@ class MainDialog(UpstreamDialog):
                     caption_text=self.m_MachineCodeCaptionCtrl.GetValue(),
                     caption_height_mm=self.m_MachineCodeCaptionHeightCtrl.GetValue(),
                     frame_padding_mm=self.m_MachineCodeFramePaddingCtrl.GetValue(),
+                    show_content_text=self.m_MachineCodeShowContentCheckbox.IsChecked(),
+                    content_text=self.m_MachineCodeContentCtrl.GetValue(),
+                    content_height_mm=self.m_MachineCodeContentHeightCtrl.GetValue(),
+                    content_gap_mm=self.m_MachineCodeContentGapCtrl.GetValue(),
                 )
             elif mode == "2.54 mm Pin Header":
                 labels = tuple(text.splitlines())
@@ -2217,6 +2372,9 @@ class MainDialog(UpstreamDialog):
                     subtitle_text=subtitle,
                     subtitle_typography=style.secondary_typography,
                     subtitle_gap_mm=self.m_SubtitleGapCtrl.GetValue(),
+                    underline=self.m_UnderlineCheckbox.IsChecked(),
+                    underline_thickness_mm=self.m_UnderlineThicknessCtrl.GetValue(),
+                    underline_gap_mm=self.m_UnderlineGapCtrl.GetValue(),
                 )
             self.polys = list(self.artwork.filled_polygons)
             self.stroke_polys = list(self.artwork.strokes)

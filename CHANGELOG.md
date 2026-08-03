@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 — 2026-08-04
+
+- Migrated the plugin entry point and board-placement adapter to KiCad's supported IPC API while keeping 1.2.x artwork editable.
+- Added optional underlines beneath main label text, exported as real KiCad geometry for filled, inverted, outline and container-free labels.
+- Added forward-slash and backslash shortcuts to the label character controls.
+- Added optional human-readable text beneath QR codes and Code 128 barcodes. The displayed line is editable independently from the encoded payload.
+- Adopted the package identifier `com.github.mrcpuddington.kobeestudio`.
+- Rebuilt the development PCM archive around the official IPC package layout, with the plugin manifest directly under `plugins/`, a 64 × 64 catalog icon, bundled licences and KiCad schema-valid metadata.
+- Completed IPC create, reopen, update and undo testing on KiCad 10 for macOS. Windows IPC validation remains before a stable 1.3 release and official Plugin and Content Manager submission.
+
 ## 1.2.1 — 2026-08-03
 
 - Added an always-visible **Need help?** button in the top-right of the editor. It opens the Kobee Studio documentation hub for installation help, tutorials and tool guides without interrupting the artwork workflow.
@@ -23,7 +33,6 @@ This release is mostly about making it easier to build more complete board graph
 - Added an editable Kobee Studio showcase board and refreshed the repository artwork to cover labels, symbols, component callouts, connector overlays, QR codes, barcodes and multilayer graphics.
 - Kept the existing label, symbol, header, QR and barcode workflows intact while making new artwork start from the everyday label tool.
 
-
 ## 1.0.0 — 2026-08-02
 
 - Released the first packaged Kobee Studio milestone for KiCad 10, tested on macOS with Windows and Linux validation still planned.
@@ -34,6 +43,7 @@ This release is mostly about making it easier to build more complete board graph
 - Fixed icon-and-text assembly alignment, font sizing/spacing, inverted artwork knockout geometry, bottom-side mirroring, live-preview painting, editor reopening, and growing-dialog layout issues.
 - Added KiCad footprint parsing, six-layer Gerber export, geometry, settings, picker, icon-complexity, QR, barcode, and pin-header regression coverage.
 - Bundled the pure-Python runtime dependencies and retained all upstream licences and KiBuzzard attribution for a self-contained PCM installation.
+
 ## 0.4.0-dev — 2026-08-02
 
 - Renamed the product to **Kobee Studio** across the KiCad plugin, dialog,
@@ -79,7 +89,7 @@ This release is mostly about making it easier to build more complete board graph
 
 - Started Kobee Studio as a maintained fork of KiBuzzard, with original-author attribution retained.
 - Added explicit front and bottom output choices for silkscreen, copper, and solder mask.
-- Generated bottom labels as B.Cu-owned footprints with a single mirror transform on their selected B.* layer.
+- Generated bottom labels as B.Cu-owned footprints with a single mirror transform on their selected B.\* layer.
 - Rebuilt the macOS preview renderer with deterministic sizing, buffered painting, and a separate bottom-view caption strip.
 - Replaced clipboard/simulated-paste placement with direct KiCad board insertion for KiCad 10.0.x.
 - Added diagnostics, source-level regression tests, macOS development-install instructions, PCM metadata, and a release checklist.

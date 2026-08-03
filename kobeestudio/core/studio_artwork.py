@@ -436,6 +436,9 @@ def render_label_artwork(
     subtitle_text: str = "",
     subtitle_typography: Optional[TypographyStyle] = None,
     subtitle_gap_mm: float = 0.25,
+    underline: bool = False,
+    underline_thickness_mm: float = 0.15,
+    underline_gap_mm: float = 0.12,
 ) -> StudioArtwork:
     if icon_position not in ("left", "right", "only"):
         raise ValueError("Unsupported icon position: {}".format(icon_position))
@@ -445,6 +448,10 @@ def render_label_artwork(
         raise ValueError("Icon gap must be non-negative")
     if subtitle_gap_mm < 0:
         raise ValueError("Subtitle gap must be non-negative")
+    if underline_thickness_mm <= 0:
+        raise ValueError("Underline thickness must be greater than zero")
+    if underline_gap_mm < 0:
+        raise ValueError("Underline gap must be non-negative")
 
     has_icon = bool(icon_id)
     has_text = bool(text or subtitle_text) and icon_position != "only"
@@ -474,10 +481,13 @@ def render_label_artwork(
     )
     has_primary = bool(vectors.polygons)
     has_subtitle = bool(subtitle_vectors.polygons)
+    has_underline = bool(underline and has_primary)
+    underline_extra = underline_gap_mm + underline_thickness_mm if has_underline else 0.0
+    primary_block_height = vectors.size.height + underline_extra
     text_gap = subtitle_gap_mm if has_primary and has_subtitle else 0.0
     text_stack_size = Size(
         max(vectors.size.width, subtitle_vectors.size.width),
-        vectors.size.height + subtitle_vectors.size.height + text_gap,
+        primary_block_height + subtitle_vectors.size.height + text_gap,
     )
 
     def line_x(line_width: float) -> float:
@@ -487,17 +497,23 @@ def render_label_artwork(
             return text_stack_size.width / 2.0 - line_width / 2.0
         return 0.0
 
-    primary_in_stack = Point(line_x(vectors.size.width), 0.0)
+    primary_block_centre_y = 0.0
+    if has_primary and has_subtitle:
+        primary_block_centre_y = -text_stack_size.height / 2.0 + primary_block_height / 2.0
+    primary_in_stack = Point(
+        line_x(vectors.size.width),
+        primary_block_centre_y - underline_extra / 2.0,
+    )
     subtitle_in_stack = Point(line_x(subtitle_vectors.size.width), 0.0)
     if has_primary and has_subtitle:
-        primary_in_stack = Point(
-            primary_in_stack.x,
-            -text_stack_size.height / 2.0 + vectors.size.height / 2.0,
-        )
         subtitle_in_stack = Point(
             subtitle_in_stack.x,
             text_stack_size.height / 2.0 - subtitle_vectors.size.height / 2.0,
         )
+    underline_in_stack = Point(
+        line_x(vectors.size.width),
+        primary_block_centre_y + (vectors.size.height + underline_gap_mm) / 2.0,
+    )
     icon = (
         render_builtin_icon(icon_id, icon_height_mm or style.typography.height_mm)
         if has_icon
@@ -531,6 +547,10 @@ def render_label_artwork(
         text_stack_centre.x + subtitle_in_stack.x,
         text_stack_centre.y + subtitle_in_stack.y,
     )
+    underline_centre = Point(
+        text_stack_centre.x + underline_in_stack.x,
+        text_stack_centre.y + underline_in_stack.y,
+    )
     placed_text = tuple(_translate_polygon(polygon, text_centre) for polygon in vectors.polygons)
     placed_subtitle = tuple(
         _translate_polygon(polygon, subtitle_centre) for polygon in subtitle_vectors.polygons
@@ -538,7 +558,15 @@ def render_label_artwork(
     placed_icon = tuple(
         _translate_polygon(polygon, icon_centre) for polygon in (icon.polygons if icon else ())
     )
-    content_polygons = placed_text + placed_subtitle + placed_icon
+    placed_underline = (
+        (
+            Point(underline_centre.x - vectors.size.width / 2.0, underline_centre.y - underline_thickness_mm / 2.0),
+            Point(underline_centre.x + vectors.size.width / 2.0, underline_centre.y - underline_thickness_mm / 2.0),
+            Point(underline_centre.x + vectors.size.width / 2.0, underline_centre.y + underline_thickness_mm / 2.0),
+            Point(underline_centre.x - vectors.size.width / 2.0, underline_centre.y + underline_thickness_mm / 2.0),
+        ),
+    ) if has_underline else ()
+    content_polygons = placed_text + placed_subtitle + placed_icon + placed_underline
     if content_polygons:
         content_minimum, content_maximum = polygon_bounds(content_polygons)
         normalise = Point(
@@ -550,6 +578,7 @@ def render_label_artwork(
             subtitle_centre.x + normalise.x, subtitle_centre.y + normalise.y
         )
         icon_centre = Point(icon_centre.x + normalise.x, icon_centre.y + normalise.y)
+        underline_centre = Point(underline_centre.x + normalise.x, underline_centre.y + normalise.y)
         content_polygons = tuple(
             _translate_polygon(polygon, normalise) for polygon in content_polygons
         )
@@ -571,6 +600,15 @@ def render_label_artwork(
                 subtitle_text,
                 position=subtitle_centre,
                 style_role="secondary",
+            )
+        )
+    if has_underline:
+        objects.append(
+            ShapeObject(
+                "text.underline",
+                shape="rectangle",
+                position=underline_centre,
+                size=Size(vectors.size.width, underline_thickness_mm),
             )
         )
     if icon is not None:
@@ -623,7 +661,7 @@ def render_label_artwork(
                     style_role=item.style_role,
                 )
             )
-        else:
+        elif isinstance(item, IconObject):
             placed_objects_list.append(
                 IconObject(
                     item.object_id,
@@ -631,6 +669,17 @@ def render_label_artwork(
                     position=position,
                     size=item.size,
                     rotation_deg=item.rotation_deg,
+                )
+            )
+        else:
+            placed_objects_list.append(
+                ShapeObject(
+                    item.object_id,
+                    shape=item.shape,
+                    position=position,
+                    size=item.size,
+                    rotation_deg=item.rotation_deg,
+                    content_ids=item.content_ids,
                 )
             )
     placed_objects = tuple(placed_objects_list)
@@ -961,6 +1010,10 @@ def render_machine_code_artwork(
     caption_text: str = "SCAN ME",
     caption_height_mm: float = 1.2,
     frame_padding_mm: float = 0.2,
+    show_content_text: bool = False,
+    content_text: str = "",
+    content_height_mm: float = 0.9,
+    content_gap_mm: float = 0.5,
 ) -> StudioArtwork:
     """Render a QR or linear barcode directly as fabrication polygons."""
     if output_layer not in SUPPORTED_OUTPUT_LAYERS:
@@ -971,6 +1024,10 @@ def render_machine_code_artwork(
         raise ValueError("Rounded containers are currently available for QR Codes only")
     if frame_padding_mm < 0.0:
         raise ValueError("QR frame padding must be non-negative")
+    if content_gap_mm < 0.0:
+        raise ValueError("Machine-code text gap must be non-negative")
+    if content_height_mm < 0.6:
+        raise ValueError("Machine-code text must be at least 0.6 mm high")
 
     code = render_machine_code(kind, payload, module_size_mm, bar_height_mm)
     half_width = code.size.width / 2.0
@@ -993,7 +1050,16 @@ def render_machine_code_artwork(
             size=code.size,
             alignment="center",
         )
-        return StudioArtwork(code.polygons, (), (quiet_zone_guide,), document)
+        artwork = StudioArtwork(code.polygons, (), (quiet_zone_guide,), document)
+        return _add_machine_code_content_text(
+            artwork,
+            payload,
+            vectorizer,
+            show_content_text,
+            content_text,
+            content_height_mm,
+            content_gap_mm,
+        )
 
     frame_width = max(0.35, module_size_mm)
     frame_gap = frame_padding_mm
@@ -1102,10 +1168,112 @@ def render_machine_code_artwork(
         alignment="center",
         style=DocumentStyle(typography=caption_typography, shape=frame_style),
     )
-    return StudioArtwork(
+    artwork = StudioArtwork(
         filled_polygons=code.polygons + frame_polygons + footer_polygons,
         strokes=(),
         guides=(quiet_zone_guide,),
+        document=document,
+    )
+    return _add_machine_code_content_text(
+        artwork,
+        payload,
+        vectorizer,
+        show_content_text,
+        content_text,
+        content_height_mm,
+        content_gap_mm,
+    )
+
+
+def _add_machine_code_content_text(
+    artwork: StudioArtwork,
+    payload: str,
+    vectorizer: Optional[TextVectorizer],
+    enabled: bool,
+    content_text: str,
+    height_mm: float,
+    gap_mm: float,
+) -> StudioArtwork:
+    """Add optional, editable human-readable text below a QR code or barcode."""
+    if not enabled:
+        return artwork
+    display_text = content_text.strip() or payload.strip()
+    if not display_text:
+        raise ValueError("Enter machine-code display text or turn it off")
+    if "\n" in display_text or "\r" in display_text:
+        raise ValueError("Machine-code display text must be a single line")
+    if len(display_text) > 96:
+        raise ValueError("Machine-code display text must be 96 characters or fewer")
+    if vectorizer is None:
+        raise ValueError("A text renderer is required for machine-code display text")
+
+    typography = TypographyStyle(
+        font_name="UbuntuMono-B",
+        height_mm=height_mm,
+        alignment="center",
+    )
+    vectors = vectorizer.render(display_text, typography)
+    if not vectors.polygons:
+        raise ValueError("Machine-code display text has no printable artwork")
+
+    source_polygons = artwork.filled_polygons + artwork.guides
+    minimum, maximum = polygon_bounds(source_polygons)
+    position = Point(
+        (minimum.x + maximum.x) / 2.0,
+        maximum.y + gap_mm + vectors.size.height / 2.0,
+    )
+    text_polygons = tuple(
+        _translate_polygon(polygon, position) for polygon in vectors.polygons
+    )
+    text_minimum, text_maximum = polygon_bounds(text_polygons)
+    outer_minimum = Point(
+        min(minimum.x, text_minimum.x),
+        min(minimum.y, text_minimum.y),
+    )
+    outer_maximum = Point(
+        max(maximum.x, text_maximum.x),
+        max(maximum.y, text_maximum.y),
+    )
+    origin = Point(
+        (outer_minimum.x + outer_maximum.x) / 2.0,
+        (outer_minimum.y + outer_maximum.y) / 2.0,
+    )
+
+    objects = tuple(
+        item for item in artwork.document.objects
+        if not isinstance(item, GroupObject) or item.object_id != "group.code"
+    )
+    text_object = TextObject(
+        "code.content-text",
+        display_text,
+        position=position,
+        style_role="secondary",
+    )
+    objects = objects + (text_object,)
+    objects = objects + (
+        GroupObject("group.code", tuple(item.object_id for item in objects)),
+    )
+    style = DocumentStyle(
+        typography=typography,
+        shape=artwork.document.style.shape,
+        secondary_typography=typography,
+    )
+    document = CompositionDocument(
+        objects=objects,
+        output_layer=artwork.document.output_layer,
+        anchor=artwork.document.anchor,
+        origin=origin,
+        size=Size(
+            outer_maximum.x - outer_minimum.x,
+            outer_maximum.y - outer_minimum.y,
+        ),
+        alignment="center",
+        style=style,
+    )
+    return StudioArtwork(
+        filled_polygons=artwork.filled_polygons + text_polygons,
+        strokes=artwork.strokes,
+        guides=artwork.guides,
         document=document,
     )
 
