@@ -7,8 +7,8 @@
 - Added forward-slash and backslash shortcuts to the label character controls.
 - Added optional human-readable text beneath QR codes and Code 128 barcodes. The displayed line is editable independently from the encoded payload.
 - Adopted the package identifier `com.github.mrcpuddington.kobeestudio`.
-- Rebuilt the development PCM archive around the official IPC package layout, with the plugin manifest directly under `plugins/`, a 64 × 64 catalog icon, bundled licences and KiCad schema-valid metadata.
-- Completed IPC create, reopen, update and undo testing on KiCad 10 for macOS. Windows IPC validation remains before a stable 1.3 release and official Plugin and Content Manager submission.
+- Rebuilt the PCM archive around the official IPC package layout, with the plugin manifest directly under `plugins/`, a 64 × 64 catalog icon, bundled licences and KiCad schema-valid metadata.
+- Completed IPC create, reopen, update and undo testing on KiCad 10 for macOS. Windows IPC validation remains a follow-up before the official Plugin and Content Manager submission.
 
 ## 1.2.1 — 2026-08-03
 

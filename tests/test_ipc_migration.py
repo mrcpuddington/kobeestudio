@@ -69,11 +69,11 @@ class IpcMigrationTests(unittest.TestCase):
             manifest["identifier"],
         )
         self.assertEqual("python", manifest["runtime"]["type"])
-        self.assertIn("IPC Development", manifest["name"])
+        self.assertEqual("Kobee Studio", manifest["name"])
         action = manifest["actions"][0]
         self.assertEqual("kobeestudio_ipc.py", action["entrypoint"])
         self.assertEqual(["pcb"], action["scopes"])
-        self.assertIn("IPC DEV", action["name"])
+        self.assertEqual("Create PCB Artwork", action["name"])
         expected_icons = ["kobee-toolbar-24.png", "kobee-toolbar-48.png"]
         self.assertEqual(expected_icons, action["icons-light"])
         self.assertEqual(expected_icons, action["icons-dark"])
@@ -91,7 +91,7 @@ class IpcMigrationTests(unittest.TestCase):
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
-        self.assertEqual("development", metadata["versions"][0]["status"])
+        self.assertEqual("stable", metadata["versions"][0]["status"])
         self.assertEqual("1.3.0", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])

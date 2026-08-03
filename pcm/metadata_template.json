@@ -29,7 +29,7 @@
     "versions": [
         {
             "version": "1.3.0",
-            "status": "development",
+            "status": "stable",
             "kicad_version": "10.0",
             "runtime": "ipc"
         }

@@ -8,7 +8,7 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **⚠️ Current status:** Kobee Studio 1.2.1 is tested on **KiCad 10 for macOS and Windows**. The 1.3.0 development build moves Kobee Studio to KiCad's supported IPC API and has completed macOS testing; Windows IPC testing is next. It is still a work in progress, so save your PCB before applying labels.
+> **⚠️ Current status:** Kobee Studio 1.3.0 uses KiCad's supported IPC API and is tested on **KiCad 10 for macOS**. The earlier 1.2.1 release was also tested on Windows; complete Windows IPC validation for 1.3 is next. Save your PCB before applying new artwork.
 > Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
@@ -34,7 +34,7 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.3.0 development
+## What’s in 1.3.0
 
 | Tool                 | What it does                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -164,7 +164,7 @@ For the current release:
 3. Choose **Install from File…**, select the ZIP, and approve the install.
 4. Open **Tools → External Plugins → Kobee Studio: Create PCB Artwork**.
 
-### Build and install the current IPC development package
+### Build and install 1.3 from source
 
 The 1.3 source tree uses KiCad's IPC plugin runtime. From a checkout, build a complete PCM archive:
 
@@ -178,8 +178,8 @@ This creates `pcm/build/Kobee-Studio-1.3.0-pcm.zip`. Install that ZIP using the 
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.2 release and 1.3 IPC development build tested |
-| Windows  | KiCad 10      | 1.2 release tested; 1.3 IPC validation planned   |
+| macOS    | KiCad 10      | 1.3 IPC release tested                            |
+| Windows  | KiCad 10      | 1.2 tested; complete 1.3 IPC validation planned  |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---

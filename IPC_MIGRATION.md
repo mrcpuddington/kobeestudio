@@ -1,9 +1,8 @@
 # IPC migration
 
-Kobee Studio 1.2.x uses KiCad's SWIG ActionPlugin interface and remains the
-current stable release for KiCad 10. Kobee Studio 1.3 develops the successor against KiCad's
-supported IPC plugin API, which is available in KiCad 9 and 10 and planned to
-replace SWIG in KiCad 11.
+Kobee Studio 1.2.x used KiCad's SWIG ActionPlugin interface. Kobee Studio 1.3
+is the stable successor built on KiCad's supported IPC plugin API, which is
+available in KiCad 9 and 10 and planned to replace SWIG in KiCad 11.
 
 ## Current milestone — connection foundation
 
@@ -31,11 +30,10 @@ format, and most of the editor UI remain shared. The migration replaces only
 the KiCad-facing adapter currently in
 `kobeestudio/integration/kicad_compatibility.py`.
 
-IPC artwork will be created in one board transaction, so placing or updating a
-Kobee Studio item remains a single Undo operation. Until placement and editing
-are fully covered by regression tests on KiCad 10 for macOS and Windows, the
-IPC build is now available as a local development PCM package. It will remain
-marked development until the Windows regression and stable release checks pass.
+IPC artwork is created in one board transaction, so placing or updating a
+Kobee Studio item remains a single Undo operation. The 1.3.0 PCM is the stable
+IPC release. Complete Windows IPC validation remains on the roadmap before the
+official KiCad package-repository submission.
 
 ## Test path
 

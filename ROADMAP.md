@@ -10,7 +10,7 @@ This is a working roadmap, not a promise that every idea will ship. The order ma
 - [ ] Repeat the complete IPC workflow on KiCad 10 for Windows.
 - [ ] Test the complete KiCad 11 workflow.
 
-## What 1.3.0 development includes
+## What 1.3.0 includes
 
 The following is the expanded version of the feature checklist shown on the main project page.
 
@@ -47,7 +47,7 @@ The following is the expanded version of the feature checklist shown on the main
 - [x] Stable buffered preview and automated KiCad/Gerber regression coverage.
 - [x] An always-visible in-app **Need help?** link to the hosted Kobee Studio documentation hub.
 - [x] Versioned 1.2.1 PCM package and release notes prepared for manual installation.
-- [x] A KiCad schema-valid IPC PCM development package using `com.github.mrcpuddington.kobeestudio`, a direct `plugins/` layout and a 64 × 64 catalog icon.
+- [x] A KiCad schema-valid IPC PCM release using `com.github.mrcpuddington.kobeestudio`, a direct `plugins/` layout and a 64 × 64 catalog icon.
 - [x] Attribution, licensing and a contributor-friendly source installation path.
 
 ## Next: make 1.3 dependable
@@ -118,7 +118,7 @@ These features fit the core product well once the current release is stable acro
 ### Distribution and project health
 
 - [x] Make the source and release process suitable for an official public KiCad Plugin and Content Manager submission.
-- [ ] Complete Windows IPC validation, publish the stable 1.3 package, and submit its metadata to KiCad's official package repository.
+- [ ] Complete Windows IPC validation and submit the stable 1.3 metadata to KiCad's official package repository.
 - [ ] Publish release notes, checksums and a known-good example board for every release.
 - [ ] Add a lightweight crash/error report template that captures KiCad version, platform and reproducible inputs.
 - [ ] Document a migration and compatibility policy before presets or project files become common.

@@ -68,7 +68,7 @@ def main() -> int:
             geometry.buzzard,
             place,
             editor_session=session,
-            build_label="IPC DEV",
+            build_label="IPC",
         )
         try:
             dialog.ShowModal()
