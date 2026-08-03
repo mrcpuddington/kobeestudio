@@ -57,7 +57,7 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
         'lineoverThicknessCtrl': '1'
     }
 
-    def __init__(self, parent, config, buzzard, func):
+    def __init__(self, parent, config, buzzard, func, editor_session=None):
         dialog_text_base.DIALOG_TEXT_BASE.__init__(self, parent)
         
         typeface_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..', 'fonts')
@@ -87,6 +87,7 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
         self.SetClientSize(best_size)
         self.config_file = config
         self.func = func
+        self.editor_session = editor_session
 
         self.error = None
         
@@ -128,6 +129,14 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
     def loadConfig(self):
         # check if we have a footprint we can load value from first
         try:
+            if self.editor_session is not None:
+                selected = self.editor_session.selected_artwork()
+                if selected is not None:
+                    params, footprint = selected
+                    self.LoadSettings(params)
+                    self.updateFootprint = footprint
+                    return
+                raise LookupError("No selected Kobee Studio IPC artwork")
             import pcbnew
             b = pcbnew.GetBoard()
             selected_footprints = [f for f in b.Footprints() if f.IsSelected()] if b is not None else []
@@ -159,6 +168,8 @@ class Dialog(dialog_text_base.DIALOG_TEXT_BASE):
 
                         return
                 
+        except LookupError:
+            pass
         except Exception:
             import traceback
             wx.LogError(traceback.format_exc())

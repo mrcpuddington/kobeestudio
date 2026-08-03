@@ -325,7 +325,7 @@ class MainDialog(UpstreamDialog):
         }
     )
 
-    def __init__(self, parent, config, buzzard, func):
+    def __init__(self, parent, config, buzzard, func, editor_session=None):
         self._loaded_output_layer = FRONT_SILKSCREEN
         self._loaded_studio_settings = dict(STUDIO_DEFAULTS)
         self._studio_controls_ready = False
@@ -336,7 +336,9 @@ class MainDialog(UpstreamDialog):
         self.artwork = None
         self.stroke_polys = []
         self.guide_polys = []
-        super(MainDialog, self).__init__(parent, config, buzzard, func)
+        super(MainDialog, self).__init__(
+            parent, config, buzzard, func, editor_session=editor_session
+        )
         self.SetTitle("Kobee Studio")
         self._build_studio_controls()
         self._build_machine_code_controls()
