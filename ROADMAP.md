@@ -4,6 +4,11 @@ Kobee Studio began as a maintained evolution of [KiBuzzard](https://github.com/g
 
 This is a working roadmap, not a promise that every idea will ship. The order matters: reliable, editable board artwork and a calm workflow come before clever automation.
 
+### Next Up
+- [ ] Migrate to the new IPC API plugin away from depricate Python SWIG bindings
+- [ ] Back compatible testing of IPC API with KiCad 10
+- [ ] Test the complete KiCad 11 workflow.
+
 ## What 1.2.1 includes
 
 The following is the expanded version of the feature checklist shown on the main project page.
