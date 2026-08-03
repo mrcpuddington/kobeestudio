@@ -18,7 +18,9 @@ from kobeestudio.core.shape_geometry import render_document_shapes
 
 def header_style():
     return DocumentStyle(
-        typography=TypographyStyle(height_mm=1.0),
+        # The first-use vertical header puts pins on the left, so right
+        # alignment preserves its established outer-edge label layout.
+        typography=TypographyStyle(height_mm=1.0, alignment="right"),
         shape=ShapeStyle(
             padding=Padding.symmetric(0.3, 0.3),
             border_thickness_mm=0.2,
@@ -142,7 +144,12 @@ class PinHeaderTests(unittest.TestCase):
     def test_vertical_pins_left_produces_padding_pin_gap_right_aligned_labels(self):
         sizes = (Size(1.0, 1.0), Size(2.0, 1.0), Size(3.0, 1.0))
         layout = layout_pin_header(
-            self.make_spec(3, orientation="vertical", label_side="right"),
+            self.make_spec(
+                3,
+                orientation="vertical",
+                label_side="right",
+                style=replace(header_style(), typography=TypographyStyle(height_mm=1.0, alignment="right")),
+            ),
             sizes,
         )
         self.assertAlmostEqual(-1.3, layout.bounds_min.x)
@@ -154,12 +161,33 @@ class PinHeaderTests(unittest.TestCase):
     def test_vertical_pins_right_is_the_opposite_left_aligned_layout(self):
         sizes = (Size(1.0, 1.0), Size(2.0, 1.0), Size(3.0, 1.0))
         layout = layout_pin_header(
-            self.make_spec(3, orientation="vertical", label_side="left"),
+            self.make_spec(
+                3,
+                orientation="vertical",
+                label_side="left",
+                style=replace(header_style(), typography=TypographyStyle(height_mm=1.0, alignment="left")),
+            ),
             sizes,
         )
         left_edges = tuple(centre.x - size.width / 2.0 for centre, size in zip(layout.label_centres, sizes))
         self.assertTrue(all(abs(edge + 4.3) < 1e-9 for edge in left_edges))
         self.assertTrue(all(centre.x < 0.0 for centre in layout.label_centres))
+
+    def test_header_label_alignment_uses_the_shared_label_lane(self):
+        sizes = (Size(1.0, 1.0), Size(3.0, 1.0))
+        centres = {}
+        for alignment in ("left", "center", "right"):
+            style = replace(
+                header_style(),
+                typography=TypographyStyle(height_mm=1.0, alignment=alignment),
+            )
+            layout = layout_pin_header(
+                self.make_spec(2, orientation="vertical", label_side="right", style=style),
+                sizes,
+            )
+            centres[alignment] = layout.label_centres
+        self.assertLess(centres["left"][0].x, centres["center"][0].x)
+        self.assertLess(centres["center"][0].x, centres["right"][0].x)
 
     def test_cross_axis_padding_is_independently_controllable(self):
         layout = layout_pin_header(

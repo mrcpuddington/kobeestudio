@@ -1,8 +1,10 @@
 Kobee Studio
 Copyright (c) 2026 Corey Busuttil <hello@coreybusuttil.com>
+SPDX-License-Identifier: GPL-2.0-only
 
-Kobee Studio is distributed under the GNU General Public License, version 2.
-The complete licence text follows.
+Kobee Studio as a whole is distributed under the GNU General Public License,
+version 2 only. It incorporates upstream material under other compatible
+licences; see THIRD_PARTY_NOTICES.md. The complete licence text follows.
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 2, June 1991

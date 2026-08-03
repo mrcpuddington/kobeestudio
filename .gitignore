@@ -13,14 +13,14 @@ config.ini
 config.json
 *.log
 
-# Showcase project
-examples/showcase/
-
 # Generated package and build output
 pcm/build/
 build/
 dist/
 *.egg-info/
+
+# Local KiCad showcase history (a separate on-disk Git repository)
+examples/showcase/.history/
 
 # Editors and operating-system metadata
 .idea/
@@ -34,3 +34,13 @@ dist/
 *-backups/
 *.kicad_pcb-bak
 *.kicad_sch-bak
+
+# Private or superseded working material
+DEVELOPMENT_PLAN.md
+kobeestudio/resources/kobee-bee-aa-concept.png
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx

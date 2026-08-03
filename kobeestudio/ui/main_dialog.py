@@ -44,6 +44,9 @@ from ..version import __version__
 from .asset_picker import AssetPickerDialog, icon_picker_items, label_picker_items
 
 
+KOBEE_STUDIO_DOCS_URL = "https://www.coreybusuttil.com/kobeestudio/docs/"
+
+
 LAYER_LABELS = {
     FRONT_SILKSCREEN: "Front Silkscreen (F.SilkS)",
     BOTTOM_SILKSCREEN: "Bottom Silkscreen (B.SilkS)",
@@ -79,6 +82,7 @@ PIN_SIDE_TO_LABEL_SIDE = {
 LABEL_SHAPE_LABELS = {
     "No container": None,
     "Rectangle": "rectangle",
+    "Circle": "circle",
     "Rounded rectangle": "rounded_rectangle",
     "Pill": "pill",
     "Independent ends": "custom_ends",
@@ -90,6 +94,7 @@ LABEL_SHAPE_LABELS = {
 }
 HEADER_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
 del HEADER_SHAPE_LABELS["No container"]
+del HEADER_SHAPE_LABELS["Circle"]
 del HEADER_SHAPE_LABELS["Independent ends"]
 header_shapes = list(HEADER_SHAPE_LABELS.items())
 header_shapes.insert(3, ("Independent long edges", "custom_long_edges"))
@@ -254,6 +259,7 @@ MODE_DEFAULTS = {
     "2.54 mm Pin Header": {
         "MultiLineText": "Pin 1\nPin 2\nPin 3\nPin 4",
         "HeightCtrl": 1.2,
+        "AlignmentChoice": "Right",
         "HeaderPinCountCtrl": 4,
         "HeaderOrientationChoice": "Vertical",
         "HeaderPin1Choice": "Start",
@@ -350,6 +356,7 @@ class MainDialog(UpstreamDialog):
         self.m_PreviewLabel.SetLabel("Live preview  ·  Kobee Studio {}".format(__version__))
         self.m_PreviewPanel.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self._rebuild_studio_layout()
+        self._bind_live_artwork_controls()
         if self._editing_existing_artwork:
             self._update_mode_ui(refit=False)
         else:
@@ -987,6 +994,10 @@ class MainDialog(UpstreamDialog):
         self.m_WidthCtrl.SetToolTip(
             "Optional minimum container width. Leave at 0 to fit the content."
         )
+        self.m_AlignmentChoice.SetToolTip(
+            "Align text and symbols within their available label space. For an auto-fit label, "
+            "set a minimum width to create visible extra space; header labels use their shared lane."
+        )
         self.m_LineSpacingCtrl.SetToolTip("Spacing multiplier for multi-line label text.")
 
         for control, width in (
@@ -1095,6 +1106,11 @@ class MainDialog(UpstreamDialog):
             if containing is not None:
                 containing.Detach(control)
             control.Reparent(self)
+        # Match the main multiline field across macOS, Windows, and Linux.
+        # The generated subtitle control otherwise inherits the panel colour
+        # after reparenting, which makes it look disabled in dark themes.
+        self.m_SubtitleCtrl.SetBackgroundColour(self.m_MultiLineText.GetBackgroundColour())
+        self.m_SubtitleCtrl.SetForegroundColour(self.m_MultiLineText.GetForegroundColour())
 
         # The generated sizer becomes the content of one vertical scroller.
         # Existing controls keep all bindings and settings behaviour.
@@ -1123,6 +1139,10 @@ class MainDialog(UpstreamDialog):
         self.m_StudioModeChoice.Reparent(self)
         artwork_bar = wx.StaticBoxSizer(wx.StaticBox(self, label="Artwork type"), wx.HORIZONTAL)
         artwork_bar.Add(self.m_StudioModeChoice, 1, wx.EXPAND | wx.ALL, 5)
+        self.m_HelpButton = wx.Button(self, label="Need help?")
+        self.m_HelpButton.SetToolTip("Open Kobee Studio guides, tutorials and installation help.")
+        self.m_HelpButton.Bind(wx.EVT_BUTTON, self._open_docs)
+        artwork_bar.Add(self.m_HelpButton, 0, wx.ALIGN_CENTER_VERTICAL | wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
 
         root = wx.BoxSizer(wx.VERTICAL)
         root.Add(artwork_bar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
@@ -1175,8 +1195,37 @@ class MainDialog(UpstreamDialog):
         self.m_SubtitleEditorSizer = subtitle_editor
         self.m_FooterSizer = footer
 
+    def _open_docs(self, event):
+        """Open the hosted Kobee Studio guides in the system browser."""
+        wx.LaunchDefaultBrowser(KOBEE_STUDIO_DOCS_URL)
+        event.Skip()
+
     def _advanced_visible(self):
         return bool(self.m_advancedCheckbox.IsChecked())
+
+    def _bind_live_artwork_controls(self):
+        """Refresh artwork immediately when typography or container geometry changes."""
+        for control in (
+            self.m_HeightCtrl,
+            self.m_WidthCtrl,
+            self.m_LineSpacingCtrl,
+            self.m_PaddingTopCtrl,
+            self.m_PaddingLeftCtrl,
+            self.m_PaddingRightCtrl,
+            self.m_PaddingBottomCtrl,
+            self.m_BorderThicknessCtrl,
+            self.m_CornerRadiusCtrl,
+        ):
+            control.Bind(wx.EVT_SPINCTRLDOUBLE, self._on_live_artwork_changed)
+            control.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
+        self.m_FontComboBox.Bind(wx.EVT_COMBOBOX, self._on_live_artwork_changed)
+        self.m_AlignmentChoice.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+
+    def _on_live_artwork_changed(self, event):
+        if self._studio_controls_ready:
+            self.ReGenerateFlag(event)
+            self.ReGeneratePreview()
+        event.Skip()
 
     def _refresh_settings_layout(self):
         """Refresh scrolling without changing the outer dialog size."""
@@ -1191,6 +1240,21 @@ class MainDialog(UpstreamDialog):
         self.m_SettingsScroller.FitInside()
         self.m_SettingsScroller.Layout()
         self.Layout()
+
+    @staticmethod
+    def _show_settings_panel(panel, show):
+        """Show or remove a settings panel without leaving an empty sizer slot.
+
+        ``wx.Panel.Show()`` alone is not reliable across the supported wx
+        builds once a panel has been reparented into the settings scroller. In
+        particular, macOS can leave the panel's static-box minimum size behind
+        after every child has been hidden. Toggling the containing sizer item
+        as well removes that stale geometry before the scroller is refitted.
+        """
+        containing_sizer = panel.GetContainingSizer()
+        if containing_sizer is not None:
+            containing_sizer.Show(panel, show)
+        panel.Show(show)
 
     def _apply_studio_settings(self, settings):
         if not self._studio_controls_ready:
@@ -1797,10 +1861,16 @@ class MainDialog(UpstreamDialog):
             self.m_HeightCtrl.SetRange(0.0, 128.0)
             self.m_HeightCtrl.SetToolTip("Capital-letter height in millimetres.")
         self._sync_cap_choices(header_mode)
-        self.m_HeaderPanel.Show(header_mode)
-        self.m_ComponentPanel.Show(component_mode or component_array_mode)
-        self.m_ComponentArrayPanel.Show(component_array_mode)
-        self.m_MachineCodePanel.Show(code_mode)
+        # QR / Barcode owns its settings outright. Hide the entire Design
+        # panel, rather than just its child controls, so its empty static box
+        # cannot remain as a collapsed artefact in the scroller.
+        self._show_settings_panel(self.m_StudioPanel, not code_mode)
+        self._show_settings_panel(self.m_HeaderPanel, header_mode)
+        self._show_settings_panel(
+            self.m_ComponentPanel, component_mode or component_array_mode
+        )
+        self._show_settings_panel(self.m_ComponentArrayPanel, component_array_mode)
+        self._show_settings_panel(self.m_MachineCodePanel, code_mode)
         for group, show in (
             (self.m_ContentBox, label_mode or component_mode),
             (self.m_ContainerBox, not code_mode),
@@ -1827,8 +1897,12 @@ class MainDialog(UpstreamDialog):
             control.Enable(label_mode)
         for control in (self.m_lineSpacingLabel, self.m_LineSpacingCtrl):
             control.Show(not code_mode and advanced)
-        self.m_AlignmentChoice.Enable(label_mode or component_mode or component_array_mode)
-        self.m_AlignmentLabel.Enable(label_mode or component_mode or component_array_mode)
+        self.m_AlignmentChoice.Enable(
+            label_mode or component_mode or component_array_mode or header_mode
+        )
+        self.m_AlignmentLabel.Enable(
+            label_mode or component_mode or component_array_mode or header_mode
+        )
         self.m_advancedCheckbox.Show(True)
 
         legacy_advanced = advanced and not code_mode
@@ -2152,6 +2226,22 @@ class MainDialog(UpstreamDialog):
             self.error = str(error) or "Error generating artwork"
         self.RePaint()
 
+    def OnOkClick(self, event):
+        """Generate from the controls that are visible at the instant of placement."""
+        # Numeric controls can still have uncommitted native text when the
+        # user clicks Update artwork immediately after editing them.  Never
+        # hand the placement layer a previous preview in that situation.
+        self.ReGeneratePreview()
+        if self.error is not None or self.artwork is None:
+            wx.MessageBox(
+                self.error or "Enter valid artwork before placing it.",
+                "Kobee Studio",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+            return
+        super(MainDialog, self).OnOkClick(event)
+
     def _document_style(self):
         shape_name = self.m_ShapeChoice.GetStringSelection()
         variant = self.m_ShapeVariantChoice.GetStringSelection()
@@ -2218,6 +2308,14 @@ class MainDialog(UpstreamDialog):
 
     def advancedModeChange(self, event):
         """Toggle exact controls without resizing the outer dialog."""
+        if (
+            self.m_advancedCheckbox.IsChecked()
+            and self.m_StudioModeChoice.GetStringSelection() == "2.54 mm Pin Header"
+        ):
+            # Advanced header spacing is part of the advanced view; requiring
+            # a second checkbox made the most useful connector controls easy
+            # to miss.
+            self.m_HeaderDetailsCheckbox.SetValue(True)
         self._update_mode_ui(refit=False)
         self._refresh_settings_layout()
         event.Skip()

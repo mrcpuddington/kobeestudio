@@ -334,6 +334,10 @@ def shape_contour(shape: str, size: Size, style: ShapeStyle) -> Polygon:
 
     if shape == "rectangle":
         polygon = _rectangle(width, height)
+    elif shape == "circle":
+        if not math.isclose(width, height, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("Circle shapes require equal width and height")
+        polygon = _rounded_rectangle(width, height, width / 2.0)
     elif shape == "rounded_rectangle":
         polygon = _rounded_rectangle(width, height, style.corner_radius_mm)
     elif shape == "pill":
@@ -430,6 +434,18 @@ def render_shape(shape_object: ShapeObject, style: ShapeStyle, content_size: Siz
         max(shape_object.size.width, padded.size.width),
         max(shape_object.size.height, padded.size.height),
     )
+    if shape_object.shape == "circle":
+        diameter = max(outer_size.width, outer_size.height)
+        outer_size = Size(diameter, diameter)
+    # Outline strokes are centred on their path. Reserve a full border width
+    # on every side so the inner stroke edge respects the chosen text padding
+    # rather than creeping into the artwork as the border grows.
+    if not style.filled and (content_size.width > 0.0 or content_size.height > 0.0):
+        border = style.border_thickness_mm
+        outer_size = Size(
+            outer_size.width + 2.0 * border,
+            outer_size.height + 2.0 * border,
+        )
     if outer_size.width <= 0 or outer_size.height <= 0:
         raise ValueError("A shape needs an explicit size or non-empty measured content")
 

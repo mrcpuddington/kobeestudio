@@ -14,6 +14,7 @@ from .transforms import FRONT_SILKSCREEN, SUPPORTED_OUTPUT_LAYERS, is_bottom
 DOCUMENT_SCHEMA_VERSION = 1
 SHAPE_KINDS = (
     "rectangle",
+    "circle",
     "rounded_rectangle",
     "pill",
     "custom_ends",

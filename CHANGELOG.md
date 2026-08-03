@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 — 2026-08-03
+
+- Added an always-visible **Need help?** button in the top-right of the editor. It opens the Kobee Studio documentation hub for installation help, tutorials and tool guides without interrupting the artwork workflow.
+
 ## 1.2.0 — 2026-08-03
 
 - Made every new artwork mode begin with a useful, renderable starting design instead of an empty or invalid configuration. The 2.54 mm header tool now starts with four `Pin 1`–`Pin 4` labels, vertical orientation, pins on the left and a continuous plug opening.

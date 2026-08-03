@@ -80,8 +80,10 @@ class StudioArtworkTests(unittest.TestCase):
         vectors = self.vectorizer.render("H", style.typography)
         self.assertAlmostEqual(2.0, vectors.size.height, places=6)
         artwork = render_label_artwork(self.vectorizer, "H", style, "F.SilkS", "rounded_rectangle")
-        self.assertAlmostEqual(vectors.size.width + 0.8, artwork.document.size.width, places=6)
-        self.assertAlmostEqual(2.6, artwork.document.size.height, places=6)
+        # The outline sits outside the requested padding, rather than using
+        # that padding as stroke clearance.
+        self.assertAlmostEqual(vectors.size.width + 1.2, artwork.document.size.width, places=6)
+        self.assertAlmostEqual(3.0, artwork.document.size.height, places=6)
 
     def test_icon_and_text_layout_supports_left_right_and_icon_only(self):
         left = render_label_artwork(

@@ -4,7 +4,7 @@ Kobee Studio began as a maintained evolution of [KiBuzzard](https://github.com/g
 
 This is a working roadmap, not a promise that every idea will ship. The order matters: reliable, editable board artwork and a calm workflow come before clever automation.
 
-## What 1.2.0 includes
+## What 1.2.1 includes
 
 The following is the expanded version of the feature checklist shown on the main project page.
 
@@ -36,7 +36,8 @@ The following is the expanded version of the feature checklist shown on the main
 
 - [x] KiCad 10 development and regression testing on macOS and Windows.
 - [x] Stable buffered preview and automated KiCad/Gerber regression coverage.
-- [x] Versioned 1.2 PCM package and release notes prepared for manual installation.
+- [x] An always-visible in-app **Need help?** link to the hosted Kobee Studio documentation hub.
+- [x] Versioned 1.2.1 PCM package and release notes prepared for manual installation.
 - [x] Attribution, licensing and a contributor-friendly source installation path.
 
 ## Next: make 1.2 dependable

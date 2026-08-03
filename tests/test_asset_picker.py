@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from kobeestudio.ui.main_dialog import (
+    KOBEE_STUDIO_DOCS_URL,
     MainDialog,
     _launch_settings,
     _subtitle_font_name,
@@ -19,6 +20,12 @@ from kobeestudio.ui.asset_picker import (
 
 
 class AssetPickerTests(unittest.TestCase):
+    def test_in_app_help_uses_the_hosted_kobee_studio_docs(self):
+        self.assertEqual(
+            "https://www.coreybusuttil.com/kobeestudio/docs/",
+            KOBEE_STUDIO_DOCS_URL,
+        )
+
     def test_picker_contains_every_catalog_item_plus_clear_choice(self):
         icons = icon_picker_items()
         labels = label_picker_items()

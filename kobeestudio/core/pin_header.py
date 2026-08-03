@@ -501,11 +501,40 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
     axis_size = max(0.001, axis_max - axis_min)
     cross_centre = (cross_min + cross_max) / 2.0
 
-    # Align every label at the outer edge away from the pins.  This produces
-    # right-aligned text when the pin row is on the left and the exact mirror
-    # when the row is on the right.
+    # The header has a shared label lane, so left/centre/right alignment is
+    # meaningful even when individual labels have different widths.  Earlier
+    # builds always forced labels to the outer edge, leaving the UI alignment
+    # control disabled despite there being useful space to align within.
+    label_lane_min = min(near_edge, far_text_edge)
+    label_lane_max = max(near_edge, far_text_edge)
+    alignment = spec.style.typography.alignment
+
+    def label_cross_centre(label_size: float) -> float:
+        if spec.orientation == "horizontal":
+            # Header text is rotated by ±90°. Keep the familiar local text
+            # meaning of left/right after that rotation: right alignment lands
+            # on the rail's outside edge whether labels are above or below.
+            if alignment == "left":
+                return (
+                    near_edge - label_size / 2.0
+                    if negative_side
+                    else near_edge + label_size / 2.0
+                )
+            if alignment == "right":
+                return (
+                    far_text_edge + label_size / 2.0
+                    if negative_side
+                    else far_text_edge - label_size / 2.0
+                )
+            return (label_lane_min + label_lane_max) / 2.0
+        if alignment == "left":
+            return label_lane_min + label_size / 2.0
+        if alignment == "right":
+            return label_lane_max - label_size / 2.0
+        return (label_lane_min + label_lane_max) / 2.0
+
     label_cross_centres = tuple(
-        far_text_edge + label_size / 2.0 if negative_side else far_text_edge - label_size / 2.0
+        label_cross_centre(label_size)
         for label_size in label_cross_sizes
     )
     if spec.orientation == "horizontal":

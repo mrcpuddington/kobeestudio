@@ -57,6 +57,14 @@ class ShapeGeometryTests(unittest.TestCase):
         self.assertEqual(rounded, pill)
         self.assertGreater(len(pill), 20)
 
+    def test_circle_label_uses_a_perfect_square_enclosure(self):
+        geometry = render_shape(
+            ShapeObject("shape", "circle", size=Size(10.0, 4.0)),
+            ShapeStyle(padding=Padding()),
+        )
+        self.assertEqual(Size(10.0, 10.0), geometry.outer_size)
+        self.assertEqual(Size(10.0, 10.0), size_from_polygons((geometry.regions[0].outer,)))
+
     def test_outline_border_preserves_outer_dimensions(self):
         style = ShapeStyle(
             padding=Padding(),
@@ -70,6 +78,23 @@ class ShapeGeometryTests(unittest.TestCase):
         inner_size = size_from_polygons(geometry.regions[0].holes)
         self.assertAlmostEqual(9.0, inner_size.width, places=6)
         self.assertAlmostEqual(5.0, inner_size.height, places=6)
+
+    def test_outline_reserves_its_border_outside_padded_content(self):
+        style = ShapeStyle(
+            padding=Padding.symmetric(1.0, 0.5),
+            filled=False,
+            border_thickness_mm=0.4,
+        )
+        geometry = render_shape(
+            ShapeObject("shape", "rounded_rectangle"),
+            style,
+            content_size=Size(8.0, 2.0),
+        )
+        self.assertEqual(Size(10.8, 3.8), geometry.outer_size)
+        self.assertEqual(1, len(geometry.regions[0].holes))
+        self.assertEqual(
+            Size(10.0, 3.0), size_from_polygons(geometry.regions[0].holes)
+        )
 
     def test_large_border_deterministically_becomes_solid(self):
         style = ShapeStyle(padding=Padding(), filled=False, border_thickness_mm=10.0)
