@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1 — 2026-08-04
+
+- Applied Kobee Studio process and window branding to the external IPC editor.
+- Added a stable Windows AppUserModelID so the taskbar identifies the editor as Kobee Studio rather than Python.
+- Replaced the generic Python Dock icon on macOS with the original high-resolution Kobee Studio artwork without adding another runtime dependency.
+- Confirmed that KiCad validates the IPC manifest, installs the isolated Python environment and registers the toolbar action after first-run setup completes.
+
 ## 1.3.0 — 2026-08-04
 
 - Migrated the plugin entry point and board-placement adapter to KiCad's supported IPC API while keeping 1.2.x artwork editable.

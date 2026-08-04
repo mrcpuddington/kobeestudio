@@ -31,7 +31,7 @@ the KiCad-facing adapter currently in
 `kobeestudio/integration/kicad_compatibility.py`.
 
 IPC artwork is created in one board transaction, so placing or updating a
-Kobee Studio item remains a single Undo operation. The 1.3.0 PCM is the stable
+Kobee Studio item remains a single Undo operation. The 1.3.1 PCM is the stable
 IPC release. Complete Windows IPC validation remains on the roadmap before the
 official KiCad package-repository submission.
 
@@ -44,6 +44,6 @@ The `tools/ipc_smoke_test.py` development helper can exercise create and update
 against a disposable board through an explicitly selected PCB Editor socket.
 
 Run `python3 pcm/build.py` to create the installable
-`pcm/build/Kobee-Studio-1.3.0-pcm.zip` archive. It contains the IPC manifest,
-application source, dependencies, icon and licences and can be installed with
+`pcm/build/Kobee-Studio-1.3.1-pcm.zip` archive. It contains the IPC manifest,
+application source, dependency declarations, icons and licences and can be installed with
 KiCad's **Plugin and Content Manager → Install from File…** command.

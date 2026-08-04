@@ -10,7 +10,7 @@ This is a working roadmap, not a promise that every idea will ship. The order ma
 - [ ] Repeat the complete IPC workflow on KiCad 10 for Windows.
 - [ ] Test the complete KiCad 11 workflow.
 
-## What 1.3.0 includes
+## What 1.3.1 includes
 
 The following is the expanded version of the feature checklist shown on the main project page.
 
@@ -43,20 +43,21 @@ The following is the expanded version of the feature checklist shown on the main
 
 ### Foundation and release work
 
-- [x] KiCad 10 development and regression testing on macOS and Windows.
+- [x] KiCad 10 IPC development and regression testing on macOS; the earlier 1.2 release was also tested on Windows.
 - [x] Stable buffered preview and automated KiCad/Gerber regression coverage.
 - [x] An always-visible in-app **Need help?** link to the hosted Kobee Studio documentation hub.
 - [x] Versioned 1.2.1 PCM package and release notes prepared for manual installation.
 - [x] A KiCad schema-valid IPC PCM release using `com.github.mrcpuddington.kobeestudio`, a direct `plugins/` layout and a 64 × 64 catalog icon.
+- [x] Native Kobee Studio process branding for the external IPC window, including a high-resolution macOS Dock icon and a stable Windows AppUserModelID.
 - [x] Attribution, licensing and a contributor-friendly source installation path.
 
-## Next: make 1.3 dependable
+## Next: make 1.3.x dependable
 
 These are the highest-value, least speculative improvements. They should be finished before adding a large new tool category.
 
 ### Quality, compatibility and editing
 
-- [x] Test the complete KiCad 10 workflow on Windows and fix platform-specific UI, font and placement problems.
+- [ ] Test the complete KiCad 10 IPC workflow on Windows and fix platform-specific UI, font and placement problems.
 - [ ] Test the complete KiCad 10 workflow on Linux.
 - [ ] Continue hardening reopening/editing of existing Kobee Studio artwork, including older compatible KiBuzzard labels.
 - [ ] Add regression fixtures for every built-in icon, label shape, header orientation and output layer.

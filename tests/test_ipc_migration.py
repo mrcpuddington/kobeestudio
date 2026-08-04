@@ -86,13 +86,21 @@ class IpcMigrationTests(unittest.TestCase):
                 struct.unpack(">II", icon_data[16:24]),
             )
 
+        app_icon_data = (
+            ROOT / "kobeestudio/resources/kobee-studio-app-icon.png"
+        ).read_bytes()
+        self.assertEqual(b"\x89PNG\r\n\x1a\n", app_icon_data[:8])
+        app_icon_size = struct.unpack(">II", app_icon_data[16:24])
+        self.assertGreaterEqual(app_icon_size[0], 1024)
+        self.assertEqual(app_icon_size[0], app_icon_size[1])
+
     def test_pcm_metadata_matches_ipc_manifest_and_catalog_icon_rules(self):
         manifest = json.loads((ROOT / "ipc_plugin/plugin.json").read_text())
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
         self.assertEqual("stable", metadata["versions"][0]["status"])
-        self.assertEqual("1.3.0", metadata["versions"][0]["version"])
+        self.assertEqual("1.3.1", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))

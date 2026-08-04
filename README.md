@@ -8,7 +8,7 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **⚠️ Current status:** Kobee Studio 1.3.0 uses KiCad's supported IPC API and is tested on **KiCad 10 for macOS**. The earlier 1.2.1 release was also tested on Windows; complete Windows IPC validation for 1.3 is next. Save your PCB before applying new artwork.
+> **⚠️ Current status:** Kobee Studio 1.3.1 uses KiCad's supported IPC API and is tested on **KiCad 10 for macOS**. The earlier 1.2.1 release was also tested on Windows; complete Windows IPC validation for 1.3 is next. Save your PCB before applying new artwork.
 > Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
@@ -34,7 +34,7 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.3.0
+## What’s in 1.3.1
 
 | Tool                 | What it does                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -155,24 +155,40 @@ Ive started to create a more robust **[Roadmap](https://github.com/mrcpuddington
 
 Kobee Studio is a KiCad plugin, not a footprint library.
 
-### Install a release
+### Install the current release
 
-For the current release:
+Kobee Studio 1.3.1 uses KiCad's supported IPC plugin system. KiCad runs it in
+an isolated Python environment, so the editor opens as a separate, branded
+Kobee Studio window while it communicates with PCB Editor.
 
-1. Download `Kobee-Studio-1.2.1-pcm.zip` from the [GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases). Do not unzip it.
-2. In KiCad PCB Editor, open **Plugin and Content Manager**.
-3. Choose **Install from File…**, select the ZIP, and approve the install.
-4. Open **Tools → External Plugins → Kobee Studio: Create PCB Artwork**.
+1. Download `Kobee-Studio-1.3.1-pcm.zip` from the [GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases/latest). Do not unzip it.
+2. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
+3. Select the downloaded ZIP and approve the install.
+4. Open a board in PCB Editor. On the first launch, KiCad creates Kobee Studio's isolated Python environment and installs its IPC dependencies in the background. Keep an internet connection available and allow up to a minute for this to finish.
+5. Click the Kobee Studio bee button in PCB Editor's top toolbar to open the editor.
 
-### Build and install 1.3 from source
+The first-run setup only happens once. Because Kobee Studio is an external IPC
+window, it has its own Kobee Studio entry in the macOS Dock or Windows taskbar
+while it is open. This is expected and is separate from the small button in
+KiCad's toolbar.
 
-The 1.3 source tree uses KiCad's IPC plugin runtime. From a checkout, build a complete PCM archive:
+If the toolbar button does not appear after setup finishes:
+
+1. Fully quit PCB Editor and open it again.
+2. Open PCB Editor's **Preferences/Settings → Action Plugins** page and make sure **Show Button** is enabled for **Create PCB Artwork**.
+3. Use **Refresh Plugins**. If the environment failed to finish, right-click the Kobee Studio action and choose **Recreate Plugin Environment**, then restart PCB Editor.
+
+More installation help is available in the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
+
+### Build and install the current source
+
+The source tree uses KiCad's IPC plugin runtime. From a checkout, build a complete PCM archive:
 
 ```sh
 python3 pcm/build.py
 ```
 
-This creates `pcm/build/Kobee-Studio-1.3.0-pcm.zip`. Install that ZIP using the same **Plugin and Content Manager → Install from File…** flow above. The archive uses the KiCad package identifier `com.github.mrcpuddington.kobeestudio`, includes its Python dependencies, and does not depend on the source checkout after installation.
+This creates `pcm/build/Kobee-Studio-1.3.1-pcm.zip`. Install that ZIP using the same **Plugin and Content Manager → Install from File…** flow above. The archive uses the KiCad package identifier `com.github.mrcpuddington.kobeestudio`, declares its isolated Python dependencies, and does not depend on the source checkout after installation.
 
 ### Platform support
 

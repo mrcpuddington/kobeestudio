@@ -22,12 +22,34 @@ from kobeestudio.core.legacy_adapter import build_footprint_payload
 from kobeestudio.core.text_geometry import TextGeometry
 from kobeestudio.integration.ipc_artwork import IpcArtworkPlacement
 from kobeestudio.integration.ipc_session import IpcSession, IpcUnavailableError
+from kobeestudio.integration.platform_branding import (
+    configure_application_branding,
+    configure_process_identity,
+    configure_window_branding,
+)
 from kobeestudio.ui.main_dialog import MainDialog
+
+
+BRAND_ICON = next(
+    (
+        path
+        for path in (
+            PLUGIN_ROOT / "kobeestudio" / "resources" / "kobee-studio-app-icon.png",
+            SOURCE_ROOT / "kobeestudio" / "resources" / "kobee-studio-app-icon.png",
+            PLUGIN_ROOT / "kobeestudio" / "resources" / "kobee-bee.png",
+            SOURCE_ROOT / "kobeestudio" / "resources" / "kobee-bee.png",
+        )
+        if path.is_file()
+    ),
+    PLUGIN_ROOT / "kobee-toolbar-48.png",
+)
 
 
 def main() -> int:
     """Open the existing editor and place its artwork through KiCad IPC."""
+    configure_process_identity()
     app = wx.App(False)
+    configure_application_branding(app, BRAND_ICON)
     session = None
     try:
         session = IpcSession.connect(client_name="Kobee Studio")
@@ -70,6 +92,8 @@ def main() -> int:
             editor_session=session,
             build_label="IPC",
         )
+        configure_window_branding(dialog, BRAND_ICON, wx)
+        app.SetTopWindow(dialog)
         try:
             dialog.ShowModal()
         finally:
