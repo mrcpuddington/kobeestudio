@@ -8,7 +8,7 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **⚠️ Current status:** Kobee Studio 1.3.1 uses KiCad's supported IPC API and is tested on **KiCad 10 for macOS**. The earlier 1.2.1 release was also tested on Windows; complete Windows IPC validation for 1.3 is next. Save your PCB before applying new artwork.
+> **⚠️ Current status:** **Kobee Studio 1.2.1 is the current working release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's established PCBNew plug-in method. Kobee Studio 1.3.x is an IPC pre-release and is temporarily not recommended on Windows while a crash is investigated. Save your PCB before applying new artwork.
 > Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
@@ -34,14 +34,14 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.3.1
+## What’s in 1.2.1
 
 | Tool                 | What it does                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Labels               | Filled, inverted and outline labels with flexible shapes, padding, borders, mixed ends and optional underlines. |
+| Labels               | Filled, inverted and outline labels with flexible shapes, padding, borders and mixed ends.                      |
 | Icons & quick labels | Searchable PCB-safe symbols and common labels, usable standalone or with text.                                  |
 | Header overlays      | Pin labels for single-row 2.54 mm headers, with clearances, openings and editable layout.                       |
-| QR & barcodes        | QR codes and compact Code 128 markings with size checks, framing and optional editable text beneath the code.   |
+| QR & barcodes        | QR codes and compact Code 128 markings with fabrication-minded size checks.                                     |
 | Component callouts   | Labels that frame packages, switches and LED arrays while keeping the component clear.                          |
 | Layers               | Front/back silk, copper and solder-mask artwork.                                                                |
 
@@ -155,47 +155,54 @@ Ive started to create a more robust **[Roadmap](https://github.com/mrcpuddington
 
 Kobee Studio is a KiCad plugin, not a footprint library.
 
-### Install the current release
+### Install the current working release
 
-Kobee Studio 1.3.1 uses KiCad's supported IPC plugin system. KiCad runs it in
-an isolated Python environment, so the editor opens as a separate, branded
-Kobee Studio window while it communicates with PCB Editor.
+Kobee Studio 1.2.1 uses KiCad's established PCBNew plug-in method. It is the
+recommended release for KiCad 10 on macOS and Windows while the newer IPC
+version is being investigated.
 
-1. Download `Kobee-Studio-1.3.1-pcm.zip` from the [GitHub Releases page](https://github.com/mrcpuddington/kobeestudio/releases/latest). Do not unzip it.
+1. Download `Kobee-Studio-1.2.1-pcm.zip` from the [Kobee Studio 1.2.1 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.2.1). Do not unzip it.
 2. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
 3. Select the downloaded ZIP and approve the install.
-4. Open a board in PCB Editor. On the first launch, KiCad creates Kobee Studio's isolated Python environment and installs its IPC dependencies in the background. Keep an internet connection available and allow up to a minute for this to finish.
-5. Click the Kobee Studio bee button in PCB Editor's top toolbar to open the editor.
+4. Open a board in PCB Editor, then choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
 
-The first-run setup only happens once. Because Kobee Studio is an external IPC
-window, it has its own Kobee Studio entry in the macOS Dock or Windows taskbar
-while it is open. This is expected and is separate from the small button in
-KiCad's toolbar.
-
-If the toolbar button does not appear after setup finishes:
+If the toolbar button does not appear:
 
 1. Fully quit PCB Editor and open it again.
 2. Open PCB Editor's **Preferences/Settings → Action Plugins** page and make sure **Show Button** is enabled for **Create PCB Artwork**.
-3. Use **Refresh Plugins**. If the environment failed to finish, right-click the Kobee Studio action and choose **Recreate Plugin Environment**, then restart PCB Editor.
+3. Use **Refresh Plugins**, then restart PCB Editor.
 
 More installation help is available in the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
 
-### Build and install the current source
+### Install the 1.2.1 source for development
 
-The source tree uses KiCad's IPC plugin runtime. From a checkout, build a complete PCM archive:
+If you are contributing or need the PCBNew-based 1.2.1 source, check out its
+release tag before placing it in KiCad's user plug-in directory:
 
 ```sh
-python3 pcm/build.py
+git clone https://github.com/mrcpuddington/kobeestudio.git
+cd kobeestudio
+git checkout v1.2.1
 ```
 
-This creates `pcm/build/Kobee-Studio-1.3.1-pcm.zip`. Install that ZIP using the same **Plugin and Content Manager → Install from File…** flow above. The archive uses the KiCad package identifier `com.github.mrcpuddington.kobeestudio`, declares its isolated Python dependencies, and does not depend on the source checkout after installation.
+In KiCad's Python/Scripting Console, run the following to find KiCad's user
+plug-in directories:
+
+```python
+import pcbnew
+print(*pcbnew.PLUGIN_DIRECTORIES_SEARCH, sep="\n")
+```
+
+Copy or link the checked-out `kobeestudio` folder into a writable directory
+from that list, then restart PCB Editor. On Windows, copying the folder is
+preferable to using a symlink.
 
 ### Platform support
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.3 IPC release tested                            |
-| Windows  | KiCad 10      | 1.2 tested; complete 1.3 IPC validation planned  |
+| macOS    | KiCad 10      | 1.2.1 tested working release                      |
+| Windows  | KiCad 10      | 1.2.1 tested working release                      |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---
