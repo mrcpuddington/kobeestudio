@@ -8,8 +8,8 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **⚠️ Current status:** **Kobee Studio 1.2.1 is the current working release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's established PCBNew plug-in method. Kobee Studio 1.3.x is an IPC pre-release and is temporarily not recommended on Windows while a crash is investigated. Save your PCB before applying new artwork.
-> Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
+> **⚠️ Current status:** **Kobee Studio 1.2.1 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's established PCBNew plug-in method. Kobee Studio 1.3.x is an IPC beta. Recent Windows crash issues have been patched, and more testing would be very helpful. Save your PCB before applying new artwork.
+> Linux uses the same plug-in package, but still needs full UI and artwork validation, so it is not recommended yet for anything critical. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
 

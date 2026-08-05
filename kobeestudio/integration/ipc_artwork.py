@@ -29,15 +29,25 @@ def _mirror_polygon(polygon: Polygon) -> Polygon:
     return tuple(Point(-point.x, point.y) for point in reversed(polygon))
 
 
-def artwork_polygons(artwork: StudioArtwork, output_layer: str) -> Tuple[IpcPolygon, ...]:
+def _translate_polygon(polygon: Polygon, offset: Point) -> Polygon:
+    return tuple(Point(point.x + offset.x, point.y + offset.y) for point in polygon)
+
+
+def artwork_polygons(
+    artwork: StudioArtwork,
+    output_layer: str,
+    offset: Point | None = None,
+) -> Tuple[IpcPolygon, ...]:
     """Return the exact filled/stroked polygons the IPC footprint must contain."""
     if output_layer not in SUPPORTED_OUTPUT_LAYERS:
         raise ValueError("Unsupported Kobee Studio output layer: {}".format(output_layer))
 
     mirror = is_bottom(output_layer)
+    offset = offset or Point()
 
     def transform(polygon: Polygon) -> Polygon:
-        return _mirror_polygon(polygon) if mirror else polygon
+        transformed = _mirror_polygon(polygon) if mirror else polygon
+        return _translate_polygon(transformed, offset)
 
     primitives = [
         IpcPolygon(transform(polygon), filled=True)
@@ -166,6 +176,16 @@ class IpcArtworkPlacement:
         layer = api["BoardLayer"]
         return layer.BL_B_Cu if is_bottom(output_layer) else layer.BL_F_Cu
 
+    @staticmethod
+    def _artwork_origin(artwork: StudioArtwork, output_layer: str) -> Point:
+        origin = artwork.document.origin
+        return Point(-origin.x, origin.y) if is_bottom(output_layer) else origin
+
+    @classmethod
+    def _artwork_offset(cls, artwork: StudioArtwork, output_layer: str) -> Point:
+        origin = cls._artwork_origin(artwork, output_layer)
+        return Point(-origin.x, -origin.y)
+
     def _polygon_item(self, api, primitive: IpcPolygon, output_layer: str):
         shape = api["BoardPolygon"]()
         shape.layer = self._layer(api, output_layer)
@@ -195,7 +215,11 @@ class IpcArtworkPlacement:
         footprint = api["FootprintInstance"]()
         definition = footprint.definition
         definition.id.name = name
-        for primitive in artwork_polygons(artwork, output_layer):
+        for primitive in artwork_polygons(
+            artwork,
+            output_layer,
+            offset=self._artwork_offset(artwork, output_layer),
+        ):
             definition.add_item(self._polygon_item(api, primitive, output_layer))
 
         metadata = api["Field"]()
@@ -217,31 +241,41 @@ class IpcArtworkPlacement:
         footprint.value_field.visible = False
         return footprint
 
-    def _default_position(self, api):
-        # Match the current plugin's predictable fallback. A later placement
-        # milestone can ask KiCad to attach the new footprint to the cursor.
-        return api["Vector2"].from_xy_mm(100.0, 100.0)
-
     def place(
         self,
         artwork: StudioArtwork,
         payload: Mapping[str, Any],
         output_layer: str,
         old_footprint: Optional[Any] = None,
+        start_interactive_move: bool = True,
     ):
         api = self._api()
         footprint = self.build_footprint(artwork, payload, output_layer)
         if old_footprint is not None:
+            # KiCad matches the top-level item by UUID, but preserving the
+            # existing footprint definition identity avoids replacing an
+            # edited board item with a logically new shell that can momentarily
+            # drop out of the workspace on some edit paths.
+            try:
+                footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
+            except Exception:
+                pass
             footprint.position = old_footprint.position
             footprint.orientation = old_footprint.orientation
-        else:
-            footprint.position = self._default_position(api)
+            # KiCad updates board items by UUID. Preserve the selected
+            # footprint's identity so this is a true in-place replacement.
+            footprint.proto.id.CopyFrom(old_footprint.id)
+            try:
+                footprint.locked = old_footprint.locked
+            except Exception:
+                pass
 
         transaction = self.session.begin_commit()
         try:
-            created = self.session.board.create_items(footprint)
             if old_footprint is not None:
-                self.session.board.remove_items(old_footprint)
+                created = self.session.board.update_items(footprint)
+            else:
+                created = self.session.board.create_items(footprint)
             self.session.commit(
                 transaction,
                 "Update Kobee Studio artwork" if old_footprint is not None else "Place Kobee Studio artwork",
@@ -251,10 +285,21 @@ class IpcArtworkPlacement:
             raise
 
         placed = created[0] if created else None
-        if placed is not None:
+        if placed is not None and old_footprint is not None:
             try:
                 self.session.board.add_to_selection(placed)
             except Exception:
                 # Selection is convenience only; placement has already succeeded.
                 pass
+        if placed is not None and old_footprint is None and start_interactive_move:
+            self.start_interactive_move(placed)
         return placed
+
+    def start_interactive_move(self, placed: Any) -> None:
+        """Attach a committed footprint after the plugin modal has closed."""
+        try:
+            self.session.board.add_to_selection(placed)
+        except Exception:
+            # Selection is convenience only; placement has already succeeded.
+            pass
+        self.session.board.interactive_move(placed.id)

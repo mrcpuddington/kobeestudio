@@ -436,13 +436,25 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
         axis_min = last_axis - clearance_radius - spec.trailing_padding_mm
         axis_max = first_axis + clearance_radius + spec.leading_padding_mm
     if spec.opening_mode == "continuous":
+        minimum_end_padding = (
+            spec.leading_padding_mm if direction > 0 else spec.trailing_padding_mm
+        )
+        maximum_end_padding = (
+            spec.trailing_padding_mm if direction > 0 else spec.leading_padding_mm
+        )
         axis_min = min(
             axis_min,
-            min(axis_values) - clearance_radius - spec.opening_end_padding_mm - spec.label_padding_mm,
+            min(axis_values)
+            - clearance_radius
+            - spec.opening_end_padding_mm
+            - minimum_end_padding,
         )
         axis_max = max(
             axis_max,
-            max(axis_values) + clearance_radius + spec.opening_end_padding_mm + spec.label_padding_mm,
+            max(axis_values)
+            + clearance_radius
+            + spec.opening_end_padding_mm
+            + maximum_end_padding,
         )
     for centre, label_axis_size in zip(axis_values, label_axis_sizes):
         axis_min = min(axis_min, centre - label_axis_size / 2.0 - spec.label_padding_mm)
@@ -609,7 +621,7 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
     connector_keepout = keepout_geometry.regions[0].outer
     marker = None
     if spec.pin1_marker:
-        marker_size = min(0.4, spec.label_padding_mm, cross_size * 0.2)
+        marker_size = min(0.4, cross_size * 0.2)
         if marker_size <= 0.05:
             marker_size = min(0.2, cross_size * 0.1)
         edge_inset = marker_size * 0.15

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.3 Beta - 2026-08-05
+
+- Beta build for testing the KiCad 10 IPC path while `1.2.1` remains the stable release.
+- Fixed the main Windows stability issues around install, launch, preview refresh, placement, and cleanup after interrupted sessions.
+- Improved editor responsiveness by coalescing preview work, reducing startup delay, and avoiding repeated geometry rebuilds during numeric edits.
+- Fixed artwork placement and editing so new items attach to KiCad's move cursor, existing items keep their identity, and pin-count edits preserve label text.
+- Made live preview updates more reliable across labels, headers, arrays, component callouts, QR codes, and machine-code artwork controls.
+- Cleaned up pin-header spacing behavior and labels so the advanced controls are easier to understand and reflect the generated result more accurately.
+- Changed the default QR payload to the Kobee Studio GitHub repository.
+
 ## 1.3.1 — 2026-08-04
 
 - Applied Kobee Studio process and window branding to the external IPC editor.

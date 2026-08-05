@@ -65,6 +65,7 @@ class TextVectorizer:
 
     def __init__(self, buzzard) -> None:
         self.buzzard = buzzard
+        self._cache = {}
 
     def render(
         self,
@@ -76,6 +77,17 @@ class TextVectorizer:
     ) -> TextVectors:
         if not text:
             return TextVectors((), Size())
+
+        cache_key = (
+            text,
+            typography,
+            bool(inline_format),
+            lineover_style,
+            max(1, int(lineover_thickness)),
+        )
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         buzzard = self.buzzard
         buzzard.fontName = typography.font_name
@@ -106,12 +118,22 @@ class TextVectorizer:
             if len(polygon) >= 3
         )
         if not polygons:
-            return TextVectors((), Size())
+            result = TextVectors((), Size())
+            self._remember(cache_key, result)
+            return result
 
         minimum, maximum = polygon_bounds(polygons)
         centre = Point((minimum.x + maximum.x) / 2.0, (minimum.y + maximum.y) / 2.0)
         centred = tuple(_translate_polygon(polygon, Point(-centre.x, -centre.y)) for polygon in polygons)
-        return TextVectors(centred, Size(maximum.x - minimum.x, maximum.y - minimum.y))
+        result = TextVectors(centred, Size(maximum.x - minimum.x, maximum.y - minimum.y))
+        self._remember(cache_key, result)
+        return result
+
+    def _remember(self, key, value: TextVectors) -> None:
+        """Keep recent immutable outlines without retaining unbounded text."""
+        if len(self._cache) >= 64:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[key] = value
 
 
 def _translate_polygon(polygon: Polygon, offset: Point) -> Polygon:

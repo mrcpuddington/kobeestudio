@@ -68,6 +68,18 @@ class StudioArtworkTests(unittest.TestCase):
                 self.assertGreater(len(artwork.filled_polygons), 0)
                 self.assertEqual(1, len(artwork.strokes))
 
+    def test_text_vectors_are_reused_when_only_container_geometry_changes(self):
+        typography = TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.2)
+        first = self.vectorizer.render("RADIUS", typography)
+        second = self.vectorizer.render("RADIUS", typography)
+        self.assertIs(first, second)
+
+        changed_type = self.vectorizer.render(
+            "RADIUS",
+            TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.3),
+        )
+        self.assertIsNot(first, changed_type)
+
     def test_main_text_can_be_underlined_as_exported_geometry(self):
         plain = render_label_artwork(
             self.vectorizer,

@@ -275,7 +275,7 @@ MODE_DEFAULTS = {
         "ShapeChoice": "Rounded rectangle",
     },
     "QR / Barcode": {
-        "MultiLineText": "https://kobee.com.au",
+        "MultiLineText": "https://github.com/mrcpuddington/kobeestudio",
         "MachineCodeTypeChoice": "QR Code",
         "MachineCodePresentationChoice": "Rounded frame + footer",
         "MachineCodeCaptionCtrl": "SCAN ME",
@@ -349,6 +349,7 @@ class MainDialog(UpstreamDialog):
         self._applying_label_preset = False
         self._applying_mode_defaults = False
         self._dynamic_refit_pending = False
+        self._preview_pending = False
         self._editing_existing_artwork = False
         self._component_defaults_applied = False
         self.artwork = None
@@ -357,6 +358,9 @@ class MainDialog(UpstreamDialog):
         super(MainDialog, self).__init__(
             parent, config, buzzard, func, editor_session=editor_session
         )
+        # Typography is independent from container radius and padding. Reuse
+        # its immutable vectors so spinner edits only rebuild cheap shape geometry.
+        self._text_vectorizer = TextVectorizer(self.buzzard)
         title = "Kobee Studio"
         if self._build_label:
             title = "{} — {}".format(title, self._build_label)
@@ -364,6 +368,9 @@ class MainDialog(UpstreamDialog):
         self._build_studio_controls()
         self._build_machine_code_controls()
         self._build_layer_selector()
+        # Windows wxWidgets enforces native ownership for static-box content
+        # during the first layout pass, before the final scroller is built.
+        self._reparent_sizer_windows(self.GetSizer(), self)
         self._studio_controls_ready = True
         self._apply_studio_settings(self._loaded_studio_settings)
         self._hide_legacy_cap_controls()
@@ -388,6 +395,8 @@ class MainDialog(UpstreamDialog):
         else:
             self._apply_mode_defaults("Label", refit=False)
         self._stabilise_dialog_layout()
+        # Let the modal window paint before building its first preview.
+        wx.CallAfter(self._request_preview)
         # Reopening a placed icon is still an edit of its label. Keeping the
         # main field focused avoids jumping back into symbol selection.
         wx.CallAfter(self.m_MultiLineText.SetFocus)
@@ -397,6 +406,15 @@ class MainDialog(UpstreamDialog):
 
         panel = wx.Panel(self)
         box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Design"), wx.VERTICAL)
+        design_parent = box.GetStaticBox()
+        content_box = wx.StaticBoxSizer(
+            wx.StaticBox(design_parent, label="Content"), wx.VERTICAL
+        )
+        content_parent = content_box.GetStaticBox()
+        container_box = wx.StaticBoxSizer(
+            wx.StaticBox(design_parent, label="Container"), wx.VERTICAL
+        )
+        container_parent = container_box.GetStaticBox()
         # Two label/control pairs per row remain legible on the 800 px-wide
         # KiCad dialog, including the independent long-edge controls.
         grid = wx.FlexGridSizer(0, 4, 4, 6)
@@ -404,7 +422,7 @@ class MainDialog(UpstreamDialog):
         grid.AddGrowableCol(3)
 
         self.m_StudioModeChoice = wx.Choice(
-            panel,
+            design_parent,
             choices=(
                 "Label",
                 "Component Callout",
@@ -413,100 +431,100 @@ class MainDialog(UpstreamDialog):
                 "QR / Barcode",
             ),
         )
-        self.m_ShapeChoice = wx.Choice(panel, choices=tuple(LABEL_SHAPE_LABELS.keys()))
-        self.m_ShapeVariantChoice = wx.Choice(panel, choices=VARIANT_LABELS)
-        self.m_BorderThicknessCtrl = self._double_control(panel, 0.0, 10.0, 0.2, 0.05, 2)
-        self.m_CornerRadiusCtrl = self._double_control(panel, 0.0, 100.0, 0.2, 0.1, 2)
-        self.m_FeatureSizeCtrl = self._double_control(panel, 0.0, 100.0, 0.75, 0.1, 2)
-        self.m_ShapeDirectionChoice = wx.Choice(panel, choices=("Left", "Right"))
-        self.m_StartCapChoice = wx.Choice(panel, choices=CAP_LABELS)
-        self.m_EndCapChoice = wx.Choice(panel, choices=CAP_LABELS)
+        self.m_ShapeChoice = wx.Choice(container_parent, choices=tuple(LABEL_SHAPE_LABELS.keys()))
+        self.m_ShapeVariantChoice = wx.Choice(container_parent, choices=VARIANT_LABELS)
+        self.m_BorderThicknessCtrl = self._double_control(container_parent, 0.0, 10.0, 0.2, 0.05, 2)
+        self.m_CornerRadiusCtrl = self._double_control(container_parent, 0.0, 100.0, 0.2, 0.1, 2)
+        self.m_FeatureSizeCtrl = self._double_control(container_parent, 0.0, 100.0, 0.75, 0.1, 2)
+        self.m_ShapeDirectionChoice = wx.Choice(container_parent, choices=("Left", "Right"))
+        self.m_StartCapChoice = wx.Choice(container_parent, choices=CAP_LABELS)
+        self.m_EndCapChoice = wx.Choice(container_parent, choices=CAP_LABELS)
 
         mode_row = wx.BoxSizer(wx.HORIZONTAL)
-        mode_label = wx.StaticText(panel, label="Artwork type:")
+        mode_label = wx.StaticText(design_parent, label="Artwork type:")
         mode_row.Add(mode_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         mode_row.Add(self.m_StudioModeChoice, 1, wx.EXPAND)
         box.Add(mode_row, 0, wx.EXPAND | wx.ALL, 5)
         self.m_ArtworkTypeLabel = mode_label
         self.m_ArtworkTypeRow = mode_row
-        self._add_control(grid, panel, "Shape:", self.m_ShapeChoice)
-        self._add_control(grid, panel, "Appearance:", self.m_ShapeVariantChoice)
+        self._add_control(grid, container_parent, "Shape:", self.m_ShapeChoice)
+        self._add_control(grid, container_parent, "Appearance:", self.m_ShapeVariantChoice)
         self.m_BorderThicknessLabel = self._add_control(
-            grid, panel, "Border:", self.m_BorderThicknessCtrl
+            grid, container_parent, "Border:", self.m_BorderThicknessCtrl
         )
         self.m_CornerRadiusLabel = self._add_control(
-            grid, panel, "Radius:", self.m_CornerRadiusCtrl
+            grid, container_parent, "Radius:", self.m_CornerRadiusCtrl
         )
         self.m_FeatureSizeLabel = self._add_control(
-            grid, panel, "Feature size:", self.m_FeatureSizeCtrl
+            grid, container_parent, "Feature size:", self.m_FeatureSizeCtrl
         )
         self.m_ShapeDirectionLabel = self._add_control(
-            grid, panel, "Direction:", self.m_ShapeDirectionChoice
+            grid, container_parent, "Direction:", self.m_ShapeDirectionChoice
         )
-        self.m_StartCapLabel = self._add_control(grid, panel, "Left end:", self.m_StartCapChoice)
-        self.m_EndCapLabel = self._add_control(grid, panel, "Right end:", self.m_EndCapChoice)
+        self.m_StartCapLabel = self._add_control(grid, container_parent, "Left end:", self.m_StartCapChoice)
+        self.m_EndCapLabel = self._add_control(grid, container_parent, "Right end:", self.m_EndCapChoice)
 
         asset_grid = wx.FlexGridSizer(0, 4, 4, 6)
         asset_grid.AddGrowableCol(1)
         asset_grid.AddGrowableCol(3)
-        self.m_PresetLabelChoice = wx.Choice(panel, choices=tuple(PRESET_LABELS.keys()))
-        self.m_IconChoice = wx.Choice(panel, choices=tuple(ICON_LABELS.keys()))
+        self.m_PresetLabelChoice = wx.Choice(content_parent, choices=tuple(PRESET_LABELS.keys()))
+        self.m_IconChoice = wx.Choice(content_parent, choices=tuple(ICON_LABELS.keys()))
         self.m_PresetLabelChoice.Hide()
         self.m_IconChoice.Hide()
-        self.m_PresetPickerButton = wx.Button(panel, label="Choose quick label…")
-        self.m_IconPickerButton = wx.Button(panel, label="Choose symbol…")
-        self.m_IconPositionChoice = wx.Choice(panel, choices=tuple(ICON_POSITION_LABELS.keys()))
-        self.m_IconHeightCtrl = self._double_control(panel, 0.0, 20.0, 0.0, 0.1, 2)
-        self.m_IconGapCtrl = self._double_control(panel, 0.0, 20.0, 0.3, 0.1, 2)
-        self.m_ContentLayoutChoice = wx.Choice(panel, choices=CONTENT_LAYOUT_LABELS)
-        self.m_SubtitleCtrl = wx.TextCtrl(panel, value="")
+        self.m_PresetPickerButton = wx.Button(content_parent, label="Choose quick label…")
+        self.m_IconPickerButton = wx.Button(content_parent, label="Choose symbol…")
+        self.m_IconPositionChoice = wx.Choice(content_parent, choices=tuple(ICON_POSITION_LABELS.keys()))
+        self.m_IconHeightCtrl = self._double_control(content_parent, 0.0, 20.0, 0.0, 0.1, 2)
+        self.m_IconGapCtrl = self._double_control(content_parent, 0.0, 20.0, 0.3, 0.1, 2)
+        self.m_ContentLayoutChoice = wx.Choice(content_parent, choices=CONTENT_LAYOUT_LABELS)
+        self.m_SubtitleCtrl = wx.TextCtrl(content_parent, value="")
         self.m_SubtitleCtrl.SetMaxLength(256)
         self.m_SubtitleFontChoice = wx.Choice(
-            panel,
+            content_parent,
             choices=(MATCH_MAIN_TYPEFACE,) + tuple(self.m_FontComboBox.GetItems()),
         )
-        self.m_SubtitleHeightCtrl = self._double_control(panel, 0.1, 128.0, 0.8, 0.1, 2)
-        self.m_SubtitleLineSpacingCtrl = self._double_control(panel, 0.1, 10.0, 1.2, 0.1, 2)
-        self.m_SubtitleGapCtrl = self._double_control(panel, 0.0, 20.0, 0.25, 0.05, 2)
-        self.m_UnderlineCheckbox = wx.CheckBox(panel, label="Underline main text")
-        self.m_UnderlineThicknessCtrl = self._double_control(panel, 0.05, 5.0, 0.15, 0.05, 2)
-        self.m_UnderlineGapCtrl = self._double_control(panel, 0.0, 10.0, 0.12, 0.05, 2)
+        self.m_SubtitleHeightCtrl = self._double_control(content_parent, 0.1, 128.0, 0.8, 0.1, 2)
+        self.m_SubtitleLineSpacingCtrl = self._double_control(content_parent, 0.1, 10.0, 1.2, 0.1, 2)
+        self.m_SubtitleGapCtrl = self._double_control(content_parent, 0.0, 20.0, 0.25, 0.05, 2)
+        self.m_UnderlineCheckbox = wx.CheckBox(content_parent, label="Underline main text")
+        self.m_UnderlineThicknessCtrl = self._double_control(content_parent, 0.05, 5.0, 0.15, 0.05, 2)
+        self.m_UnderlineGapCtrl = self._double_control(content_parent, 0.0, 10.0, 0.12, 0.05, 2)
         self.m_ContentLayoutLabel = self._add_control(
-            asset_grid, panel, "Text layout:", self.m_ContentLayoutChoice
+            asset_grid, content_parent, "Text layout:", self.m_ContentLayoutChoice
         )
-        self._add_control(asset_grid, panel, "Text preset:", self.m_PresetPickerButton)
-        self._add_control(asset_grid, panel, "Symbol:", self.m_IconPickerButton)
+        self._add_control(asset_grid, content_parent, "Text preset:", self.m_PresetPickerButton)
+        self._add_control(asset_grid, content_parent, "Symbol:", self.m_IconPickerButton)
         self.m_IconPositionLabel = self._add_control(
-            asset_grid, panel, "Position:", self.m_IconPositionChoice
+            asset_grid, content_parent, "Position:", self.m_IconPositionChoice
         )
         self.m_IconHeightLabel = self._add_control(
-            asset_grid, panel, "Icon height (mm):", self.m_IconHeightCtrl
+            asset_grid, content_parent, "Icon height (mm):", self.m_IconHeightCtrl
         )
         self.m_IconGapLabel = self._add_control(
-            asset_grid, panel, "Icon gap (mm):", self.m_IconGapCtrl
+            asset_grid, content_parent, "Icon gap (mm):", self.m_IconGapCtrl
         )
         self.m_SubtitleLabel = self._add_control(
-            asset_grid, panel, "Subtitle text:", self.m_SubtitleCtrl
+            asset_grid, content_parent, "Subtitle text:", self.m_SubtitleCtrl
         )
         self.m_SubtitleFontLabel = self._add_control(
-            asset_grid, panel, "Subtitle typeface:", self.m_SubtitleFontChoice
+            asset_grid, content_parent, "Subtitle typeface:", self.m_SubtitleFontChoice
         )
         self.m_SubtitleHeightLabel = self._add_control(
-            asset_grid, panel, "Subtitle height (mm):", self.m_SubtitleHeightCtrl
+            asset_grid, content_parent, "Subtitle height (mm):", self.m_SubtitleHeightCtrl
         )
         self.m_SubtitleLineSpacingLabel = self._add_control(
-            asset_grid, panel, "Subtitle line spacing:", self.m_SubtitleLineSpacingCtrl
+            asset_grid, content_parent, "Subtitle line spacing:", self.m_SubtitleLineSpacingCtrl
         )
         self.m_SubtitleGapLabel = self._add_control(
-            asset_grid, panel, "Title/subtitle gap (mm):", self.m_SubtitleGapCtrl
+            asset_grid, content_parent, "Title/subtitle gap (mm):", self.m_SubtitleGapCtrl
         )
         asset_grid.Add(self.m_UnderlineCheckbox, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
         asset_grid.Add((0, 0), 1, wx.EXPAND)
         self.m_UnderlineThicknessLabel = self._add_control(
-            asset_grid, panel, "Underline thickness (mm):", self.m_UnderlineThicknessCtrl
+            asset_grid, content_parent, "Underline thickness (mm):", self.m_UnderlineThicknessCtrl
         )
         self.m_UnderlineGapLabel = self._add_control(
-            asset_grid, panel, "Underline gap (mm):", self.m_UnderlineGapCtrl
+            asset_grid, content_parent, "Underline gap (mm):", self.m_UnderlineGapCtrl
         )
         self.m_IconHeightCtrl.SetToolTip("0 matches the current text height; otherwise this is millimetres.")
         self.m_IconGapCtrl.SetToolTip("Space between the icon and text in millimetres.")
@@ -519,12 +537,10 @@ class MainDialog(UpstreamDialog):
         self.m_FeatureSizeCtrl.SetToolTip(
             "Controls the depth of the point, notch, tab, chamfer, or hexagon end."
         )
-        content_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Content"), wx.VERTICAL)
         content_box.Add(asset_grid, 0, wx.EXPAND | wx.ALL, 5)
         box.Add(content_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         self.m_ContentBox = content_box
 
-        container_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Container"), wx.VERTICAL)
         container_box.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
         box.Add(container_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         self.m_ContainerBox = container_box
@@ -534,23 +550,28 @@ class MainDialog(UpstreamDialog):
 
         header_panel = wx.Panel(self)
         header_box = wx.StaticBoxSizer(wx.StaticBox(header_panel, label="Pin header layout"), wx.VERTICAL)
+        header_parent = header_box.GetStaticBox()
+        header_detail_box = wx.StaticBoxSizer(
+            wx.StaticBox(header_parent, label="Detailed spacing"), wx.VERTICAL
+        )
+        header_detail_parent = header_detail_box.GetStaticBox()
         header_grid = wx.GridSizer(0, 4, 4, 8)
-        self.m_HeaderPinCountCtrl = wx.SpinCtrl(header_panel, min=1, max=40, initial=4)
-        self.m_HeaderOrientationChoice = wx.Choice(header_panel, choices=("Horizontal", "Vertical"))
-        self.m_HeaderPin1Choice = wx.Choice(header_panel, choices=("Start", "End"))
-        self.m_HeaderPinSideChoice = wx.Choice(header_panel, choices=("Top", "Bottom"))
-        self.m_HeaderPadClearanceCtrl = self._double_control(header_panel, 0.1, 100.0, 2.0, 0.1, 2)
-        self.m_HeaderOpeningChoice = wx.Choice(header_panel, choices=tuple(OPENING_LABELS.keys()))
-        self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.0, 0.1, 2)
-        self.m_HeaderLabelPaddingCtrl = self._double_control(header_panel, 0.0, 20.0, 0.3, 0.1, 2)
-        self.m_HeaderPinOuterPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
-        self.m_HeaderPinToLabelGapCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
-        self.m_HeaderLabelOuterPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
-        self.m_HeaderCrossSizeCtrl = self._double_control(header_panel, 0.0, 100.0, 0.0, 0.1, 2)
-        self.m_HeaderLeadingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
-        self.m_HeaderTrailingPaddingCtrl = self._double_control(header_panel, 0.0, 100.0, 0.3, 0.1, 2)
-        self.m_HeaderFillLabelsButton = wx.Button(header_panel, label="Fill labels 1…N")
-        self.m_HeaderPin1MarkerCheckbox = wx.CheckBox(header_panel, label="Pin 1 marker")
+        self.m_HeaderPinCountCtrl = wx.SpinCtrl(header_parent, min=1, max=40, initial=4)
+        self.m_HeaderOrientationChoice = wx.Choice(header_parent, choices=("Horizontal", "Vertical"))
+        self.m_HeaderPin1Choice = wx.Choice(header_parent, choices=("Start", "End"))
+        self.m_HeaderPinSideChoice = wx.Choice(header_parent, choices=("Top", "Bottom"))
+        self.m_HeaderPadClearanceCtrl = self._double_control(header_parent, 0.1, 100.0, 2.0, 0.1, 2)
+        self.m_HeaderOpeningChoice = wx.Choice(header_parent, choices=tuple(OPENING_LABELS.keys()))
+        self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.0, 0.1, 2)
+        self.m_HeaderLabelPaddingCtrl = self._double_control(header_detail_parent, 0.0, 20.0, 0.3, 0.1, 2)
+        self.m_HeaderPinOuterPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderPinToLabelGapCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderLabelOuterPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderCrossSizeCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.0, 0.1, 2)
+        self.m_HeaderLeadingPaddingCtrl = self._double_control(header_parent, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderTrailingPaddingCtrl = self._double_control(header_parent, 0.0, 100.0, 0.3, 0.1, 2)
+        self.m_HeaderFillLabelsButton = wx.Button(header_parent, label="Fill labels 1…N")
+        self.m_HeaderPin1MarkerCheckbox = wx.CheckBox(header_parent, label="Pin 1 marker")
         self.m_HeaderPin1MarkerCheckbox.SetValue(True)
 
         for label, control in (
@@ -560,10 +581,10 @@ class MainDialog(UpstreamDialog):
             ("Pins on", self.m_HeaderPinSideChoice),
             ("Artwork opening", self.m_HeaderOpeningChoice),
             ("Connector width (mm)", self.m_HeaderPadClearanceCtrl),
-            ("Row start outer padding (mm)", self.m_HeaderLeadingPaddingCtrl),
-            ("Row end outer padding (mm)", self.m_HeaderTrailingPaddingCtrl),
+            ("Pin 1 end outer padding (mm)", self.m_HeaderLeadingPaddingCtrl),
+            ("Far end outer padding (mm)", self.m_HeaderTrailingPaddingCtrl),
         ):
-            self._add_vertical_control(header_grid, header_panel, label, control)
+            self._add_vertical_control(header_grid, header_parent, label, control)
 
         header_detail_grid = wx.GridSizer(0, 4, 4, 8)
         for label, control in (
@@ -572,9 +593,9 @@ class MainDialog(UpstreamDialog):
             ("Pin-side outer padding (mm)", self.m_HeaderPinOuterPaddingCtrl),
             ("Pin-to-label gap (mm)", self.m_HeaderPinToLabelGapCtrl),
             ("Label-side outer padding (mm)", self.m_HeaderLabelOuterPaddingCtrl),
-            ("Fixed rail width / height (mm)", self.m_HeaderCrossSizeCtrl),
+            ("Minimum rail width / height (mm)", self.m_HeaderCrossSizeCtrl),
         ):
-            self._add_vertical_control(header_detail_grid, header_panel, label, control)
+            self._add_vertical_control(header_detail_grid, header_detail_parent, label, control)
 
         self.m_HeaderPadClearanceCtrl.SetToolTip(
             "Reserved connector width; also the cut width when an opening is enabled."
@@ -595,11 +616,12 @@ class MainDialog(UpstreamDialog):
             "Clearance from the outer label edge to the rail."
         )
         self.m_HeaderCrossSizeCtrl.SetToolTip(
-            "Optional total rail width (vertical header) or height (horizontal header). 0 follows content."
+            "Minimum total rail width (vertical header) or height (horizontal header). "
+            "The rail still grows if its connector and labels need more room; 0 follows content."
         )
         header_box.Add(header_grid, 0, wx.EXPAND | wx.ALL, 5)
         self.m_HeaderDetailsCheckbox = wx.CheckBox(
-            header_panel, label="Show detailed spacing"
+            header_parent, label="Show detailed spacing"
         )
         self.m_HeaderDetailsCheckbox.SetToolTip(
             "Show independent outer padding, label gap, rail size and end spacing."
@@ -609,9 +631,6 @@ class MainDialog(UpstreamDialog):
             0,
             wx.LEFT | wx.RIGHT | wx.BOTTOM,
             5,
-        )
-        header_detail_box = wx.StaticBoxSizer(
-            wx.StaticBox(header_panel, label="Detailed spacing"), wx.VERTICAL
         )
         header_detail_box.Add(header_detail_grid, 0, wx.EXPAND | wx.ALL, 5)
         header_box.Add(
@@ -625,7 +644,7 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderDetailBox.ShowItems(False)
         help_row = wx.BoxSizer(wx.HORIZONTAL)
         help_row.Add(
-            wx.StaticText(header_panel, label="Enter one label per pin."),
+            wx.StaticText(header_parent, label="Enter one label per pin."),
             1,
             wx.ALIGN_CENTER_VERTICAL | wx.RIGHT,
             8,
@@ -641,25 +660,26 @@ class MainDialog(UpstreamDialog):
         component_box = wx.StaticBoxSizer(
             wx.StaticBox(component_panel, label="Component safe zone"), wx.VERTICAL
         )
+        component_parent = component_box.GetStaticBox()
         component_grid = wx.FlexGridSizer(0, 4, 4, 8)
         component_grid.AddGrowableCol(1)
         component_grid.AddGrowableCol(3)
         self.m_ComponentPresetChoice = wx.Choice(
-            component_panel, choices=tuple(COMPONENT_PRESET_LABELS.keys())
+            component_parent, choices=tuple(COMPONENT_PRESET_LABELS.keys())
         )
         self.m_ComponentPositionChoice = wx.Choice(
-            component_panel, choices=tuple(COMPONENT_POSITION_LABELS.keys())
+            component_parent, choices=tuple(COMPONENT_POSITION_LABELS.keys())
         )
         self.m_ComponentCutoutChoice = wx.Choice(
-            component_panel, choices=tuple(COMPONENT_CUTOUT_LABELS.keys())
+            component_parent, choices=tuple(COMPONENT_CUTOUT_LABELS.keys())
         )
-        self.m_ComponentWidthCtrl = self._double_control(component_panel, 0.1, 100.0, 2.2, 0.1, 2)
-        self.m_ComponentHeightCtrl = self._double_control(component_panel, 0.1, 100.0, 1.1, 0.1, 2)
-        self.m_ComponentClearanceCtrl = self._double_control(component_panel, 0.0, 50.0, 0.3, 0.05, 2)
-        self.m_ComponentCutoutRadiusCtrl = self._double_control(component_panel, 0.0, 50.0, 0.7, 0.05, 2)
-        self.m_ComponentTextGapCtrl = self._double_control(component_panel, 0.0, 100.0, 2.6, 0.1, 2)
-        self.m_ComponentMinWidthCtrl = self._double_control(component_panel, 0.0, 200.0, 0.0, 0.5, 2)
-        self.m_ComponentMinHeightCtrl = self._double_control(component_panel, 0.0, 200.0, 0.0, 0.5, 2)
+        self.m_ComponentWidthCtrl = self._double_control(component_parent, 0.1, 100.0, 2.2, 0.1, 2)
+        self.m_ComponentHeightCtrl = self._double_control(component_parent, 0.1, 100.0, 1.1, 0.1, 2)
+        self.m_ComponentClearanceCtrl = self._double_control(component_parent, 0.0, 50.0, 0.3, 0.05, 2)
+        self.m_ComponentCutoutRadiusCtrl = self._double_control(component_parent, 0.0, 50.0, 0.7, 0.05, 2)
+        self.m_ComponentTextGapCtrl = self._double_control(component_parent, 0.0, 100.0, 2.6, 0.1, 2)
+        self.m_ComponentMinWidthCtrl = self._double_control(component_parent, 0.0, 200.0, 0.0, 0.5, 2)
+        self.m_ComponentMinHeightCtrl = self._double_control(component_parent, 0.0, 200.0, 0.0, 0.5, 2)
         for attribute, label, control in (
             ("m_ComponentPresetLabel", "Package / envelope:", self.m_ComponentPresetChoice),
             ("m_ComponentPositionLabel", "Component position:", self.m_ComponentPositionChoice),
@@ -675,29 +695,29 @@ class MainDialog(UpstreamDialog):
             setattr(
                 self,
                 attribute,
-                self._add_control(component_grid, component_panel, label, control),
+                self._add_control(component_grid, component_parent, label, control),
             )
         self.m_ComponentCutoutRadiusLabel = self._add_control(
             component_grid,
-            component_panel,
+            component_parent,
             "Safe-zone radius (mm):",
             self.m_ComponentCutoutRadiusCtrl,
         )
         self.m_ComponentTextGapLabel = self._add_control(
             component_grid,
-            component_panel,
+            component_parent,
             "Component-to-text gap (mm):",
             self.m_ComponentTextGapCtrl,
         )
         self.m_ComponentMinWidthLabel = self._add_control(
-            component_grid, component_panel, "Minimum width (mm):", self.m_ComponentMinWidthCtrl
+            component_grid, component_parent, "Minimum width (mm):", self.m_ComponentMinWidthCtrl
         )
         self.m_ComponentMinHeightLabel = self._add_control(
-            component_grid, component_panel, "Minimum height (mm):", self.m_ComponentMinHeightCtrl
+            component_grid, component_parent, "Minimum height (mm):", self.m_ComponentMinHeightCtrl
         )
         component_box.Add(component_grid, 0, wx.EXPAND | wx.ALL, 5)
         component_help = wx.StaticText(
-            component_panel,
+            component_parent,
             label=(
                 "Preset sizes are editable footprint envelopes. The preview guide and placement origin "
                 "mark the real component centre; guide geometry is never exported."
@@ -719,40 +739,41 @@ class MainDialog(UpstreamDialog):
         array_box = wx.StaticBoxSizer(
             wx.StaticBox(array_panel, label="Component array"), wx.VERTICAL
         )
+        array_parent = array_box.GetStaticBox()
         array_grid = wx.FlexGridSizer(0, 4, 4, 8)
         array_grid.AddGrowableCol(1)
         array_grid.AddGrowableCol(3)
         self.m_ComponentArrayCountCtrl = wx.SpinCtrl(
-            array_panel, min=2, max=16, initial=3
+            array_parent, min=2, max=16, initial=3
         )
         self.m_ComponentArrayOrientationChoice = wx.Choice(
-            array_panel, choices=tuple(COMPONENT_ARRAY_ORIENTATION_LABELS.keys())
+            array_parent, choices=tuple(COMPONENT_ARRAY_ORIENTATION_LABELS.keys())
         )
         self.m_ComponentArrayPitchCtrl = self._double_control(
-            array_panel, 0.1, 100.0, 5.0, 0.1, 2
+            array_parent, 0.1, 100.0, 5.0, 0.1, 2
         )
         self.m_ComponentArrayFillButton = wx.Button(
-            array_panel, label="Fill labels 1…N"
+            array_parent, label="Fill labels 1…N"
         )
         self._add_control(
-            array_grid, array_panel, "Component count:", self.m_ComponentArrayCountCtrl
+            array_grid, array_parent, "Component count:", self.m_ComponentArrayCountCtrl
         )
         self._add_control(
             array_grid,
-            array_panel,
+            array_parent,
             "Array direction:",
             self.m_ComponentArrayOrientationChoice,
         )
         self._add_control(
             array_grid,
-            array_panel,
+            array_parent,
             "Centre spacing (mm):",
             self.m_ComponentArrayPitchCtrl,
         )
         array_grid.Add(self.m_ComponentArrayFillButton, 0, wx.EXPAND)
         array_box.Add(array_grid, 0, wx.EXPAND | wx.ALL, 5)
         array_help = wx.StaticText(
-            array_panel,
+            array_parent,
             label=(
                 "Enter one label per component. Centre spacing is checked against "
                 "the selected opening and rendered text so rows cannot overlap."
@@ -834,6 +855,11 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderOrientationChoice.Bind(wx.EVT_CHOICE, self._on_header_orientation_changed)
         self.m_HeaderOpeningChoice.Bind(wx.EVT_CHOICE, self._on_header_opening_changed)
         self.m_HeaderDetailsCheckbox.Bind(wx.EVT_CHECKBOX, self._on_header_details_changed)
+        self.m_HeaderPinCountCtrl.Bind(wx.EVT_SPINCTRL, self._on_header_pin_count_changed)
+        self.m_HeaderPinCountCtrl.Bind(wx.EVT_TEXT, self._on_header_pin_count_changed)
+        self.m_HeaderPin1Choice.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+        self.m_HeaderPinSideChoice.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+        self.m_HeaderPin1MarkerCheckbox.Bind(wx.EVT_CHECKBOX, self._on_live_artwork_changed)
         self.m_ShapeChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
         self.m_ShapeVariantChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
         self.m_StartCapChoice.Bind(wx.EVT_CHOICE, self._on_shape_changed)
@@ -859,18 +885,19 @@ class MainDialog(UpstreamDialog):
         box = wx.StaticBoxSizer(
             wx.StaticBox(panel, label="Machine-readable code"), wx.VERTICAL
         )
+        machine_parent = box.GetStaticBox()
         grid = wx.FlexGridSizer(0, 4, 4, 8)
         grid.AddGrowableCol(1)
         grid.AddGrowableCol(3)
 
         self.m_MachineCodeTypeChoice = wx.Choice(
-            panel, choices=tuple(MACHINE_CODE_LABELS.keys())
+            machine_parent, choices=tuple(MACHINE_CODE_LABELS.keys())
         )
         self.m_MachineCodeModuleSizeCtrl = self._double_control(
-            panel, CODE128_MIN_MODULE_MM, 5.0, QR_MIN_MODULE_MM, 0.05, 2
+            machine_parent, CODE128_MIN_MODULE_MM, 5.0, QR_MIN_MODULE_MM, 0.05, 2
         )
         self.m_MachineCodeBarHeightCtrl = self._double_control(
-            panel,
+            machine_parent,
             CODE128_MIN_HEIGHT_MM,
             100.0,
             CODE128_DEFAULT_HEIGHT_MM,
@@ -878,62 +905,62 @@ class MainDialog(UpstreamDialog):
             1,
         )
         self.m_MachineCodePresentationChoice = wx.Choice(
-            panel, choices=tuple(QR_PRESENTATION_LABELS.keys())
+            machine_parent, choices=tuple(QR_PRESENTATION_LABELS.keys())
         )
-        self.m_MachineCodeCaptionCtrl = wx.TextCtrl(panel, value="SCAN ME")
+        self.m_MachineCodeCaptionCtrl = wx.TextCtrl(machine_parent, value="SCAN ME")
         self.m_MachineCodeCaptionCtrl.SetMaxLength(32)
         self.m_MachineCodeCaptionHeightCtrl = self._double_control(
-            panel, 0.8, 10.0, 1.2, 0.1, 1
+            machine_parent, 0.8, 10.0, 1.2, 0.1, 1
         )
         self.m_MachineCodeFramePaddingCtrl = self._double_control(
-            panel, 0.0, 10.0, 0.2, 0.05, 2
+            machine_parent, 0.0, 10.0, 0.2, 0.05, 2
         )
         self.m_MachineCodeShowContentCheckbox = wx.CheckBox(
-            panel, label="Show editable text below code"
+            machine_parent, label="Show editable text below code"
         )
-        self.m_MachineCodeContentCtrl = wx.TextCtrl(panel, value="")
+        self.m_MachineCodeContentCtrl = wx.TextCtrl(machine_parent, value="")
         self.m_MachineCodeContentCtrl.SetMaxLength(96)
         self.m_MachineCodeContentHeightCtrl = self._double_control(
-            panel, 0.6, 10.0, 0.9, 0.1, 1
+            machine_parent, 0.6, 10.0, 0.9, 0.1, 1
         )
         self.m_MachineCodeContentGapCtrl = self._double_control(
-            panel, 0.0, 10.0, 0.5, 0.1, 1
+            machine_parent, 0.0, 10.0, 0.5, 0.1, 1
         )
         self.m_MachineCodeFramePaddingCtrl.SetToolTip(
             "Extra space outside the required QR quiet zone. Zero still preserves the full quiet zone."
         )
-        self._add_control(grid, panel, "Code type:", self.m_MachineCodeTypeChoice)
+        self._add_control(grid, machine_parent, "Code type:", self.m_MachineCodeTypeChoice)
         self.m_MachineCodeModuleSizeLabel = self._add_control(
-            grid, panel, "Module size (mm):", self.m_MachineCodeModuleSizeCtrl
+            grid, machine_parent, "Module size (mm):", self.m_MachineCodeModuleSizeCtrl
         )
         self.m_MachineCodeBarHeightLabel = self._add_control(
-            grid, panel, "Bar height (mm):", self.m_MachineCodeBarHeightCtrl
+            grid, machine_parent, "Bar height (mm):", self.m_MachineCodeBarHeightCtrl
         )
         self.m_MachineCodePresentationLabel = self._add_control(
-            grid, panel, "QR presentation:", self.m_MachineCodePresentationChoice
+            grid, machine_parent, "QR presentation:", self.m_MachineCodePresentationChoice
         )
         self.m_MachineCodeFramePaddingLabel = self._add_control(
-            grid, panel, "Extra frame gap (mm):", self.m_MachineCodeFramePaddingCtrl
+            grid, machine_parent, "Extra frame gap (mm):", self.m_MachineCodeFramePaddingCtrl
         )
         self.m_MachineCodeCaptionLabel = self._add_control(
-            grid, panel, "Footer text:", self.m_MachineCodeCaptionCtrl
+            grid, machine_parent, "Footer text:", self.m_MachineCodeCaptionCtrl
         )
         self.m_MachineCodeCaptionHeightLabel = self._add_control(
-            grid, panel, "Footer height (mm):", self.m_MachineCodeCaptionHeightCtrl
+            grid, machine_parent, "Footer height (mm):", self.m_MachineCodeCaptionHeightCtrl
         )
         grid.Add(self.m_MachineCodeShowContentCheckbox, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
         grid.Add((0, 0), 1, wx.EXPAND)
         self.m_MachineCodeContentLabel = self._add_control(
-            grid, panel, "Text below code:", self.m_MachineCodeContentCtrl
+            grid, machine_parent, "Text below code:", self.m_MachineCodeContentCtrl
         )
         self.m_MachineCodeContentHeightLabel = self._add_control(
-            grid, panel, "Text height (mm):", self.m_MachineCodeContentHeightCtrl
+            grid, machine_parent, "Text height (mm):", self.m_MachineCodeContentHeightCtrl
         )
         self.m_MachineCodeContentGapLabel = self._add_control(
-            grid, panel, "Text gap (mm):", self.m_MachineCodeContentGapCtrl
+            grid, machine_parent, "Text gap (mm):", self.m_MachineCodeContentGapCtrl
         )
         box.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
-        self.m_MachineCodeHelp = wx.StaticText(panel, label="")
+        self.m_MachineCodeHelp = wx.StaticText(machine_parent, label="")
         self.m_MachineCodeHelp.Wrap(720)
         box.Add(
             self.m_MachineCodeHelp,
@@ -1156,18 +1183,24 @@ class MainDialog(UpstreamDialog):
         return None
 
     def _reparent_sizer_windows(self, sizer, parent):
-        """Move direct dialog children into the settings scroller."""
+        """Move sizer windows while preserving native static-box ownership."""
+        content_parent = parent
         if isinstance(sizer, wx.StaticBoxSizer):
             static_box = sizer.GetStaticBox()
-            if static_box.GetParent() is self:
+            if static_box.GetParent() is not parent:
                 static_box.Reparent(parent)
+            content_parent = static_box
         for item in sizer.GetChildren():
             window = item.GetWindow()
             nested = item.GetSizer()
-            if window is not None and window.GetParent() is self:
-                window.Reparent(parent)
+            if window is not None:
+                if window.GetParent() is not content_parent:
+                    window.Reparent(content_parent)
+                child_sizer = window.GetSizer()
+                if child_sizer is not None:
+                    self._reparent_sizer_windows(child_sizer, window)
             elif nested is not None:
-                self._reparent_sizer_windows(nested, parent)
+                self._reparent_sizer_windows(nested, content_parent)
 
     def _rebuild_studio_layout(self):
         """Replace the legacy growing form with a fixed workspace and scroller."""
@@ -1227,9 +1260,11 @@ class MainDialog(UpstreamDialog):
             mode_sizer.Detach(self.m_StudioModeChoice)
         self.m_ArtworkTypeLabel.Hide()
         self.m_StudioModeChoice.Reparent(self)
-        artwork_bar = wx.StaticBoxSizer(wx.StaticBox(self, label="Artwork type"), wx.HORIZONTAL)
+        artwork_box = wx.StaticBox(self, label="Artwork type")
+        artwork_bar = wx.StaticBoxSizer(artwork_box, wx.HORIZONTAL)
+        self.m_StudioModeChoice.Reparent(artwork_box)
         artwork_bar.Add(self.m_StudioModeChoice, 1, wx.EXPAND | wx.ALL, 5)
-        self.m_HelpButton = wx.Button(self, label="Need help?")
+        self.m_HelpButton = wx.Button(artwork_box, label="Need help?")
         self.m_HelpButton.SetToolTip("Open Kobee Studio guides, tutorials and installation help.")
         self.m_HelpButton.Bind(wx.EVT_BUTTON, self._open_docs)
         artwork_bar.Add(self.m_HelpButton, 0, wx.ALIGN_CENTER_VERTICAL | wx.TOP | wx.RIGHT | wx.BOTTOM, 5)
@@ -1294,7 +1329,7 @@ class MainDialog(UpstreamDialog):
         return bool(self.m_advancedCheckbox.IsChecked())
 
     def _bind_live_artwork_controls(self):
-        """Refresh artwork immediately when typography or container geometry changes."""
+        """Schedule one preview refresh after a burst of control changes."""
         for control in (
             self.m_HeightCtrl,
             self.m_WidthCtrl,
@@ -1305,8 +1340,31 @@ class MainDialog(UpstreamDialog):
             self.m_PaddingBottomCtrl,
             self.m_BorderThicknessCtrl,
             self.m_CornerRadiusCtrl,
+            self.m_FeatureSizeCtrl,
+            self.m_IconHeightCtrl,
+            self.m_IconGapCtrl,
+            self.m_SubtitleHeightCtrl,
+            self.m_SubtitleLineSpacingCtrl,
+            self.m_SubtitleGapCtrl,
             self.m_UnderlineThicknessCtrl,
             self.m_UnderlineGapCtrl,
+            self.m_HeaderPadClearanceCtrl,
+            self.m_HeaderOpeningEndPaddingCtrl,
+            self.m_HeaderLeadingPaddingCtrl,
+            self.m_HeaderTrailingPaddingCtrl,
+            self.m_HeaderLabelPaddingCtrl,
+            self.m_HeaderPinOuterPaddingCtrl,
+            self.m_HeaderPinToLabelGapCtrl,
+            self.m_HeaderLabelOuterPaddingCtrl,
+            self.m_HeaderCrossSizeCtrl,
+            self.m_ComponentWidthCtrl,
+            self.m_ComponentHeightCtrl,
+            self.m_ComponentClearanceCtrl,
+            self.m_ComponentCutoutRadiusCtrl,
+            self.m_ComponentTextGapCtrl,
+            self.m_ComponentMinWidthCtrl,
+            self.m_ComponentMinHeightCtrl,
+            self.m_ComponentArrayPitchCtrl,
             self.m_MachineCodeModuleSizeCtrl,
             self.m_MachineCodeBarHeightCtrl,
             self.m_MachineCodeCaptionHeightCtrl,
@@ -1318,12 +1376,45 @@ class MainDialog(UpstreamDialog):
             control.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
         self.m_FontComboBox.Bind(wx.EVT_COMBOBOX, self._on_live_artwork_changed)
         self.m_AlignmentChoice.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+        for control in (
+            self.m_ShapeDirectionChoice,
+            self.m_SubtitleFontChoice,
+            self.m_ComponentPositionChoice,
+        ):
+            control.Bind(wx.EVT_CHOICE, self._on_live_artwork_changed)
+        self.m_ComponentArrayCountCtrl.Bind(
+            wx.EVT_SPINCTRL, self._on_component_array_count_changed
+        )
+        self.m_ComponentArrayCountCtrl.Bind(
+            wx.EVT_TEXT, self._on_component_array_count_changed
+        )
         self.m_MachineCodeCaptionCtrl.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
 
     def _on_live_artwork_changed(self, event):
         if self._studio_controls_ready and not self._applying_mode_defaults:
-            self.ReGenerateFlag(event)
-            self.ReGeneratePreview()
+            self._request_preview(event)
+        event.Skip()
+
+    def _request_preview(self, event=None, *, immediate=False):
+        """Coalesce UI events so geometry generation never monopolises wx."""
+        if not self._studio_controls_ready:
+            return
+        self.ReGenerateFlag(event)
+        self.timer.Stop()
+        if immediate:
+            self._preview_pending = False
+            self._regenerate_preview_now()
+            self.label_params = self.CurrentSettings()
+            return
+        self._preview_pending = True
+        self.timer.Start(milliseconds=300, oneShot=True)
+
+    def labelEditOnText(self, event):
+        """Replace the inherited repeating regeneration loop with one pass."""
+        if self._studio_controls_ready and self._preview_pending:
+            self._preview_pending = False
+            self._regenerate_preview_now()
+            self.label_params = self.CurrentSettings()
         event.Skip()
 
     def _refresh_settings_layout(self):
@@ -1412,6 +1503,27 @@ class MainDialog(UpstreamDialog):
         self.ReGeneratePreview()
         event.Skip()
 
+    def _on_header_pin_count_changed(self, event):
+        if (
+            not self._studio_controls_ready
+            or self._applying_mode_defaults
+            or self.m_StudioModeChoice.GetStringSelection() != "2.54 mm Pin Header"
+        ):
+            event.Skip()
+            return
+        count = self.m_HeaderPinCountCtrl.GetValue()
+        labels = self.m_MultiLineText.GetValue().splitlines()
+        resized = labels[:count]
+        resized.extend(
+            "Pin {}".format(index)
+            for index in range(len(resized) + 1, count + 1)
+        )
+        value = "\n".join(resized)
+        if value != self.m_MultiLineText.GetValue():
+            self.m_MultiLineText.SetValue(value)
+        self._request_preview(event)
+        event.Skip()
+
     def _on_header_opening_changed(self, event):
         self._update_opening_ui()
         self.ReGenerateFlag(event)
@@ -1462,6 +1574,27 @@ class MainDialog(UpstreamDialog):
         self._ensure_component_array_pitch()
         self.ReGenerateFlag(event)
         self.ReGeneratePreview()
+        event.Skip()
+
+    def _on_component_array_count_changed(self, event):
+        if (
+            not self._studio_controls_ready
+            or self._applying_mode_defaults
+            or self.m_StudioModeChoice.GetStringSelection() != "Component Array"
+        ):
+            event.Skip()
+            return
+        count = self.m_ComponentArrayCountCtrl.GetValue()
+        labels = self.m_MultiLineText.GetValue().splitlines()
+        resized = labels[:count]
+        resized.extend(
+            "Component {}".format(index)
+            for index in range(len(resized) + 1, count + 1)
+        )
+        value = "\n".join(resized)
+        if value != self.m_MultiLineText.GetValue():
+            self.m_MultiLineText.SetValue(value)
+        self._request_preview(event)
         event.Skip()
 
     def _on_machine_code_type_changed(self, event):
@@ -1597,6 +1730,8 @@ class MainDialog(UpstreamDialog):
         ):
             self.m_PresetLabelChoice.SetStringSelection("Custom label")
             self._update_asset_button_labels()
+        if self._studio_controls_ready and not self._applying_mode_defaults:
+            self._request_preview(event)
         event.Skip()
 
     def _update_opening_ui(self):
@@ -2219,9 +2354,12 @@ class MainDialog(UpstreamDialog):
         return settings
 
     def ReGeneratePreview(self, event=None):
+        """Request a preview instead of rebuilding on the active UI event."""
         if not self._studio_controls_ready:
             return super(MainDialog, self).ReGeneratePreview(event)
+        self._request_preview(event)
 
+    def _regenerate_preview_now(self):
         self.polys = []
         self.stroke_polys = []
         self.guide_polys = []
@@ -2230,7 +2368,7 @@ class MainDialog(UpstreamDialog):
         self.buzzard.layer = self.output_layer
         try:
             style = self._document_style()
-            vectorizer = TextVectorizer(self.buzzard)
+            vectorizer = self._text_vectorizer
             text = self.m_MultiLineText.GetValue()
             mode = self.m_StudioModeChoice.GetStringSelection()
             subtitle = (
@@ -2389,7 +2527,7 @@ class MainDialog(UpstreamDialog):
         # Numeric controls can still have uncommitted native text when the
         # user clicks Update artwork immediately after editing them.  Never
         # hand the placement layer a previous preview in that situation.
-        self.ReGeneratePreview()
+        self._request_preview(immediate=True)
         if self.error is not None or self.artwork is None:
             wx.MessageBox(
                 self.error or "Enter valid artwork before placing it.",
@@ -2398,7 +2536,19 @@ class MainDialog(UpstreamDialog):
                 self,
             )
             return
-        super(MainDialog, self).OnOkClick(event)
+        self.m_sdbSizerOK.Disable()
+        try:
+            super(MainDialog, self).OnOkClick(event)
+        except Exception as error:
+            traceback.print_exc()
+            self.Show()
+            self.m_sdbSizerOK.Enable()
+            wx.MessageBox(
+                str(error) or "KiCad could not place the artwork.",
+                "Kobee Studio",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
 
     def _document_style(self):
         shape_name = self.m_ShapeChoice.GetStringSelection()
