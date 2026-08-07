@@ -214,7 +214,7 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
         self.assertEqual("testing", metadata["versions"][0]["status"])
-        self.assertEqual("1.3.3", metadata["versions"][0]["version"])
+        self.assertEqual("1.3.4", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
@@ -230,6 +230,20 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn('PLUGIN_DIR / filename', source)
         self.assertIn('"plugin.json"', source)
         self.assertNotIn('PLUGINS / filename', source)
+
+    def test_windows_settings_scroller_uses_a_content_panel(self):
+        """Keep the generated sizer out of wx.ScrolledWindow directly.
+
+        Windows validates a window's native parent and containing sizer at a
+        later layout pass.  Putting the legacy generated tree directly on the
+        scroller made a text-height spinner edit capable of reaching an
+        invalid ownership assertion.
+        """
+        source = (ROOT / "kobeestudio/ui/main_dialog.py").read_text()
+        self.assertIn("settings_content = wx.Panel(scroller)", source)
+        self.assertIn("settings_content.SetSizer(legacy_root)", source)
+        self.assertIn("scroller_sizer.Add(settings_content", source)
+        self.assertNotIn("scroller.SetSizer(legacy_root)", source)
 
     def test_ipc_session_uses_the_connection_details_from_kicad(self):
         session = IpcSession.connect(

@@ -368,9 +368,6 @@ class MainDialog(UpstreamDialog):
         self._build_studio_controls()
         self._build_machine_code_controls()
         self._build_layer_selector()
-        # Windows wxWidgets enforces native ownership for static-box content
-        # during the first layout pass, before the final scroller is built.
-        self._reparent_sizer_windows(self.GetSizer(), self)
         self._studio_controls_ready = True
         self._apply_studio_settings(self._loaded_studio_settings)
         self._hide_legacy_cap_controls()
@@ -1183,7 +1180,19 @@ class MainDialog(UpstreamDialog):
         return None
 
     def _reparent_sizer_windows(self, sizer, parent):
-        """Move sizer windows while preserving native static-box ownership."""
+        """Move one complete settings tree to its final content panel.
+
+        wxWidgets keeps both a native parent relationship and a separate
+        ``containing sizer`` relationship.  Moving the generated controls
+        through the dialog and then into a scroller left a short-lived,
+        invalid ownership tree on Windows.  Windows validates that tree on a
+        later layout (often the first numeric spinner edit) and aborts KiCad
+        with ``SetContainingSizer(): window already in a sizer``.
+
+        The generated tree is now moved exactly once, into a normal panel
+        owned by the scroller.  Static-box children remain children of their
+        static box throughout the move, as wxWidgets requires.
+        """
         content_parent = parent
         if isinstance(sizer, wx.StaticBoxSizer):
             static_box = sizer.GetStaticBox()
@@ -1232,8 +1241,10 @@ class MainDialog(UpstreamDialog):
         self.m_SubtitleCtrl.SetBackgroundColour(self.m_MultiLineText.GetBackgroundColour())
         self.m_SubtitleCtrl.SetForegroundColour(self.m_MultiLineText.GetForegroundColour())
 
-        # The generated sizer becomes the content of one vertical scroller.
-        # Existing controls keep all bindings and settings behaviour.
+        # The generated sizer becomes the content of a normal panel inside
+        # the scroller.  Do not set it directly on wx.ScrolledWindow: some
+        # Windows wx builds defer their sizer ownership validation until a
+        # later relayout, which made an innocent text-height edit fatal.
         self.SetSizer(None, deleteOld=False)
         scroller = wx.ScrolledWindow(
             self,
@@ -1242,14 +1253,22 @@ class MainDialog(UpstreamDialog):
         scroller.SetBackgroundColour(self.GetBackgroundColour())
         scroller.SetScrollRate(0, 12)
         scroller.SetMinSize(wx.Size(1, 180))
-        self._reparent_sizer_windows(legacy_root, scroller)
+        settings_content = wx.Panel(scroller)
+        settings_content.SetBackgroundColour(self.GetBackgroundColour())
+        self._reparent_sizer_windows(legacy_root, settings_content)
+        settings_content.SetSizer(legacy_root)
+        settings_content.Layout()
+        settings_content.Fit()
+        scroller_sizer = wx.BoxSizer(wx.VERTICAL)
+        scroller_sizer.Add(settings_content, 0, wx.EXPAND)
+        scroller.SetSizer(scroller_sizer)
         self.m_advancedCheckbox.Reparent(self)
         self.m_advancedCheckbox.SetLabel("Show advanced settings")
         self.m_advancedCheckbox.SetToolTip(
             "Reveal exact geometry, spacing and typography controls."
         )
-        scroller.SetSizer(legacy_root)
         self.m_SettingsScroller = scroller
+        self.m_SettingsContent = settings_content
 
         # Artwork type is the first decision. Keep it above layer selection and
         # outside the scrollable settings area so it remains discoverable.
@@ -1426,6 +1445,8 @@ class MainDialog(UpstreamDialog):
         self.m_ComponentPanel.Layout()
         self.m_ComponentArrayPanel.Layout()
         self.m_MachineCodePanel.Layout()
+        self.m_SettingsContent.Layout()
+        self.m_SettingsContent.Fit()
         self.m_SettingsScroller.GetSizer().Layout()
         self.m_SettingsScroller.FitInside()
         self.m_SettingsScroller.Layout()
