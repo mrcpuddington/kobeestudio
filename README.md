@@ -34,7 +34,7 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.2.1
+## What’s in 1.3.4
 
 | Tool                 | What it does                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -173,28 +173,25 @@ If the toolbar button does not appear:
 
 More installation help is available in the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
 
-### Install the 1.2.1 source for development
+### Build and install from source
 
-If you are contributing or need the PCBNew-based 1.2.1 source, check out its
-release tag before placing it in KiCad's user plug-in directory:
+If you are contributing or want to test the current source, build the IPC
+package locally and install the generated ZIP through KiCad's Plugin and
+Content Manager:
 
 ```sh
 git clone https://github.com/mrcpuddington/kobeestudio.git
 cd kobeestudio
-git checkout v1.2.1
+git checkout v1.3.4
+python3 pcm/build.py
 ```
 
-In KiCad's Python/Scripting Console, run the following to find KiCad's user
-plug-in directories:
+Then choose **Install from File…** in KiCad's Plugin and Content Manager and
+select:
 
-```python
-import pcbnew
-print(*pcbnew.PLUGIN_DIRECTORIES_SEARCH, sep="\n")
+```text
+pcm/build/Kobee-Studio-1.3.4-pcm.zip
 ```
-
-Copy or link the checked-out `kobeestudio` folder into a writable directory
-from that list, then restart PCB Editor. On Windows, copying the folder is
-preferable to using a symlink.
 
 ### Platform support
 
