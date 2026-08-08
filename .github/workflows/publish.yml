@@ -1,0 +1,144 @@
+name: Publish Kobee Studio package
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch, tag, or commit to publish"
+        required: true
+        default: main
+        type: string
+      channel:
+        description: "Release channel"
+        required: true
+        default: testing
+        type: choice
+        options:
+          - testing
+          - stable
+      release_tag:
+        description: "GitHub release tag, for example v1.4.0-beta.1 or v1.4.0"
+        required: true
+        type: string
+      release_name:
+        description: "Optional GitHub release title"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build and publish ${{ inputs.channel }} package
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.channel == 'stable' && 'production' || 'testing' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run focused tests
+        run: |
+          python -m unittest \
+            tests.test_ipc_migration.IpcMigrationTests.test_manifest_declares_supported_ipc_runtime \
+            tests.test_ipc_migration.IpcMigrationTests.test_pcm_metadata_matches_ipc_manifest_and_catalog_icon_rules \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_requirements_use_kicad_bundled_wxpython \
+            tests.test_ipc_migration.IpcMigrationTests.test_pcm_builder_places_ipc_manifest_in_plugin_subdirectory \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_uses_the_connection_details_from_kicad \
+            tests.test_ipc_migration.IpcMigrationTests.test_development_connection_accepts_kicads_empty_external_token \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_fails_clearly_outside_kicad \
+            tests.test_ipc_migration.IpcMigrationTests.test_each_plugin_process_has_a_unique_ipc_commit_identity \
+            tests.test_ipc_migration.IpcMigrationTests.test_metadata_round_trip_reopens_selected_artwork \
+            tests.test_platform_branding
+
+      - name: Build PCM package
+        run: python pcm/build.py
+
+      - name: Validate release metadata
+        id: package
+        shell: python
+        env:
+          EXPECTED_CHANNEL: ${{ inputs.channel }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          import json
+          import os
+          import re
+          import zipfile
+          from pathlib import Path
+
+          metadata = json.loads(Path("pcm/metadata_template.json").read_text())
+          version_entry = metadata["versions"][0]
+          version = version_entry["version"]
+          status = version_entry["status"]
+          expected_status = os.environ["EXPECTED_CHANNEL"]
+          release_tag = os.environ["RELEASE_TAG"]
+
+          if not re.fullmatch(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}", version):
+              raise SystemExit(
+                  f"Invalid KiCad PCM version {version!r}; expected major.minor.patch"
+              )
+          if status != expected_status:
+              raise SystemExit(
+                  f"Metadata status is {status!r}, but channel is {expected_status!r}"
+              )
+          if not release_tag.startswith("v"):
+              raise SystemExit("release_tag must start with 'v'")
+
+          archive = Path(f"pcm/build/Kobee-Studio-{version}-pcm.zip")
+          if not archive.exists():
+              raise SystemExit(f"Missing expected archive: {archive}")
+
+          with zipfile.ZipFile(archive) as package:
+              packaged = json.loads(package.read("metadata.json"))
+          if packaged["versions"][0]["version"] != version:
+              raise SystemExit("Archive metadata does not match source metadata")
+
+          print(f"version={version}")
+          print(f"archive={archive}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"version={version}\n")
+              output.write(f"archive={archive}\n")
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+          CHANNEL: ${{ inputs.channel }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          title="$RELEASE_NAME"
+          if [ -z "$title" ]; then
+            title="Kobee Studio $RELEASE_TAG"
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ARCHIVE" --clobber
+            if [ "$CHANNEL" = "testing" ]; then
+              gh release edit "$RELEASE_TAG" --title "$title" --prerelease
+            else
+              gh release edit "$RELEASE_TAG" --title "$title" --prerelease=false
+            fi
+          else
+            if [ "$CHANNEL" = "testing" ]; then
+              gh release create "$RELEASE_TAG" "$ARCHIVE" \
+                --title "$title" \
+                --target "${{ inputs.source_ref }}" \
+                --generate-notes \
+                --prerelease
+            else
+              gh release create "$RELEASE_TAG" "$ARCHIVE" \
+                --title "$title" \
+                --target "${{ inputs.source_ref }}" \
+                --generate-notes
+            fi
+          fi
