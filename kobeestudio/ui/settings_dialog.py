@@ -122,8 +122,6 @@ class SettingsDialog(wx.Dialog):
         hidden_symbol_ids=(),
         hidden_label_ids=(),
         current_module: str,
-        capture_settings: Callable[[], Dict],
-        apply_profile: Callable[[Dict], None],
         preferences_changed: Callable[[AppPreferences], None],
     ):
         super().__init__(
@@ -142,8 +140,6 @@ class SettingsDialog(wx.Dialog):
         self._hidden_symbol_ids = set(hidden_symbol_ids)
         self._hidden_label_ids = set(hidden_label_ids)
         self.current_module = current_module
-        self.capture_settings = capture_settings
-        self.apply_profile = apply_profile
         self.preferences_changed = preferences_changed
         self._profiles = ()
         self._upload_items = ()
@@ -300,7 +296,7 @@ class SettingsDialog(wx.Dialog):
     def _build_profile_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.profile_page.SetSizer(root)
-        root.Add(self._heading(self.profile_page, "Module profiles"), 0, wx.ALL, 14)
+        root.Add(self._heading(self.profile_page, "Saved profiles"), 0, wx.ALL, 14)
         top = wx.BoxSizer(wx.HORIZONTAL)
         top.Add(wx.StaticText(self.profile_page, label="Module"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         self.module_choice = ThemedChoice(self.profile_page, choices=tuple(MODULE_BY_LABEL))
@@ -313,9 +309,6 @@ class SettingsDialog(wx.Dialog):
         root.Add(self.profile_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
         actions = wx.BoxSizer(wx.HORIZONTAL)
         for label, handler in (
-            ("Save current as…", self._save_profile),
-            ("Update selected", self._update_profile),
-            ("Apply", self._apply_selected_profile),
             ("Set default", self._set_default_profile),
             ("Clear default", self._clear_default_profile),
             ("Delete", self._delete_profile),
@@ -325,7 +318,7 @@ class SettingsDialog(wx.Dialog):
         root.Add(actions, 0, wx.ALL, 14)
         note = wx.StaticText(
             self.profile_page,
-            label="Defaults apply to new artwork only. Settings embedded in existing artwork always win.",
+            label="Save and recall profiles from each editor tool. Set one default here to use it for new artwork; without one, the app’s standard defaults are used.",
         )
         root.Add(note, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         self._refresh_profiles()
@@ -357,51 +350,6 @@ class SettingsDialog(wx.Dialog):
     def _on_profile_module_changed(self, event):
         self._refresh_profiles()
         event.Skip()
-
-    def _save_profile(self, event):
-        module = self._profile_module()
-        if module != self.current_module:
-            wx.MessageBox(
-                "Switch the editor to {} before saving its current settings.".format(MODULE_LABELS[module]),
-                "Kobee Studio Profiles",
-                wx.OK | wx.ICON_INFORMATION,
-                self,
-            )
-            return
-        prompt = wx.TextEntryDialog(self, "Profile name", "Save current settings as a profile")
-        try:
-            if prompt.ShowModal() != wx.ID_OK:
-                return
-            profile = self.profile_store.save(module, prompt.GetValue(), self.capture_settings())
-            self._refresh_profiles(profile.profile_id)
-        except (OSError, ValueError) as error:
-            wx.MessageBox(str(error), "Could not save profile", wx.OK | wx.ICON_ERROR, self)
-        finally:
-            prompt.Destroy()
-
-    def _update_profile(self, event):
-        profile = self._selected_profile()
-        if profile is None:
-            return
-        if profile.module != self.current_module:
-            wx.MessageBox("The selected profile is for a different editor module.", "Kobee Studio Profiles", wx.OK | wx.ICON_INFORMATION, self)
-            return
-        try:
-            updated = self.profile_store.save(
-                profile.module,
-                profile.name,
-                self.capture_settings(),
-                profile_id=profile.profile_id,
-            )
-            self._refresh_profiles(updated.profile_id)
-        except (OSError, ValueError) as error:
-            wx.MessageBox(str(error), "Could not update profile", wx.OK | wx.ICON_ERROR, self)
-
-    def _apply_selected_profile(self, event):
-        profile = self._selected_profile()
-        if profile is not None:
-            self.apply_profile(dict(profile.settings))
-            self.current_module = profile.module
 
     def _set_default_profile(self, event):
         profile = self._selected_profile()
@@ -556,26 +504,54 @@ class SettingsDialog(wx.Dialog):
             wx.MessageBox(str(error), "Could not delete quick label", wx.OK | wx.ICON_ERROR, self)
 
     def _visibility_entries(self):
-        if self.visibility_kind.GetStringSelection() == "Symbols":
+        if self._visibility_kind == "Symbols":
             return tuple((item.asset_id, "{}  ·  {}{}".format(item.category, item.name, " — " + item.variant.replace("_", " ").title() if item.variant != "default" else "")) for item in self.symbol_catalog.symbols if item.source == "bundle")
         return tuple((item.preset_id, item.text) for item in self.symbol_catalog.labels if item.source == "bundle")
+
+    def _select_visibility_kind(self, kind):
+        self._visibility_kind = kind
+        for button, button_kind in (
+            (self.visibility_symbol_button, "Symbols"),
+            (self.visibility_label_button, "Quick labels"),
+        ):
+            button.primary = button_kind == kind
+            button.Refresh(False)
+        self._refresh_visibility()
+
+    def _on_visibility_selection(self, event):
+        self._update_visibility_actions()
+        event.Skip()
+
+    def _update_visibility_actions(self):
+        if not hasattr(self, "hide_visibility_button"):
+            return
+        index = self.visibility_list.GetSelection()
+        if not 0 <= index < len(self._visibility_entries_current):
+            self.hide_visibility_button.Enable(False)
+            self.show_visibility_button.Enable(False)
+            return
+        identifier, _label = self._visibility_entries_current[index]
+        hidden = self._hidden_symbol_ids if self._visibility_kind == "Symbols" else self._hidden_label_ids
+        self.hide_visibility_button.Enable(identifier not in hidden)
+        self.show_visibility_button.Enable(identifier in hidden)
 
     def _refresh_visibility(self):
         if not hasattr(self, "visibility_list"):
             return
         self._visibility_entries_current = self._visibility_entries()
-        hidden = self._hidden_symbol_ids if self.visibility_kind.GetStringSelection() == "Symbols" else self._hidden_label_ids
+        hidden = self._hidden_symbol_ids if self._visibility_kind == "Symbols" else self._hidden_label_ids
         self.visibility_list.SetVisibilityRows(
             tuple(label for _identifier, label in self._visibility_entries_current),
             tuple(identifier not in hidden for identifier, _label in self._visibility_entries_current),
         )
+        self._update_visibility_actions()
 
     def _set_visibility(self, visible):
         index = self.visibility_list.GetSelection()
         if not 0 <= index < len(self._visibility_entries_current):
             return
         identifier, _label = self._visibility_entries_current[index]
-        hidden = self._hidden_symbol_ids if self.visibility_kind.GetStringSelection() == "Symbols" else self._hidden_label_ids
+        hidden = self._hidden_symbol_ids if self._visibility_kind == "Symbols" else self._hidden_label_ids
         if visible:
             hidden.discard(identifier)
         else:
@@ -611,17 +587,25 @@ class SettingsDialog(wx.Dialog):
         message = wx.StaticText(self.library_visibility_page, label="Hide only the shipped item you select. Linked quick labels remain available unless you explicitly hide those too.")
         message.Wrap(620)
         visibility_root.Add(message, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-        visibility_row = wx.BoxSizer(wx.HORIZONTAL)
-        visibility_row.Add(wx.StaticText(self.library_visibility_page, label="Manage"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-        self.visibility_kind = ThemedChoice(self.library_visibility_page, choices=("Symbols", "Quick labels"))
-        self.visibility_kind.Bind(wx.EVT_CHOICE, lambda event: self._refresh_visibility())
-        visibility_row.Add(self.visibility_kind, 0)
-        visibility_root.Add(visibility_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        visibility_tabs = wx.BoxSizer(wx.HORIZONTAL)
+        self._visibility_kind = "Symbols"
+        self.visibility_symbol_button = ThemedActionButton(
+            self.library_visibility_page, "Symbols", lambda: self._select_visibility_kind("Symbols"), primary=True
+        )
+        self.visibility_label_button = ThemedActionButton(
+            self.library_visibility_page, "Quick labels", lambda: self._select_visibility_kind("Quick labels")
+        )
+        visibility_tabs.Add(self.visibility_symbol_button, 0, wx.RIGHT, 6)
+        visibility_tabs.Add(self.visibility_label_button, 0)
+        visibility_root.Add(visibility_tabs, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         visibility_actions = wx.BoxSizer(wx.HORIZONTAL)
-        visibility_actions.Add(ThemedActionButton(self.library_visibility_page, "Hide selected", lambda: self._set_visibility(False)), 0, wx.RIGHT, 6)
-        visibility_actions.Add(ThemedActionButton(self.library_visibility_page, "Show selected", lambda: self._set_visibility(True)), 0)
+        self.hide_visibility_button = ThemedActionButton(self.library_visibility_page, "Hide selected", lambda: self._set_visibility(False))
+        self.show_visibility_button = ThemedActionButton(self.library_visibility_page, "Show selected", lambda: self._set_visibility(True))
+        visibility_actions.Add(self.hide_visibility_button, 0, wx.RIGHT, 6)
+        visibility_actions.Add(self.show_visibility_button, 0)
         visibility_root.Add(visibility_actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
         self.visibility_list = ThemedListBox(self.library_visibility_page)
+        self.visibility_list.Bind(wx.EVT_LISTBOX, self._on_visibility_selection)
         visibility_root.Add(self.visibility_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         self._refresh_visibility()
 

@@ -44,6 +44,11 @@ from ..core.svg_symbols import (
 )
 from ..core.quick_labels import QuickLabelStore
 from ..core.transforms import (
+    BOTTOM_COPPER,
+    BOTTOM_MASK,
+    BOTTOM_SILKSCREEN,
+    FRONT_COPPER,
+    FRONT_MASK,
     FRONT_SILKSCREEN,
     fit_preview_polygons,
     is_bottom,
@@ -56,6 +61,7 @@ from .theme import apply_native_theme, is_dark_mode, set_appearance_preference
 from .themed_controls import (
     ThemedCheckBox,
     ThemedChoice,
+    ThemedListBox,
     ThemedSpinCtrl,
     ThemedSpinCtrlDouble,
     ThemedTextButton,
@@ -99,6 +105,29 @@ from .main_dialog import (
 KOBEE_STUDIO_DOCS_URL = "https://www.coreybusuttil.com/kobeestudio/docs/"
 ACCENT = wx.Colour(235, 177, 20)
 ACCENT_TEXT = wx.Colour(48, 36, 4)
+PREVIEW_LAYER_LABELS = {
+    "F.SilkS": "Front silk",
+    "B.SilkS": "Back silk",
+    "F.Mask": "Front mask",
+    "B.Mask": "Back mask",
+    "F.Cu": "Front copper",
+    "B.Cu": "Back copper",
+}
+TARGET_LAYER_LABELS = {
+    FRONT_SILKSCREEN: "Front silk",
+    BOTTOM_SILKSCREEN: "Back silk",
+    FRONT_COPPER: "Front copper",
+    BOTTOM_COPPER: "Back copper",
+    FRONT_MASK: "Front mask",
+    BOTTOM_MASK: "Back mask",
+}
+MODULE_LABELS_FOR_PROFILE = {
+    "labels": "Label",
+    "pin_headers": "Header overlay",
+    "component_callouts": "Component callout",
+    "component_arrays": "Component array",
+    "machine_codes": "QR code or barcode",
+}
 
 TOOL_DEFINITIONS = (
     ("labels", "Standard", "Label"),
@@ -669,6 +698,52 @@ class PickerButton(wx.Control):
         return True
 
 
+class ProfileRecallDialog(wx.Dialog):
+    """Small dark-safe picker used directly from each artwork tool."""
+
+    def __init__(self, parent, module_label, profiles, default_id):
+        super().__init__(parent, title="Recall {} profile".format(module_label), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self._profiles = tuple(profiles)
+        self.selected_profile_id = None
+        palette = _palette()
+        self.SetBackgroundColour(palette["window"])
+        root = wx.BoxSizer(wx.VERTICAL)
+        heading = wx.StaticText(self, label="Recall a {} profile".format(module_label))
+        heading.SetFont(heading.GetFont().Bold())
+        heading.SetForegroundColour(palette["text"])
+        root.Add(heading, 0, wx.ALL, 14)
+        helper = wx.StaticText(self, label="Recalling replaces the current settings for this tool. You can save your changes as a new profile or overwrite this one later.")
+        helper.SetForegroundColour(palette["muted"])
+        helper.Wrap(440)
+        root.Add(helper, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
+        self.list = ThemedListBox(self)
+        self.list.Set(
+            tuple("{}{}".format(profile.name, "  [default]" if profile.profile_id == default_id else "") for profile in self._profiles)
+        )
+        if self._profiles:
+            self.list.SetSelection(0)
+        self.list.Bind(wx.EVT_LISTBOX_DCLICK, self._on_recall)
+        root.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
+        buttons = wx.BoxSizer(wx.HORIZONTAL)
+        buttons.AddStretchSpacer(1)
+        buttons.Add(KobeeAction(self, "Cancel", lambda: self.EndModal(wx.ID_CANCEL)), 0, wx.RIGHT, 7)
+        buttons.Add(KobeeAction(self, "Recall profile", self._recall, primary=True), 0)
+        root.Add(buttons, 0, wx.EXPAND | wx.ALL, 14)
+        self.SetSizer(root)
+        self.SetMinSize(wx.Size(500, 330))
+        self.SetSize(wx.Size(540, 380))
+
+    def _on_recall(self, event):
+        self._recall()
+
+    def _recall(self):
+        index = self.list.GetSelection()
+        if not 0 <= index < len(self._profiles):
+            return
+        self.selected_profile_id = self._profiles[index].profile_id
+        self.EndModal(wx.ID_OK)
+
+
 class PreviewCanvas(wx.Panel):
     """Buffered, zoomable preview that paints only cached device geometry."""
 
@@ -863,6 +938,18 @@ class ToolPage(wx.Panel):
         self.section_sizer = wx.BoxSizer(wx.VERTICAL)
         self.section_bar.SetSizer(self.section_sizer)
         self.section_sizer.AddSpacer(12)
+        profile_label = wx.StaticText(self.section_bar, label="PROFILES")
+        profile_label.SetForegroundColour(_palette()["muted"])
+        profile_label.SetFont(profile_label.GetFont().Bold())
+        self.section_sizer.Add(profile_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        self.section_sizer.Add(
+            KobeeAction(self.section_bar, "Recall…", self.dialog._recall_profile_for_active_tool),
+            0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5,
+        )
+        self.section_sizer.Add(
+            KobeeAction(self.section_bar, "Save…", self.dialog._save_profile_for_active_tool),
+            0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10,
+        )
         self.root.Add(self.section_bar, 0, wx.EXPAND)
         self.content = wx.ScrolledWindow(
             self,
@@ -1301,6 +1388,21 @@ class ToolPage(wx.Panel):
             return self._container_special_shape
         shape = self.controls.get("ShapeChoice")
         return shape.GetStringSelection() if shape is not None else "No container"
+
+    def _effective_end_caps(self):
+        """Resolve matched skew shapes without exposing slash glyphs as ends."""
+        shape = self.controls.get("ShapeChoice")
+        matched_shape = shape.GetStringSelection() if shape is not None else ""
+        independent = (
+            self.controls.get("IndependentEdgesChoice")
+            and self.controls["IndependentEdgesChoice"].GetStringSelection() == "Independent"
+        )
+        if not independent and matched_shape in ("Skew left", "Skew right"):
+            return matched_shape, matched_shape
+        return (
+            self.controls.get("StartCapChoice").GetStringSelection() if self.controls.get("StartCapChoice") else "Square",
+            self.controls.get("EndCapChoice").GetStringSelection() if self.controls.get("EndCapChoice") else "Rounded",
+        )
 
     def _update_container_ui(self):
         if "ShapeChoice" not in self.controls:
@@ -1781,6 +1883,11 @@ class ToolPage(wx.Panel):
                 continue
             if key in settings:
                 raw_value = settings[key]
+                if key in ("StartCapChoice", "EndCapChoice"):
+                    raw_value = {
+                        "Skew /": "Skew left",
+                        "Skew \\": "Skew right",
+                    }.get(raw_value, raw_value)
                 if key in MEASUREMENT_SETTING_KEYS:
                     # Older artwork may contain null/blank optional dimensions.
                     # wx numeric controls cannot accept those values, while the
@@ -1874,6 +1981,7 @@ class StudioEditorDialog(wx.Dialog):
         self._tool = "Standard"
         self._editing_existing = False
         self._default_applied_tools = set()
+        self._recalled_profile_ids = {}
         self._output_layers = (FRONT_SILKSCREEN,)
         self._text_vectorizer = TextVectorizer(self.buzzard)
         self._timer = wx.Timer(self)
@@ -2036,6 +2144,30 @@ class StudioEditorDialog(wx.Dialog):
         self.tool_sizer.AddStretchSpacer(1)
         root.Add(self.tool_bar, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 6)
 
+        # Placement is a first-class decision, not a preview setting.  Keep
+        # every selected PCB layer visible and independently controllable.
+        self.placement_bar = wx.Panel(self)
+        self.placement_bar.SetBackgroundColour(palette["subnav"])
+        placement_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.placement_bar.SetSizer(placement_sizer)
+        placement_sizer.AddSpacer(14)
+        placement_label = wx.StaticText(self.placement_bar, label="Place artwork on")
+        placement_label.SetForegroundColour(palette["muted"])
+        placement_sizer.Add(placement_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        self.layer_toggles = {}
+        for layer in LAYER_ORDER:
+            toggle = ThemedCheckBox(
+                self.placement_bar,
+                label=TARGET_LAYER_LABELS[layer],
+                value=layer in self._output_layers,
+            )
+            toggle.SetToolTip(LAYER_LABELS[layer])
+            toggle.Bind(wx.EVT_CHECKBOX, self._on_target_layers_changed)
+            placement_sizer.Add(toggle, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+            self.layer_toggles[layer] = toggle
+        placement_sizer.AddStretchSpacer(1)
+        root.Add(self.placement_bar, 0, wx.EXPAND | wx.BOTTOM, 6)
+
         workspace = wx.BoxSizer(wx.HORIZONTAL)
         self.pages = wx.Simplebook(self)
         self.pages.SetBackgroundColour(palette["controls"])
@@ -2063,9 +2195,10 @@ class StudioEditorDialog(wx.Dialog):
         preview_heading.Add(preview_title, 0, wx.ALIGN_CENTER_VERTICAL)
         toolbar.Add(preview_heading, 0, wx.EXPAND | wx.BOTTOM, 6)
         preview_controls = wx.BoxSizer(wx.HORIZONTAL)
-        self.layer_choice = ThemedChoice(preview_panel, choices=tuple(LAYER_LABELS[layer] for layer in self._output_layers))
+        preview_controls.Add(wx.StaticText(preview_panel, label="Preview layer"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        self.layer_choice = ThemedChoice(preview_panel, choices=tuple(PREVIEW_LAYER_LABELS[layer] for layer in self._output_layers))
         self.layer_choice.SetMinSize(wx.Size(140, 30))
-        self.layer_choice.SetStringSelection(LAYER_LABELS[FRONT_SILKSCREEN])
+        self.layer_choice.SetStringSelection(PREVIEW_LAYER_LABELS[FRONT_SILKSCREEN])
         self.layer_choice.Bind(wx.EVT_CHOICE, self.on_control_changed)
         preview_controls.Add(self.layer_choice, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 7)
         for label, handler in (
@@ -2076,14 +2209,6 @@ class StudioEditorDialog(wx.Dialog):
             button = KobeeAction(preview_panel, label, handler)
             preview_controls.Add(button, 0, wx.RIGHT, 4)
         toolbar.Add(preview_controls, 0, wx.EXPAND)
-        target_row = wx.BoxSizer(wx.HORIZONTAL)
-        target_hint = wx.StaticText(preview_panel, label="Place on")
-        target_hint.SetForegroundColour(palette["muted"])
-        target_row.Add(target_hint, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-        self.layer_targets_button = KobeeAction(preview_panel, "Target layers… (1)", self._choose_output_layers)
-        target_row.Add(self.layer_targets_button, 0)
-        target_row.AddStretchSpacer(1)
-        toolbar.Add(target_row, 0, wx.EXPAND | wx.TOP, 6)
         preview_root.Add(toolbar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.preview = PreviewCanvas(preview_panel)
         self.preview.SetMinSize(wx.Size(300, 410))
@@ -2122,6 +2247,77 @@ class StudioEditorDialog(wx.Dialog):
     def _profile_module(self):
         return profile_module_for_mode(self.active_page.mode)
 
+    def _recall_profile_for_active_tool(self):
+        module = self._profile_module()
+        profiles = self.profile_store.list(module)
+        if not profiles:
+            wx.MessageBox(
+                "There are no saved {} profiles yet. Set this tool up, then use Save… in the left sidebar.",
+                "Kobee Studio Profiles", wx.OK | wx.ICON_INFORMATION, self,
+            )
+            return
+        dialog = ProfileRecallDialog(
+            self, MODULE_LABELS_FOR_PROFILE[module], profiles, self.profile_store.default_id(module)
+        )
+        try:
+            if dialog.ShowModal() != wx.ID_OK or not dialog.selected_profile_id:
+                return
+            profile = self.profile_store.load(module, dialog.selected_profile_id)
+            self._recalled_profile_ids[module] = profile.profile_id
+            self._apply_profile_settings(dict(profile.settings))
+        except (OSError, ValueError, LookupError) as error:
+            wx.MessageBox(str(error), "Could not recall profile", wx.OK | wx.ICON_ERROR, self)
+        finally:
+            dialog.Destroy()
+
+    def _save_profile_for_active_tool(self):
+        module = self._profile_module()
+        recalled_id = self._recalled_profile_ids.get(module)
+        recalled = None
+        if recalled_id:
+            try:
+                recalled = self.profile_store.load(module, recalled_id)
+            except (OSError, ValueError, LookupError):
+                self._recalled_profile_ids.pop(module, None)
+        if recalled is not None:
+            choice = wx.MessageDialog(
+                self,
+                "You recalled “{}”. Save these current settings as a new profile, or overwrite that profile?".format(recalled.name),
+                "Save profile",
+                wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION,
+            )
+            try:
+                choice.SetYesNoLabels("Save as new", "Overwrite “{}”".format(recalled.name))
+                result = choice.ShowModal()
+            finally:
+                choice.Destroy()
+            if result == wx.ID_CANCEL:
+                return
+            if result == wx.ID_NO:
+                confirmation = wx.MessageBox(
+                    "Overwrite “{}” with the current {} settings? This replaces its saved values.".format(
+                        recalled.name, MODULE_LABELS_FOR_PROFILE[module].lower()
+                    ),
+                    "Confirm profile overwrite", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self,
+                )
+                if confirmation != wx.YES:
+                    return
+                try:
+                    self.profile_store.save(module, recalled.name, self.CurrentSettings(), profile_id=recalled.profile_id)
+                except (OSError, ValueError) as error:
+                    wx.MessageBox(str(error), "Could not overwrite profile", wx.OK | wx.ICON_ERROR, self)
+                return
+        prompt = wx.TextEntryDialog(self, "Profile name", "Save {} settings as a profile".format(MODULE_LABELS_FOR_PROFILE[module].lower()))
+        try:
+            if prompt.ShowModal() != wx.ID_OK:
+                return
+            profile = self.profile_store.save(module, prompt.GetValue(), self.CurrentSettings())
+            self._recalled_profile_ids[module] = profile.profile_id
+        except (OSError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not save profile", wx.OK | wx.ICON_ERROR, self)
+        finally:
+            prompt.Destroy()
+
     def _open_settings(self):
         dialog = SettingsDialog(
             self,
@@ -2138,8 +2334,6 @@ class StudioEditorDialog(wx.Dialog):
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
             current_module=self._profile_module(),
-            capture_settings=self.CurrentSettings,
-            apply_profile=self._apply_profile_settings,
             preferences_changed=self._on_preferences_changed,
         )
         try:
@@ -2232,11 +2426,9 @@ class StudioEditorDialog(wx.Dialog):
             try:
                 profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
                 self.page_by_tool[tool].apply(profile.settings)
-                layer = profile.settings.get("LayerComboBox")
-                if layer in LAYER_LABELS.values():
-                    self.layer_choice.SetStringSelection(layer)
-                elif layer in LAYER_LABELS:
-                    self.layer_choice.SetStringSelection(LAYER_LABELS[layer])
+                layer = profile.settings.get("LayerComboBox", FRONT_SILKSCREEN)
+                layers = profile.settings.get("OutputLayers", (layer,))
+                self._set_output_layers(layers if isinstance(layers, (tuple, list)) else (layer,), preview_layer=layer)
             except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
                 pass
         self._default_applied_tools.add(tool)
@@ -2291,10 +2483,6 @@ class StudioEditorDialog(wx.Dialog):
         if not configured_layers:
             configured_layers = (layer,) if layer in LAYER_LABELS else (FRONT_SILKSCREEN,)
         self._set_output_layers(configured_layers, preview_layer=layer)
-        if layer in LAYER_LABELS.values():
-            self.layer_choice.SetStringSelection(layer)
-        else:
-            self.layer_choice.SetStringSelection(LAYER_LABELS.get(layer, LAYER_LABELS[FRONT_SILKSCREEN]))
         self._update_tab_state()
         self._show_active_page()
 
@@ -2305,7 +2493,7 @@ class StudioEditorDialog(wx.Dialog):
     @property
     def output_layer(self):
         label = self.layer_choice.GetStringSelection()
-        for layer, layer_label in LAYER_LABELS.items():
+        for layer, layer_label in PREVIEW_LAYER_LABELS.items():
             if label == layer_label:
                 return layer
         return FRONT_SILKSCREEN
@@ -2318,36 +2506,31 @@ class StudioEditorDialog(wx.Dialog):
         layers = tuple(layer for layer in LAYER_ORDER if layer in layers)
         self._output_layers = layers or (FRONT_SILKSCREEN,)
         if hasattr(self, "layer_choice"):
-            self.layer_choice.SetItems(tuple(LAYER_LABELS[layer] for layer in self._output_layers))
+            self.layer_choice.SetItems(tuple(PREVIEW_LAYER_LABELS[layer] for layer in self._output_layers))
             preview_layer = preview_layer if preview_layer in self._output_layers else self._output_layers[0]
-            self.layer_choice.SetStringSelection(LAYER_LABELS[preview_layer])
-        if hasattr(self, "layer_targets_button"):
-            self.layer_targets_button.SetLabel("Target layers… ({})".format(len(self._output_layers)))
-            width, _height = self.layer_targets_button.GetParent().GetTextExtent(self.layer_targets_button.GetLabel())
-            self.layer_targets_button.SetMinSize(wx.Size(width + 28, 32))
-            self.layer_targets_button.GetParent().Layout()
+            self.layer_choice.SetStringSelection(PREVIEW_LAYER_LABELS[preview_layer])
+        if hasattr(self, "layer_toggles"):
+            for layer, toggle in self.layer_toggles.items():
+                toggle.SetValue(layer in self._output_layers)
 
-    def _choose_output_layers(self):
-        labels = [LAYER_LABELS[layer] for layer in LAYER_ORDER]
-        dialog = wx.MultiChoiceDialog(self, "Choose one or more target PCB layers.", "Target layers", labels)
-        try:
-            dialog.SetSelections([index for index, layer in enumerate(LAYER_ORDER) if layer in self._output_layers])
-            if dialog.ShowModal() != wx.ID_OK:
-                return
-            selections = dialog.GetSelections()
-            if not selections:
-                wx.MessageBox("Choose at least one target layer.", "Target layers", wx.OK | wx.ICON_INFORMATION, self)
-                return
-            self._set_output_layers(tuple(LAYER_ORDER[index] for index in selections), self.output_layer)
+    def _on_target_layers_changed(self, event):
+        layers = tuple(layer for layer in LAYER_ORDER if self.layer_toggles[layer].GetValue())
+        if not layers:
+            self.layer_toggles[FRONT_SILKSCREEN].SetValue(True)
+            layers = (FRONT_SILKSCREEN,)
+            wx.MessageBox("At least one target layer is required.", "Target layers", wx.OK | wx.ICON_INFORMATION, self)
+        self._set_output_layers(layers, preview_layer=self.output_layer)
+        if not self._loading:
             self.request_preview(immediate=True)
-        finally:
-            dialog.Destroy()
+        event.Skip()
 
     def CurrentSettings(self):
         settings = mode_defaults(self.active_page.mode)
         settings.update(self.active_page.settings())
         if hasattr(self.active_page, "_effective_shape_choice"):
             settings["ShapeChoice"] = self.active_page._effective_shape_choice()
+        if hasattr(self.active_page, "_effective_end_caps"):
+            settings["StartCapChoice"], settings["EndCapChoice"] = self.active_page._effective_end_caps()
         settings["StudioModeChoice"] = self.active_page.mode
         settings["MachineCodeTypeChoice"] = "Code 128 barcode" if self._tool == "Barcode" else settings.get("MachineCodeTypeChoice", "QR Code")
         settings["LayerComboBox"] = self.output_layer

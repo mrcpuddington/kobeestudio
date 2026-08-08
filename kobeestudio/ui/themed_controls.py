@@ -383,6 +383,12 @@ class ThemedActionButton(wx.Control):
         if self.IsEnabled():
             self.callback()
 
+    def Enable(self, enable=True):
+        result = super().Enable(enable)
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND if enable else wx.CURSOR_ARROW))
+        self.Refresh(False)
+        return result
+
     def _on_key(self, event):
         if event.GetKeyCode() in (wx.WXK_SPACE, wx.WXK_RETURN) and self.IsEnabled():
             self.callback()
@@ -403,14 +409,15 @@ class ThemedActionButton(wx.Control):
         dc.SetBackground(wx.Brush(self.GetParent().GetBackgroundColour()))
         dc.Clear()
         rect = self.GetClientRect().Deflate(1)
-        fill = colours["accent"] if self.primary else colours["field"]
-        if self.hovered:
+        enabled = self.IsEnabled()
+        fill = colours["accent"] if self.primary and enabled else colours["field"]
+        if self.hovered and enabled:
             fill = wx.Colour(246, 189, 32) if self.primary else colours["hover"]
-        dc.SetPen(wx.Pen(wx.Colour(204, 146, 0) if self.primary else colours["border"]))
+        dc.SetPen(wx.Pen(wx.Colour(204, 146, 0) if self.primary and enabled else colours["border"]))
         dc.SetBrush(wx.Brush(fill))
         dc.DrawRoundedRectangle(rect, 7)
         dc.SetFont(self.GetFont().Bold())
-        dc.SetTextForeground(colours["accent_text"] if self.primary else colours["text"])
+        dc.SetTextForeground(colours["accent_text"] if self.primary and enabled else (colours["text"] if enabled else colours["muted"]))
         dc.DrawLabel(self.GetLabel(), self.GetClientRect(), wx.ALIGN_CENTER)
 
 

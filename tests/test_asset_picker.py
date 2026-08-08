@@ -7,10 +7,12 @@ from pathlib import Path
 
 from kobeestudio.core.svg_symbols import SymbolCatalog
 from kobeestudio.ui.main_dialog import (
+    CAP_LABELS,
     KOBEE_STUDIO_DOCS_URL,
     MainDialog,
     _launch_settings,
     _subtitle_font_name,
+    cap_style_id,
     mode_defaults,
 )
 from kobeestudio.ui.asset_picker import (
@@ -23,6 +25,13 @@ from kobeestudio.ui.asset_picker import (
 
 
 class AssetPickerTests(unittest.TestCase):
+    def test_skew_choices_have_clear_labels_and_read_legacy_artwork(self):
+        self.assertIn("Skew left", CAP_LABELS)
+        self.assertIn("Skew right", CAP_LABELS)
+        self.assertNotIn("Skew /", CAP_LABELS)
+        self.assertEqual("skew_forward", cap_style_id("Skew /"))
+        self.assertEqual("skew_back", cap_style_id("Skew \\"))
+
     def test_picker_hides_native_scrollbar_in_dark_library_dialog(self):
         source = Path(__file__).resolve().parents[1] / "kobeestudio" / "ui" / "asset_picker.py"
         contents = source.read_text(encoding="utf-8")

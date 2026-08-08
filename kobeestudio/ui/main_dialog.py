@@ -86,6 +86,8 @@ LABEL_SHAPE_LABELS = {
     "Rounded rectangle": "rounded_rectangle",
     "Pill": "pill",
     "Independent ends": "custom_ends",
+    "Skew left": "custom_ends",
+    "Skew right": "custom_ends",
     "Pointer": "pointer",
     "Flag": "flag",
     "Tab": "tab",
@@ -102,8 +104,16 @@ HEADER_SHAPE_LABELS = dict(header_shapes)
 COMPONENT_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
 del COMPONENT_SHAPE_LABELS["No container"]
 VARIANT_LABELS = ("Inverted fill", "Outline")
-CAP_LABELS = ("Square", "Rounded", "Chamfered", "Point", "Notch", "Skew /", "Skew " + chr(92))
-CAP_STYLE_IDS = {"Skew /": "skew_forward", "Skew " + chr(92): "skew_back"}
+CAP_LABELS = ("Square", "Rounded", "Chamfered", "Point", "Notch", "Skew left", "Skew right")
+CAP_STYLE_IDS = {
+    # The slash spellings were exposed briefly during development. Keep
+    # accepting them when loading existing artwork and profiles, but never
+    # expose ambiguous glyphs in the editor.
+    "Skew /": "skew_forward",
+    "Skew \\": "skew_back",
+    "Skew left": "skew_forward",
+    "Skew right": "skew_back",
+}
 
 
 def cap_style_id(value):
