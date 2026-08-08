@@ -213,7 +213,7 @@ class IpcMigrationTests(unittest.TestCase):
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
-        self.assertEqual("testing", metadata["versions"][0]["status"])
+        self.assertEqual("stable", metadata["versions"][0]["status"])
         self.assertEqual("1.3.4", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])

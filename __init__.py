@@ -1,6 +1,6 @@
-"""Kobee Studio KiCad plugin entry point.
+"""Repository package marker.
 
-KiCad discovers this module from its scripting/plugin search path.
+The distributable IPC plugin is registered by ``ipc_plugin/kobeestudio_ipc.py``.
+Keeping this module inert prevents KiCad from treating an opened source checkout
+as a separately installed legacy ActionPlugin.
 """
-
-from .kobeestudio import plugin
