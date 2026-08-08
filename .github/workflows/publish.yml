@@ -141,6 +141,7 @@ jobs:
                 --target "${{ inputs.source_ref }}" \
                 --generate-notes
             fi
+          fi
 
       - name: Check PCM repository credential
         env:
