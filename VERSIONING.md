@@ -34,11 +34,14 @@ v1.4.1-beta.2
 v1.4.1-beta.3
 ```
 
-The PCM metadata should expose only the current testing package. For local or
-manual beta testing, each beta is installed from its GitHub release asset or
-from the locally generated ZIP. When a beta must receive automatic PCM updates
+For local or manual beta testing, each beta can be installed from its GitHub
+release asset or from the locally generated ZIP. For automatic PCM updates
 between iterations, use a separate testing repository and an increasing
 numeric build scheme; do not add SemVer suffixes to the PCM version.
+
+The automated catalogue now retains every published numeric version. A new
+numeric version is appended to the catalogue, while rerunning an identical
+version replaces only that version's asset metadata.
 
 ## Version locations in this repository
 
