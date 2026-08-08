@@ -22,16 +22,16 @@ Testing releases use the target release number in PCM and identify beta
 iterations in the GitHub tag:
 
 ```text
-PCM version: 1.4.1
+PCM version: 1.4.2
 PCM status:  testing
-Git tag:     v1.4.1-beta.2
+Git tag:     v1.4.2-beta.1
 ```
 
 Subsequent beta tags are:
 
 ```text
-v1.4.1-beta.2
-v1.4.1-beta.3
+v1.4.2-beta.1
+v1.4.2-beta.2
 ```
 
 For local or manual beta testing, each beta can be installed from its GitHub
