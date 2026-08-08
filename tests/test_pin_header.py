@@ -94,8 +94,8 @@ class PinHeaderTests(unittest.TestCase):
         self.assertLess(large_plug.bounds_min.y, ordinary.bounds_min.y)
 
     def test_opening_is_optional_and_continuous_end_padding_expands_the_enclosure(self):
-        no_opening = layout_pin_header(
-            self.make_spec(4, opening_mode="none"),
+        compact = layout_pin_header(
+            self.make_spec(4, opening_mode="continuous", opening_end_padding_mm=0.0),
             (Size(1.0, 1.0),) * 4,
         )
         extended = layout_pin_header(
@@ -106,8 +106,40 @@ class PinHeaderTests(unittest.TestCase):
             ),
             (Size(1.0, 1.0),) * 4,
         )
-        self.assertGreater(extended.size.width, no_opening.size.width)
+        self.assertAlmostEqual(6.0, extended.size.width - compact.size.width)
         self.assertAlmostEqual(3.0, extended.spec.opening_end_padding_mm)
+
+    def test_each_header_spacing_dimension_has_an_independent_layout_effect(self):
+        sizes = (Size(1.0, 1.0),) * 3
+        base = self.make_spec(
+            3,
+            opening_mode="continuous",
+            leading_padding_mm=0.3,
+            trailing_padding_mm=0.3,
+            label_padding_mm=0.3,
+            pin_outer_padding_mm=0.3,
+            pin_to_label_gap_mm=0.3,
+            label_outer_padding_mm=0.3,
+        )
+        ordinary = layout_pin_header(base, sizes)
+
+        pin1_end = layout_pin_header(replace(base, leading_padding_mm=1.3), sizes)
+        far_end = layout_pin_header(replace(base, trailing_padding_mm=1.3), sizes)
+        opening = layout_pin_header(replace(base, opening_end_padding_mm=1.0), sizes)
+        label_ends = layout_pin_header(replace(base, label_padding_mm=1.3), sizes)
+        pin_outer = layout_pin_header(replace(base, pin_outer_padding_mm=1.3), sizes)
+        label_gap = layout_pin_header(replace(base, pin_to_label_gap_mm=1.3), sizes)
+        label_outer = layout_pin_header(replace(base, label_outer_padding_mm=1.3), sizes)
+        minimum_rail = layout_pin_header(replace(base, rail_cross_size_mm=12.0), sizes)
+
+        self.assertAlmostEqual(1.0, ordinary.bounds_min.x - pin1_end.bounds_min.x)
+        self.assertAlmostEqual(1.0, far_end.bounds_max.x - ordinary.bounds_max.x)
+        self.assertAlmostEqual(2.0, opening.size.width - ordinary.size.width)
+        self.assertAlmostEqual(1.0, label_ends.size.width - ordinary.size.width)
+        self.assertAlmostEqual(1.0, pin_outer.size.height - ordinary.size.height)
+        self.assertAlmostEqual(1.0, label_gap.size.height - ordinary.size.height)
+        self.assertAlmostEqual(1.0, label_outer.size.height - ordinary.size.height)
+        self.assertAlmostEqual(12.0, minimum_rail.size.height)
 
     def test_individual_openings_cannot_overlap_at_a_2_54_mm_pitch(self):
         with self.assertRaisesRegex(ValueError, "use a continuous opening"):

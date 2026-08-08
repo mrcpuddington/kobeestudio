@@ -143,7 +143,10 @@ class AssetPickerTests(unittest.TestCase):
 
         self.assertEqual("COMPONENT", mode_defaults("Component Callout")["MultiLineText"])
         self.assertEqual("LED 1\nLED 2\nLED 3", mode_defaults("Component Array")["MultiLineText"])
-        self.assertEqual("https://kobee.com.au", mode_defaults("QR / Barcode")["MultiLineText"])
+        self.assertEqual(
+            "https://github.com/mrcpuddington/kobeestudio",
+            mode_defaults("QR / Barcode")["MultiLineText"],
+        )
 
     def test_selected_existing_artwork_keeps_its_embedded_settings(self):
         incoming = {

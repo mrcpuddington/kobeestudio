@@ -13,11 +13,12 @@ ROOT = HERE.parent
 BUILD = HERE / "build"
 STAGING = BUILD / "plugin"
 PLUGINS = STAGING / "plugins"
+PLUGIN_DIR = PLUGINS / "com.github.mrcpuddington.kobeestudio"
 METADATA_TEMPLATE = HERE / "metadata_template.json"
 
 
 def _copy_plugin() -> None:
-    PLUGINS.mkdir(parents=True)
+    PLUGIN_DIR.mkdir(parents=True)
     for filename in (
         "plugin.json",
         "requirements.txt",
@@ -25,14 +26,14 @@ def _copy_plugin() -> None:
         "kobee-toolbar-24.png",
         "kobee-toolbar-48.png",
     ):
-        shutil.copy2(ROOT / "ipc_plugin" / filename, PLUGINS / filename)
+        shutil.copy2(ROOT / "ipc_plugin" / filename, PLUGIN_DIR / filename)
     shutil.copytree(
         ROOT / "kobeestudio",
-        PLUGINS / "kobeestudio",
+        PLUGIN_DIR / "kobeestudio",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", ".DS_Store"),
     )
     for filename in ("LICENCE", "THIRD_PARTY_NOTICES.md"):
-        shutil.copy2(ROOT / filename, PLUGINS / filename)
+        shutil.copy2(ROOT / filename, PLUGIN_DIR / filename)
 
 
 def _write_metadata() -> tuple[dict, str]:

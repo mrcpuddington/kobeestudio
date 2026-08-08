@@ -10,12 +10,13 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 BUILD = HERE / "build"
 PACKAGE = BUILD / "kobeestudio-ipc"
+PLUGIN_DIR = PACKAGE / "com.github.mrcpuddington.kobeestudio"
 
 
 def main() -> None:
     if BUILD.exists():
         shutil.rmtree(BUILD)
-    PACKAGE.mkdir(parents=True)
+    PLUGIN_DIR.mkdir(parents=True)
 
     for filename in (
         "plugin.json",
@@ -24,15 +25,15 @@ def main() -> None:
         "kobee-toolbar-24.png",
         "kobee-toolbar-48.png",
     ):
-        shutil.copy2(HERE / filename, PACKAGE / filename)
+        shutil.copy2(HERE / filename, PLUGIN_DIR / filename)
 
     shutil.copytree(
         ROOT / "kobeestudio",
-        PACKAGE / "kobeestudio",
+        PLUGIN_DIR / "kobeestudio",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", ".DS_Store"),
     )
-    shutil.copy2(ROOT / "LICENCE", PACKAGE / "LICENCE")
-    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", PACKAGE / "THIRD_PARTY_NOTICES.md")
+    shutil.copy2(ROOT / "LICENCE", PLUGIN_DIR / "LICENCE")
+    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", PLUGIN_DIR / "THIRD_PARTY_NOTICES.md")
     shutil.make_archive(str(BUILD / "Kobee-Studio-IPC-development"), "zip", PACKAGE)
 
 

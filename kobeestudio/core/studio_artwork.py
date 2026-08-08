@@ -65,6 +65,8 @@ class TextVectorizer:
 
     def __init__(self, buzzard) -> None:
         self.buzzard = buzzard
+        self._cache = {}
+        self._normalised_cache = {}
 
     def render(
         self,
@@ -76,6 +78,36 @@ class TextVectorizer:
     ) -> TextVectors:
         if not text:
             return TextVectors((), Size())
+
+        cache_key = (
+            text,
+            typography,
+            bool(inline_format),
+            lineover_style,
+            max(1, int(lineover_thickness)),
+        )
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Font height changes are common spinner edits.  The outline itself is
+        # scale-independent, so preserve a unit-height version and avoid
+        # invoking the SVG/font pipeline again for every tick of that spinner.
+        normalised_key = (
+            text,
+            typography.font_name,
+            typography.width_mm,
+            typography.line_spacing,
+            typography.alignment,
+            bool(inline_format),
+            lineover_style,
+            max(1, int(lineover_thickness)),
+        )
+        normalised = self._normalised_cache.get(normalised_key)
+        if normalised is not None:
+            result = self._scale_vectors(normalised, typography.height_mm)
+            self._remember(cache_key, result)
+            return result
 
         buzzard = self.buzzard
         buzzard.fontName = typography.font_name
@@ -106,12 +138,42 @@ class TextVectorizer:
             if len(polygon) >= 3
         )
         if not polygons:
-            return TextVectors((), Size())
+            result = TextVectors((), Size())
+            self._remember(cache_key, result)
+            return result
 
         minimum, maximum = polygon_bounds(polygons)
         centre = Point((minimum.x + maximum.x) / 2.0, (minimum.y + maximum.y) / 2.0)
         centred = tuple(_translate_polygon(polygon, Point(-centre.x, -centre.y)) for polygon in polygons)
-        return TextVectors(centred, Size(maximum.x - minimum.x, maximum.y - minimum.y))
+        result = TextVectors(centred, Size(maximum.x - minimum.x, maximum.y - minimum.y))
+        self._remember(cache_key, result)
+        if typography.height_mm > 0:
+            self._remember_normalised(
+                normalised_key,
+                self._scale_vectors(result, 1.0 / typography.height_mm),
+            )
+        return result
+
+    def _remember(self, key, value: TextVectors) -> None:
+        """Keep recent immutable outlines without retaining unbounded text."""
+        if len(self._cache) >= 64:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[key] = value
+
+    def _remember_normalised(self, key, value: TextVectors) -> None:
+        if len(self._normalised_cache) >= 64:
+            self._normalised_cache.pop(next(iter(self._normalised_cache)))
+        self._normalised_cache[key] = value
+
+    @staticmethod
+    def _scale_vectors(vectors: TextVectors, factor: float) -> TextVectors:
+        return TextVectors(
+            tuple(
+                tuple(Point(point.x * factor, point.y * factor) for point in polygon)
+                for polygon in vectors.polygons
+            ),
+            Size(vectors.size.width * factor, vectors.size.height * factor),
+        )
 
 
 def _translate_polygon(polygon: Polygon, offset: Point) -> Polygon:
@@ -184,6 +246,23 @@ def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, 
     active = {}
     regions = []
 
+    # Keep the same source-order pairing used by the reference scanline
+    # implementation, but visit only edges crossing the current band.  Some
+    # glyph contours have near-identical adjacent Y values, so edge events are
+    # processed even for bands we subsequently skip as degenerate.
+    edge_starts = {}
+    edge_ends = {}
+    for ring_index, ring in enumerate(rings):
+        for edge_index, start in enumerate(ring):
+            end = ring[(edge_index + 1) % len(ring)]
+            if end.y == start.y:
+                continue
+            low, high = sorted((start.y, end.y))
+            edge = (ring_index, edge_index, start, end)
+            edge_starts.setdefault(low, []).append(edge)
+            edge_ends.setdefault(high, []).append(edge)
+    sweep_edges = {}
+
     def append_edge_point(points, point):
         if points and abs(points[-1].x - point.x) <= epsilon and abs(points[-1].y - point.y) <= epsilon:
             return
@@ -202,24 +281,23 @@ def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, 
             regions.append(boundary)
 
     for y0, y1 in zip(levels, levels[1:]):
+        for edge in edge_ends.get(y0, ()):
+            sweep_edges.pop((edge[0], edge[1]), None)
+        for edge in edge_starts.get(y0, ()):
+            sweep_edges[(edge[0], edge[1])] = edge
         if y1 - y0 <= epsilon:
             continue
         middle_y = (y0 + y1) / 2.0
         crossings = []
-        for ring_index, ring in enumerate(rings):
-            for edge_index, start in enumerate(ring):
-                end = ring[(edge_index + 1) % len(ring)]
-                low, high = sorted((start.y, end.y))
-                if end.y == start.y or not (low < middle_y < high):
-                    continue
-                crossings.append(
-                    (
-                        _edge_x_at_y(start, end, middle_y),
-                        _edge_x_at_y(start, end, y0),
-                        _edge_x_at_y(start, end, y1),
-                        (ring_index, edge_index),
-                    )
+        for ring_index, edge_index, start, end in sweep_edges.values():
+            crossings.append(
+                (
+                    _edge_x_at_y(start, end, middle_y),
+                    _edge_x_at_y(start, end, y0),
+                    _edge_x_at_y(start, end, y1),
+                    (ring_index, edge_index),
                 )
+            )
         crossings.sort(key=lambda item: item[0])
         next_active = {}
         inside_outer = False

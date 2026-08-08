@@ -17,12 +17,17 @@ class IpcUnavailableError(RuntimeError):
     """Raised when the IPC plugin was not launched by a compatible KiCad."""
 
 
+def unique_client_name(base_name: str = "Kobee Studio", process_id: int | None = None) -> str:
+    """Return an IPC identity that cannot inherit another process's commit."""
+    return "{} ({})".format(base_name, os.getpid() if process_id is None else process_id)
+
+
 def _ipc_environment(environ: dict[str, str] | None = None) -> tuple[str, str]:
     """Return the KiCad-owned connection details exposed to IPC actions."""
     values = os.environ if environ is None else environ
     socket_path = values.get("KICAD_API_SOCKET")
-    token = values.get("KICAD_API_TOKEN")
-    if not socket_path or token is None:
+    token = values.get("KICAD_API_TOKEN", "")
+    if not socket_path:
         raise IpcUnavailableError(
             "This action must be launched from KiCad 9 or newer so it receives "
             "the IPC connection details."

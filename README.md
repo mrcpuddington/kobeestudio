@@ -8,8 +8,8 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **⚠️ Current status:** **Kobee Studio 1.2.1 is the current working release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's established PCBNew plug-in method. Kobee Studio 1.3.x is an IPC pre-release and is temporarily not recommended on Windows while a crash is investigated. Save your PCB before applying new artwork.
-> Linux uses the same plug-in package, but still needs full UI and artwork validation. If you test on Linux, bug reports, screenshots, and board files are very welcome.
+> **Current status:** **Kobee Studio 1.3.4 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
+> Linux uses the same plug-in package, but still needs full UI and artwork validation, so it is not recommended yet for anything critical. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 </p>
 
@@ -155,13 +155,12 @@ Ive started to create a more robust **[Roadmap](https://github.com/mrcpuddington
 
 Kobee Studio is a KiCad plugin, not a footprint library.
 
-### Install the current working release
+### Install the current release
 
-Kobee Studio 1.2.1 uses KiCad's established PCBNew plug-in method. It is the
-recommended release for KiCad 10 on macOS and Windows while the newer IPC
-version is being investigated.
+Kobee Studio 1.3.4 uses KiCad's supported IPC plug-in method and is the
+recommended release for KiCad 10 on macOS and Windows.
 
-1. Download `Kobee-Studio-1.2.1-pcm.zip` from the [Kobee Studio 1.2.1 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.2.1). Do not unzip it.
+1. Download `Kobee-Studio-1.3.4-pcm.zip` from the [Kobee Studio 1.3.4 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.3.4). Do not unzip it.
 2. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
 3. Select the downloaded ZIP and approve the install.
 4. Open a board in PCB Editor, then choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
@@ -201,8 +200,8 @@ preferable to using a symlink.
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.2.1 tested working release                      |
-| Windows  | KiCad 10      | 1.2.1 tested working release                      |
+| macOS    | KiCad 10      | 1.3.4 tested working release                      |
+| Windows  | KiCad 10      | 1.3.4 tested working release                      |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---
