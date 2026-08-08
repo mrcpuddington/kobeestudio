@@ -124,11 +124,90 @@ class _MinimalPlacement(IpcArtworkPlacement):
     def _api(self):
         return {}
 
-    def build_footprint(self, artwork, payload, output_layer):
+    def build_footprint(self, artwork, payload, output_layer, output_layers=None):
         return _PlacedFootprint()
 
 
 class IpcMigrationTests(unittest.TestCase):
+    def test_project_asset_context_uses_only_a_saved_board_filename(self):
+        from kobeestudio.ui.editor_v2 import _active_board_path
+
+        class Session:
+            class board:
+                name = "/tmp/example.kicad_pcb"
+
+        self.assertEqual(Path("/tmp/example.kicad_pcb"), _active_board_path(Session()))
+        Session.board.name = "unsaved.kicad_pcb"
+        self.assertIsNone(_active_board_path(Session()))
+        Session.board.name = "/tmp/not-a-board.txt"
+        self.assertIsNone(_active_board_path(Session()))
+
+    def test_ui2_editor_is_used_by_both_plugin_entrypoints(self):
+        for relative_path in (
+            "kobeestudio/plugin.py",
+            "ipc_plugin/kobeestudio_ipc.py",
+        ):
+            with self.subTest(entrypoint=relative_path):
+                source = (ROOT / relative_path).read_text()
+                self.assertIn("ui.editor_v2 import MainDialog", source)
+                self.assertIn("KOBEE_USE_LEGACY_EDITOR", source)
+
+    def test_ui2_editor_owns_its_layout_and_caches_preview_geometry(self):
+        source = (ROOT / "kobeestudio/ui/editor_v2.py").read_text()
+        self.assertIn("class StudioEditorDialog(wx.Dialog):", source)
+        self.assertNotIn("class StudioEditorDialog(UpstreamDialog)", source)
+        self.assertIn("class PreviewCanvas(wx.Panel):", source)
+        self.assertIn("self._cache", source)
+        self.assertIn("self._timer.StartOnce(150)", source)
+        self.assertNotIn("Reparent(", source)
+        self.assertNotIn("Clear(delete_windows=True)", source)
+        self.assertNotIn(".Update()", source)
+        self.assertIn("Never unwind through wx's native paint callback", source)
+        self.assertIn(
+            "isinstance(control, (wx.Choice, ThemedChoice, PickerButton, SegmentedChoice))",
+            source,
+        )
+        self.assertIn("page.content.Scroll(0, 0)", source)
+        self.assertIn("self.content = wx.ScrolledWindow", source)
+        self.assertIn("self.content.ShowScrollbars(never, never)", source)
+        self.assertNotIn("self.columns_sizer.SetItemProportion", source)
+        self.assertIn("right_column_item.SetProportion", source)
+        self.assertIn("field_label.Wrap(92)", source)
+        self.assertIn("workspace.Add(self.pages, 1", source)
+        self.assertIn("workspace.Add(preview_panel, 1", source)
+        self.assertIn('return "Container"', source)
+        self.assertIn("ThemedCheckBox", source)
+        self.assertIn("_kobee_auto_value_resolver", source)
+        self.assertIn("preview_controls = wx.BoxSizer(wx.HORIZONTAL)", source)
+        self.assertIn('getattr(wx, "TE_NO_VSCROLL", 0)', source)
+        self.assertIn('self.editor.ShowScrollbars(never, never)', source)
+        self.assertIn("class BrandedHeader(wx.Panel):", source)
+        self.assertIn("icon=family", source)
+        self.assertIn('("labels", "Standard", "Label")', source)
+        self.assertIn('("labels", "Header Overlay", "2.54 mm Pin Header")', source)
+        self.assertIn('("labels", "Component Callout", "Component Callout")', source)
+        self.assertIn('("labels", "Component Array", "Component Array")', source)
+        self.assertIn('("codes", "QR Code", "QR / Barcode")', source)
+        self.assertIn('("codes", "Barcode", "QR / Barcode")', source)
+        self.assertIn('"End treatment"', source)
+        self.assertIn('"Long edges"', source)
+        self.assertIn("def _update_container_ui", source)
+        self.assertIn("def _update_machine_code_ui", source)
+        self.assertIn("self.pages.ChangeSelection", source)
+        self.assertIn("self.Freeze()", source)
+        self.assertIn("self.request_preview()", source)
+        self.assertIn("callback=self._choose_preset", source)
+        self.assertIn("callback=self._choose_icon", source)
+        self.assertIn('"Settings",', source)
+        self.assertIn("class SettingsDialog(wx.Dialog):", (ROOT / "kobeestudio/ui/settings_dialog.py").read_text())
+        self.assertIn("SymbolAssetId", source)
+        self.assertIn("MEASUREMENT_SETTING_KEYS", source)
+        self.assertIn("wx.CallAfter(self.callback, None)", source)
+        self.assertIn("def _update_card_layout", source)
+        self.assertIn('("Label", "Label + symbol", "Symbol only"), "Label", rows=2', source)
+        self.assertIn('title.replace("&", "and").upper()', source)
+        self.assertNotIn('control.SetBackgroundColour(_palette()["active"])', source)
+
     def test_every_geometry_control_is_connected_to_live_preview(self):
         source = (ROOT / "kobeestudio/ui/main_dialog.py").read_text()
         bindings = source.split("def _bind_live_artwork_controls", 1)[1].split(
@@ -213,8 +292,8 @@ class IpcMigrationTests(unittest.TestCase):
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
-        self.assertEqual("stable", metadata["versions"][0]["status"])
-        self.assertEqual("1.3.4", metadata["versions"][0]["version"])
+        self.assertEqual("testing", metadata["versions"][0]["status"])
+        self.assertEqual("1.4.0", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
@@ -457,6 +536,22 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(METADATA_FIELD_NAME, footprint.definition.items[-1].name)
         self.assertTrue(footprint.attributes.not_in_schematic)
         self.assertGreater(footprint.proto.ByteSize(), 0)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_ipc_footprint_repeats_artwork_on_each_selected_output_layer(self):
+        polygon = (Point(-1.0, -0.5), Point(1.0, -0.5), Point(0.0, 0.5))
+        artwork = StudioArtwork(
+            filled_polygons=(polygon,), strokes=(), guides=(), document=CompositionDocument(objects=())
+        )
+        footprint = IpcArtworkPlacement(session=None).build_footprint(
+            artwork,
+            {"format": "kobee-studio-composition", "legacy_settings": {}},
+            "F.SilkS",
+            output_layers=("F.SilkS", "B.Mask", "F.Cu"),
+        )
+        # One polygon for every target plus the metadata field.
+        self.assertEqual(4, len(footprint.definition.items))
+        self.assertEqual(METADATA_FIELD_NAME, footprint.definition.items[-1].name)
 
 
 if __name__ == "__main__":

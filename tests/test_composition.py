@@ -36,7 +36,13 @@ class CompositionDocumentTests(unittest.TestCase):
 
     def make_document(self):
         text = TextObject("text.main", "POWER", Point(1.0, 2.0), 5.0)
-        icon = IconObject("icon.power", "power", Point(-2.0, 0.0), Size(1.5, 1.5))
+        icon = IconObject(
+            "icon.power",
+            "power",
+            Point(-2.0, 0.0),
+            Size(1.5, 1.5),
+            variant="rounded",
+        )
         shape = ShapeObject(
             "shape.background",
             "rounded_rectangle",
@@ -74,6 +80,14 @@ class CompositionDocumentTests(unittest.TestCase):
         self.assertEqual(document, restored)
         self.assertEqual("bottom", restored.board_side)
         self.assertEqual(1, json.loads(document.to_json())["schema_version"])
+
+    def test_old_icon_documents_without_a_variant_load_as_default(self):
+        payload = self.make_document().to_dict()
+        icon = next(item for item in payload["objects"] if item["kind"] == "icon")
+        icon.pop("variant")
+        restored = CompositionDocument.from_dict(payload)
+        restored_icon = next(item for item in restored.objects if isinstance(item, IconObject))
+        self.assertEqual("default", restored_icon.variant)
 
     def test_documents_and_nested_values_are_immutable(self):
         document = self.make_document()

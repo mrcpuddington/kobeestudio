@@ -102,7 +102,15 @@ HEADER_SHAPE_LABELS = dict(header_shapes)
 COMPONENT_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
 del COMPONENT_SHAPE_LABELS["No container"]
 VARIANT_LABELS = ("Inverted fill", "Outline")
-CAP_LABELS = ("Square", "Rounded", "Chamfered", "Point", "Notch")
+CAP_LABELS = ("Square", "Rounded", "Chamfered", "Point", "Notch", "Skew /", "Skew " + chr(92))
+CAP_STYLE_IDS = {"Skew /": "skew_forward", "Skew " + chr(92): "skew_back"}
+
+
+def cap_style_id(value):
+    """Map user-facing skew labels to stable geometry identifiers."""
+
+    text = str(value)
+    return CAP_STYLE_IDS.get(text, text.lower())
 HEADER_CAP_LABELS = ("Square", "Rounded")
 OPENING_LABELS = {
     "None": "none",
@@ -2629,8 +2637,8 @@ class MainDialog(UpstreamDialog):
                 filled=filled,
                 inverted=filled,
                 direction=self.m_ShapeDirectionChoice.GetStringSelection().lower(),
-                start_cap=self.m_StartCapChoice.GetStringSelection().lower(),
-                end_cap=self.m_EndCapChoice.GetStringSelection().lower(),
+                start_cap=cap_style_id(self.m_StartCapChoice.GetStringSelection()),
+                end_cap=cap_style_id(self.m_EndCapChoice.GetStringSelection()),
             ),
         )
 

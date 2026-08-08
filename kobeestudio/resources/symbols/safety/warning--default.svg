@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="240"
+   height="240"
+   viewBox="0 0 63.499999 63.5"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer1">
+    <polygon
+       points="-0.064671567,0.20321216 -0.049497475,0.18050253 -0.02678784,0.16532843 -1.2858791e-17,0.16 0.02678784,0.16532843 0.049497475,0.18050253 0.064671567,0.20321216 0.07,0.23 0.064671567,0.25678784 0.049497475,0.27949747 0.02678784,0.29467157 4.2862638e-18,0.3 -0.02678784,0.29467157 -0.049497475,0.27949747 -0.064671567,0.25678784 -0.07,0.23 "
+       id="polygon11"
+       transform="matrix(53.567242,0,0,53.567242,31.75,32.798818)"
+       style="fill:#000000" />
+    <rect
+       style="fill:#000000;fill-rule:evenodd;stroke-width:0.454661;stroke-linecap:round;stroke-linejoin:round"
+       id="rect1"
+       width="6.4164286"
+       height="14.666121"
+       x="28.541786"
+       y="25.054625"
+       ry="0" />
+    <path
+       id="path1"
+       style="fill:#000000;fill-rule:evenodd;stroke-width:0.369177;stroke-linecap:round;stroke-linejoin:round"
+       d="M 31.750001,4.7361448 1.7787045,56.647188 H 61.721295 Z m 0,12.3129432 L 51.389115,51.0651 H 12.110889 Z" />
+  </g>
+</svg>

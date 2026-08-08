@@ -517,6 +517,8 @@ def render_label_artwork(
     underline: bool = False,
     underline_thickness_mm: float = 0.15,
     underline_gap_mm: float = 0.12,
+    icon_variant: str = "default",
+    icon_renderer=render_builtin_icon,
 ) -> StudioArtwork:
     if icon_position not in ("left", "right", "only"):
         raise ValueError("Unsupported icon position: {}".format(icon_position))
@@ -593,7 +595,7 @@ def render_label_artwork(
         primary_block_centre_y + (vectors.size.height + underline_gap_mm) / 2.0,
     )
     icon = (
-        render_builtin_icon(icon_id, icon_height_mm or style.typography.height_mm)
+        icon_renderer(icon_id, icon_height_mm or style.typography.height_mm)
         if has_icon
         else None
     )
@@ -696,6 +698,7 @@ def render_label_artwork(
                 icon_id,
                 position=icon_centre,
                 size=icon.size,
+                variant=icon_variant,
             )
         )
 
@@ -848,6 +851,8 @@ def render_component_callout_artwork(
     icon_position: str = "left",
     icon_height_mm: float = 0.0,
     icon_gap_mm: float = 0.3,
+    icon_variant: str = "default",
+    icon_renderer=render_builtin_icon,
 ) -> StudioArtwork:
     """Render one component callout or a regularly spaced component array."""
     labels = tuple(spec.title.splitlines()) if spec.array_count > 1 else (spec.title,)
@@ -862,6 +867,8 @@ def render_component_callout_artwork(
             icon_position=icon_position,
             icon_height_mm=icon_height_mm,
             icon_gap_mm=icon_gap_mm,
+            icon_variant=icon_variant,
+            icon_renderer=icon_renderer,
             subtitle_text=spec.subtitle if spec.array_count == 1 else "",
             subtitle_typography=spec.style.secondary_typography,
             subtitle_gap_mm=spec.subtitle_gap_mm,
@@ -1022,6 +1029,7 @@ def render_component_callout_artwork(
                         ),
                         size=item.size,
                         rotation_deg=item.rotation_deg,
+                        variant=item.variant,
                     )
                 )
         guide_objects.append(
@@ -1417,32 +1425,44 @@ def _polygon_sexpr(polygon: Polygon, layer: str, width_mm: float = 0.0, filled: 
     )
 
 
-def serialize_artwork(artwork: StudioArtwork, encoded_parameters: str, output_layer: str) -> str:
+def serialize_artwork(
+    artwork: StudioArtwork,
+    encoded_parameters: str,
+    output_layer: str,
+    output_layers: Optional[Sequence[str]] = None,
+) -> str:
     """Write preview-identical artwork as a KiCad 10 footprint."""
-    if output_layer not in SUPPORTED_OUTPUT_LAYERS:
-        raise ValueError("Unsupported Kobee Studio output layer: {}".format(output_layer))
-    bottom = is_bottom(output_layer)
-    filled = tuple(_mirror_polygon(polygon) if bottom else polygon for polygon in artwork.filled_polygons)
-    strokes = tuple(
-        StrokePath(_mirror_polygon(stroke.points) if bottom else stroke.points, stroke.width_mm)
-        for stroke in artwork.strokes
-    )
-    exported = filled + tuple(stroke.points for stroke in strokes)
+    requested_layers = tuple(output_layers or (output_layer,))
+    if not requested_layers or any(layer not in SUPPORTED_OUTPUT_LAYERS for layer in requested_layers):
+        raise ValueError("Kobee Studio requires one or more supported output layers")
+    # Preserve caller order while ignoring accidental duplicate selections.
+    layers = tuple(dict.fromkeys(requested_layers))
+    if output_layer not in layers:
+        output_layer = layers[0]
+    exported = tuple(artwork.filled_polygons) + tuple(stroke.points for stroke in artwork.strokes)
     if not exported:
         raise ValueError("Kobee Studio artwork is empty")
     minimum, maximum = polygon_bounds(exported)
     reference_y = minimum.y - 1.0
     value_y = maximum.y + 1.0
-    owner_layer = "B.Cu" if bottom else "F.Cu"
+    owner_layer = "B.Cu" if all(is_bottom(layer) for layer in layers) else "F.Cu"
     name = "kobee-studio-{:08X}".format(int(round(time.time())))
-    graphics = [
-        _polygon_sexpr(polygon, output_layer, filled=True) for polygon in filled if len(polygon) >= 3
-    ]
-    graphics.extend(
-        _polygon_sexpr(stroke.points, output_layer, width_mm=stroke.width_mm, filled=False)
-        for stroke in strokes
-        if len(stroke.points) >= 3
-    )
+    graphics = []
+    for layer in layers:
+        bottom = is_bottom(layer)
+        filled = tuple(_mirror_polygon(polygon) if bottom else polygon for polygon in artwork.filled_polygons)
+        strokes = tuple(
+            StrokePath(_mirror_polygon(stroke.points) if bottom else stroke.points, stroke.width_mm)
+            for stroke in artwork.strokes
+        )
+        graphics.extend(
+            _polygon_sexpr(polygon, layer, filled=True) for polygon in filled if len(polygon) >= 3
+        )
+        graphics.extend(
+            _polygon_sexpr(stroke.points, layer, width_mm=stroke.width_mm, filled=False)
+            for stroke in strokes
+            if len(stroke.points) >= 3
+        )
     return """(footprint \"{name}\"
   (version 20240108)
   (generator kobee_studio)

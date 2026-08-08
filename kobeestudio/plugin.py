@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import platform
 from pathlib import Path
 
@@ -12,7 +13,11 @@ import pcbnew
 import wx
 
 from .integration.kicad_compatibility import KiCadCompatibility
-from .ui.main_dialog import MainDialog
+from .integration.platform_branding import configure_window_branding
+if os.environ.get("KOBEE_USE_LEGACY_EDITOR"):
+    from .ui.main_dialog import MainDialog
+else:
+    from .ui.editor_v2 import MainDialog
 from .version import __version__
 
 
@@ -84,6 +89,12 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
             geometry = TextGeometry()
             self._log_dependency_versions()
             dialog = MainDialog(None, self.config_file, geometry.buzzard, self._generate_and_place)
+            icon_path = (
+                Path(__file__).resolve().parent
+                / "resources"
+                / "kobee-studio-platform-icon.png"
+            )
+            configure_window_branding(dialog, icon_path, wx)
             try:
                 dialog.ShowModal()
             finally:
@@ -121,10 +132,12 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                 feature=feature,
             )
             parameters = base64.b64encode(json.dumps(payload, sort_keys=True).encode("utf-8")).decode("ascii")
-            footprint_data = serialize_artwork(dialog.artwork, parameters, layer)
+            footprint_data = serialize_artwork(
+                dialog.artwork, parameters, layer, output_layers=dialog.output_layers
+            )
             footprint = self.compatibility.parse_footprint(footprint_data)
             self.compatibility.place(footprint, dialog.updateFootprint)
-            self.logger.info("Placed label layer=%s primitive_count=%s", layer, len(dialog.polys))
+            self.logger.info("Placed label layers=%s primitive_count=%s", dialog.output_layers, len(dialog.polys))
             dialog.EndModal(wx.ID_OK)
         except Exception as error:
             self._show_error("Kobee Studio placement failed", error)

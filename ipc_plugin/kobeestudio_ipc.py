@@ -28,12 +28,17 @@ from kobeestudio.integration.platform_branding import (
     configure_process_identity,
     configure_window_branding,
 )
-from kobeestudio.ui.main_dialog import MainDialog
+if os.environ.get("KOBEE_USE_LEGACY_EDITOR"):
+    from kobeestudio.ui.main_dialog import MainDialog
+else:
+    from kobeestudio.ui.editor_v2 import MainDialog
 
 BRAND_ICON = next(
     (
         path
         for path in (
+            PLUGIN_ROOT / "kobeestudio" / "resources" / "kobee-studio-platform-icon.png",
+            SOURCE_ROOT / "kobeestudio" / "resources" / "kobee-studio-platform-icon.png",
             PLUGIN_ROOT / "kobeestudio" / "resources" / "kobee-studio-app-icon.png",
             SOURCE_ROOT / "kobeestudio" / "resources" / "kobee-studio-app-icon.png",
             PLUGIN_ROOT / "kobeestudio" / "resources" / "kobee-bee.png",
@@ -89,6 +94,7 @@ def main() -> int:
                 dialog.artwork,
                 payload,
                 dialog.output_layer,
+                output_layers=dialog.output_layers,
                 old_footprint=dialog.updateFootprint,
                 start_interactive_move=False,
             )

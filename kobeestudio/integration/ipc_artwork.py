@@ -209,18 +209,25 @@ class IpcArtworkPlacement:
         artwork: StudioArtwork,
         payload: Mapping[str, Any],
         output_layer: str,
+        output_layers: Optional[Sequence[str]] = None,
     ):
+        layers = tuple(dict.fromkeys(output_layers or (output_layer,)))
+        if not layers or any(layer not in SUPPORTED_OUTPUT_LAYERS for layer in layers):
+            raise ValueError("Kobee Studio requires one or more supported output layers")
+        if output_layer not in layers:
+            output_layer = layers[0]
         api = self._api()
         name = "kobee-studio-{:08X}".format(int(round(time.time())))
         footprint = api["FootprintInstance"]()
         definition = footprint.definition
         definition.id.name = name
-        for primitive in artwork_polygons(
-            artwork,
-            output_layer,
-            offset=self._artwork_offset(artwork, output_layer),
-        ):
-            definition.add_item(self._polygon_item(api, primitive, output_layer))
+        for layer in layers:
+            for primitive in artwork_polygons(
+                artwork,
+                layer,
+                offset=self._artwork_offset(artwork, layer),
+            ):
+                definition.add_item(self._polygon_item(api, primitive, layer))
 
         metadata = api["Field"]()
         metadata.name = METADATA_FIELD_NAME
@@ -229,7 +236,8 @@ class IpcArtworkPlacement:
         metadata.visible = False
         definition.add_item(metadata)
 
-        footprint.layer = self._owner_layer(api, output_layer)
+        owner_target = next((layer for layer in layers if not is_bottom(layer)), layers[0])
+        footprint.layer = self._owner_layer(api, owner_target)
         footprint.attributes.not_in_schematic = True
         footprint.attributes.exclude_from_bill_of_materials = True
         footprint.attributes.exclude_from_position_files = True
@@ -246,11 +254,12 @@ class IpcArtworkPlacement:
         artwork: StudioArtwork,
         payload: Mapping[str, Any],
         output_layer: str,
+        output_layers: Optional[Sequence[str]] = None,
         old_footprint: Optional[Any] = None,
         start_interactive_move: bool = True,
     ):
         api = self._api()
-        footprint = self.build_footprint(artwork, payload, output_layer)
+        footprint = self.build_footprint(artwork, payload, output_layer, output_layers=output_layers)
         if old_footprint is not None:
             # KiCad matches the top-level item by UUID, but preserving the
             # existing footprint definition identity avoids replacing an

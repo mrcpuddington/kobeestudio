@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "labels": [
+    {
+      "id": "gnd",
+      "text": "GND",
+      "category": "Power",
+      "symbol_id": "builtin.ground",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "pgnd",
+      "text": "PGND",
+      "category": "Power",
+      "symbol_id": "builtin.ground",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "agnd",
+      "text": "AGND",
+      "category": "Power",
+      "symbol_id": "builtin.ground",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "earth",
+      "text": "EARTH",
+      "category": "Power",
+      "symbol_id": "builtin.ground",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "power",
+      "text": "POWER",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "vcc",
+      "text": "VCC",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "vdd",
+      "text": "VDD",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "vbat",
+      "text": "VBAT",
+      "category": "Power",
+      "symbol_id": "builtin.battery",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "vin",
+      "text": "VIN",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "vout",
+      "text": "VOUT",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "1v8",
+      "text": "+1V8",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "3v3",
+      "text": "+3V3",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "5v",
+      "text": "+5V",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "12v",
+      "text": "+12V",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "24v",
+      "text": "+24V",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "minus12v",
+      "text": "-12V",
+      "category": "Power",
+      "symbol_id": "builtin.lightning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "test_point",
+      "text": "TEST POINT",
+      "category": "Test",
+      "symbol_id": "builtin.test_point",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "tp1",
+      "text": "TP1",
+      "category": "Test",
+      "symbol_id": "builtin.test_point",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "debug",
+      "text": "DEBUG",
+      "category": "Test",
+      "symbol_id": "builtin.test_point",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "reset",
+      "text": "RESET",
+      "category": "Programming",
+      "symbol_id": "builtin.reset",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "boot",
+      "text": "BOOT",
+      "category": "Programming"
+    },
+    {
+      "id": "swdio",
+      "text": "SWDIO",
+      "category": "Programming"
+    },
+    {
+      "id": "swclk",
+      "text": "SWCLK",
+      "category": "Programming"
+    },
+    {
+      "id": "jtag",
+      "text": "JTAG",
+      "category": "Programming"
+    },
+    {
+      "id": "usb",
+      "text": "USB",
+      "category": "Interface"
+    },
+    {
+      "id": "ethernet",
+      "text": "ETHERNET",
+      "category": "Interface"
+    },
+    {
+      "id": "rs485",
+      "text": "RS-485",
+      "category": "Interface"
+    },
+    {
+      "id": "i2c",
+      "text": "I2C",
+      "category": "Interface"
+    },
+    {
+      "id": "spi",
+      "text": "SPI",
+      "category": "Interface"
+    },
+    {
+      "id": "uart",
+      "text": "UART",
+      "category": "Interface"
+    },
+    {
+      "id": "can_h",
+      "text": "CAN H",
+      "category": "Interface"
+    },
+    {
+      "id": "can_l",
+      "text": "CAN L",
+      "category": "Interface"
+    },
+    {
+      "id": "sda",
+      "text": "SDA",
+      "category": "Interface"
+    },
+    {
+      "id": "scl",
+      "text": "SCL",
+      "category": "Interface"
+    },
+    {
+      "id": "mosi",
+      "text": "MOSI",
+      "category": "Interface",
+      "symbol_id": "builtin.output",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "miso",
+      "text": "MISO",
+      "category": "Interface",
+      "symbol_id": "builtin.input",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "sck",
+      "text": "SCK",
+      "category": "Interface"
+    },
+    {
+      "id": "cs",
+      "text": "CS",
+      "category": "Interface"
+    },
+    {
+      "id": "rx",
+      "text": "RX",
+      "category": "Interface",
+      "symbol_id": "builtin.input",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "tx",
+      "text": "TX",
+      "category": "Interface",
+      "symbol_id": "builtin.output",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "input",
+      "text": "INPUT",
+      "category": "Signal",
+      "symbol_id": "builtin.input",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "output",
+      "text": "OUTPUT",
+      "category": "Signal",
+      "symbol_id": "builtin.output",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "enable",
+      "text": "ENABLE",
+      "category": "Control"
+    },
+    {
+      "id": "fault",
+      "text": "FAULT",
+      "category": "Control",
+      "symbol_id": "builtin.warning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "warning",
+      "text": "WARNING",
+      "category": "Control",
+      "symbol_id": "builtin.warning",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "led",
+      "text": "LED",
+      "category": "Control",
+      "symbol_id": "builtin.led",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "status",
+      "text": "STATUS",
+      "category": "Control",
+      "symbol_id": "builtin.led",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "run",
+      "text": "RUN",
+      "category": "Control",
+      "symbol_id": "builtin.led",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "button",
+      "text": "BUTTON",
+      "category": "Control"
+    },
+    {
+      "id": "dc_in",
+      "text": "DC IN",
+      "category": "Power",
+      "symbol_id": "builtin.centre_positive",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "dc_centre_negative",
+      "text": "DC CENTRE -",
+      "category": "Power",
+      "symbol_id": "builtin.centre_negative",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "positive",
+      "text": "POSITIVE",
+      "category": "Power",
+      "symbol_id": "builtin.positive",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "negative",
+      "text": "NEGATIVE",
+      "category": "Power",
+      "symbol_id": "builtin.negative",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "lamp",
+      "text": "LAMP",
+      "category": "Control",
+      "symbol_id": "builtin.light_bulb",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "battery",
+      "text": "BATTERY",
+      "category": "Power",
+      "symbol_id": "builtin.battery",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "fan",
+      "text": "FAN",
+      "category": "Control"
+    },
+    {
+      "id": "power_button",
+      "text": "POWER BUTTON",
+      "category": "Control",
+      "symbol_id": "builtin.power_button",
+      "symbol_variant": "default"
+    },
+    {
+      "id": "push_button",
+      "text": "PUSH BUTTON",
+      "category": "Control",
+      "symbol_id": "builtin.push_button",
+      "symbol_variant": "default"
+    }
+  ]
+}

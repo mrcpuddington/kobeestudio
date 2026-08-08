@@ -59,6 +59,58 @@ class _Window:
         self.icon = icon
 
 
+class _BundleImage:
+    def __init__(self, path, image_type, sizes=None):
+        self.path = path
+        self.image_type = image_type
+        self.sizes = sizes if sizes is not None else []
+
+    def IsOk(self):
+        return True
+
+    def Copy(self):
+        return _BundleImage(self.path, self.image_type)
+
+    def Rescale(self, width, height, quality):
+        self.sizes.append((width, height, quality))
+
+
+class _BundleIcon:
+    def __init__(self):
+        self.bitmap = None
+
+    def CopyFromBitmap(self, bitmap):
+        self.bitmap = bitmap
+
+
+class _IconBundle:
+    def __init__(self):
+        self.icons = []
+
+    def AddIcon(self, icon):
+        self.icons.append(icon)
+
+
+class _BundleWx:
+    BITMAP_TYPE_PNG = 15
+    IMAGE_QUALITY_HIGH = 30
+    Image = _BundleImage
+    Icon = _BundleIcon
+    IconBundle = _IconBundle
+
+    @staticmethod
+    def Bitmap(image):
+        return image
+
+
+class _BundleWindow:
+    def __init__(self):
+        self.icons = None
+
+    def SetIcons(self, icons):
+        self.icons = icons
+
+
 class PlatformBrandingTests(unittest.TestCase):
     def test_windows_process_identity_uses_package_identifier(self):
         shell = _Shell32()
@@ -84,6 +136,17 @@ class PlatformBrandingTests(unittest.TestCase):
         self.assertTrue(configure_window_branding(window, Path("icon.png"), _Wx))
         self.assertEqual("icon.png", window.icon.path)
         self.assertEqual(_Wx.BITMAP_TYPE_PNG, window.icon.image_type)
+
+    def test_window_receives_platform_size_icon_bundle(self):
+        window = _BundleWindow()
+        self.assertTrue(
+            configure_window_branding(window, Path("platform-icon.png"), _BundleWx)
+        )
+        self.assertEqual(7, len(window.icons.icons))
+        self.assertEqual(
+            [16, 24, 32, 48, 64, 128, 256],
+            [icon.bitmap.sizes[-1][0] for icon in window.icons.icons],
+        )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
+from kobeestudio.core.svg_symbols import SymbolCatalog
 from kobeestudio.ui.main_dialog import (
     KOBEE_STUDIO_DOCS_URL,
     MainDialog,
@@ -13,6 +15,7 @@ from kobeestudio.ui.main_dialog import (
 )
 from kobeestudio.ui.asset_picker import (
     AssetPickerDialog,
+    PickerItem,
     filter_picker_items,
     icon_picker_items,
     label_picker_items,
@@ -20,6 +23,18 @@ from kobeestudio.ui.asset_picker import (
 
 
 class AssetPickerTests(unittest.TestCase):
+    def test_picker_hides_native_scrollbar_in_dark_library_dialog(self):
+        source = Path(__file__).resolve().parents[1] / "kobeestudio" / "ui" / "asset_picker.py"
+        contents = source.read_text(encoding="utf-8")
+        self.assertIn("self.m_AssetScroller.ShowScrollbars(never, never)", contents)
+
+    def test_picker_uses_explicit_card_coordinates_for_all_cards(self):
+        source = Path(__file__).resolve().parents[1] / "kobeestudio" / "ui" / "asset_picker.py"
+        contents = source.read_text(encoding="utf-8")
+        self.assertIn("self.m_AssetContent = wx.Panel(self.m_AssetScroller)", contents)
+        self.assertIn("card.SetPosition", contents)
+        self.assertIn("self.m_AssetScroller.SetVirtualSize(content_size)", contents)
+
     def test_in_app_help_uses_the_hosted_kobee_studio_docs(self):
         self.assertEqual(
             "https://www.coreybusuttil.com/kobeestudio/docs/",
@@ -34,6 +49,11 @@ class AssetPickerTests(unittest.TestCase):
         self.assertTrue(any(item.asset_id == "builtin.warning" for item in icons))
         self.assertTrue(any(item.asset_id == "gnd" for item in labels))
 
+    def test_flagged_label_picker_uses_discovered_symbol_links(self):
+        labels = {item.asset_id: item for item in label_picker_items(SymbolCatalog.discover())}
+        self.assertEqual("builtin.ground", labels["gnd"].icon_id)
+        self.assertEqual("", labels["boot"].icon_id)
+
     def test_search_matches_names_categories_and_multiple_words(self):
         labels = label_picker_items()
         self.assertEqual(
@@ -46,6 +66,21 @@ class AssetPickerTests(unittest.TestCase):
         self.assertEqual(
             ("builtin.centre_negative",),
             tuple(item.asset_id for item in filter_picker_items(icon_picker_items(), "centre negative")),
+        )
+
+    def test_source_and_variant_filters_are_independent(self):
+        items = (
+            PickerItem("builtin.ground", "Ground", "Electrical", source="Bundled", variant="default"),
+            PickerItem("custom.one", "Ground", "Electrical", source="My library", variant="rounded"),
+            PickerItem("custom.two", "Ground", "Electrical", source="This project", variant="rounded"),
+        )
+        self.assertEqual(
+            ("custom.one",),
+            tuple(item.asset_id for item in filter_picker_items(items, source="My library", variant="rounded")),
+        )
+        self.assertEqual(
+            ("custom.one", "custom.two"),
+            tuple(item.asset_id for item in filter_picker_items(items, variant="rounded")),
         )
 
     def test_selecting_a_card_does_not_rebuild_or_destroy_clicked_button(self):
