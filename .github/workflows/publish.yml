@@ -186,9 +186,33 @@ jobs:
               "https://github.com/mrcpuddington/kobeestudio/releases/"
               f"download/{release_tag}/{archive_name}"
           )
-          packages = {"packages": [source_metadata]}
           catalogue = Path("pcm-catalogue")
           packages_path = catalogue / "packages.json"
+          existing_catalogue = json.loads(
+              packages_path.read_text(encoding="utf-8")
+          )
+          existing_package = next(
+              (
+                  package
+                  for package in existing_catalogue.get("packages", [])
+                  if package.get("identifier") == source_metadata["identifier"]
+              ),
+              None,
+          )
+          if existing_package:
+              versions_by_number = {
+                  entry["version"]: entry
+                  for entry in existing_package.get("versions", [])
+              }
+              versions_by_number[version] = version_entry
+              source_metadata["versions"] = sorted(
+                  versions_by_number.values(),
+                  key=lambda entry: tuple(
+                      int(part) for part in entry["version"].split(".")
+                  ),
+                  reverse=True,
+              )
+          packages = {"packages": [source_metadata]}
           packages_path.write_text(
               json.dumps(packages, indent=2) + "\n", encoding="utf-8"
           )
