@@ -718,7 +718,7 @@ class ProfileRecallDialog(wx.Dialog):
         root.Add(helper, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
         row = wx.BoxSizer(wx.HORIZONTAL)
         row.Add(wx.StaticText(self, label="Profile"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        self._profile_ids = ("") + tuple(profile.profile_id for profile in self._profiles)
+        self._profile_ids = ("",) + tuple(profile.profile_id for profile in self._profiles)
         self.choice = ThemedChoice(
             self,
             choices=("None",) + tuple(profile.name for profile in self._profiles),
