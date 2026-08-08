@@ -1,0 +1,72 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - UI2.0
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run focused tests
+        run: |
+          python -m unittest \
+            tests.test_ipc_migration.IpcMigrationTests.test_manifest_declares_supported_ipc_runtime \
+            tests.test_ipc_migration.IpcMigrationTests.test_pcm_metadata_matches_ipc_manifest_and_catalog_icon_rules \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_requirements_use_kicad_bundled_wxpython \
+            tests.test_ipc_migration.IpcMigrationTests.test_pcm_builder_places_ipc_manifest_in_plugin_subdirectory \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_uses_the_connection_details_from_kicad \
+            tests.test_ipc_migration.IpcMigrationTests.test_development_connection_accepts_kicads_empty_external_token \
+            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_fails_clearly_outside_kicad \
+            tests.test_ipc_migration.IpcMigrationTests.test_each_plugin_process_has_a_unique_ipc_commit_identity \
+            tests.test_ipc_migration.IpcMigrationTests.test_metadata_round_trip_reopens_selected_artwork \
+            tests.test_platform_branding
+
+      - name: Build PCM package
+        run: python pcm/build.py
+
+      - name: Verify package metadata
+        shell: python
+        run: |
+          import json
+          import zipfile
+          from pathlib import Path
+
+          metadata = json.loads(Path("pcm/metadata_template.json").read_text())
+          version = metadata["versions"][0]["version"]
+          archive = Path(f"pcm/build/Kobee-Studio-{version}-pcm.zip")
+
+          if not archive.exists():
+              raise SystemExit(f"Missing expected archive: {archive}")
+
+          with zipfile.ZipFile(archive) as package:
+              packaged = json.loads(package.read("metadata.json"))
+
+          packaged_version = packaged["versions"][0]["version"]
+          if packaged_version != version:
+              raise SystemExit(
+                  f"Package version {packaged_version!r} does not match {version!r}"
+              )
+
+          print(f"Verified {archive} ({version})")
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kobee-studio-pcm
+          path: pcm/build/Kobee-Studio-*-pcm.zip
+          if-no-files-found: error
