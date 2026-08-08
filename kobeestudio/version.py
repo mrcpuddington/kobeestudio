@@ -1,3 +1,3 @@
 """Single source of truth for the Kobee Studio version."""
 
-__version__ = "1.4.3-dev"
+__version__ = "1.4.4-dev"

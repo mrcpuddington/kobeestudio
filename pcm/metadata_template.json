@@ -28,7 +28,7 @@
     },
     "versions": [
         {
-            "version": "1.4.3",
+            "version": "1.4.4",
             "status": "testing",
             "kicad_version": "10.0",
             "runtime": "ipc"

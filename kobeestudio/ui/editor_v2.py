@@ -699,48 +699,47 @@ class PickerButton(wx.Control):
 
 
 class ProfileRecallDialog(wx.Dialog):
-    """Small dark-safe picker used directly from each artwork tool."""
+    """Small chooser with an explicit apply step for tool profiles."""
 
-    def __init__(self, parent, module_label, profiles, default_id):
-        super().__init__(parent, title="Recall {} profile".format(module_label), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+    def __init__(self, parent, module_label, profiles, selected_id=None):
+        super().__init__(parent, title="Load {} profile".format(module_label), style=wx.DEFAULT_DIALOG_STYLE)
         self._profiles = tuple(profiles)
-        self.selected_profile_id = None
+        self.selected_profile_id = ""
         palette = _palette()
         self.SetBackgroundColour(palette["window"])
         root = wx.BoxSizer(wx.VERTICAL)
-        heading = wx.StaticText(self, label="Recall a {} profile".format(module_label))
+        heading = wx.StaticText(self, label="Load a {} profile".format(module_label))
         heading.SetFont(heading.GetFont().Bold())
         heading.SetForegroundColour(palette["text"])
         root.Add(heading, 0, wx.ALL, 14)
-        helper = wx.StaticText(self, label="Recalling replaces the current settings for this tool. You can save your changes as a new profile or overwrite this one later.")
+        helper = wx.StaticText(self, label="Choose a saved profile, then apply it to this tool. None keeps the current settings without an active profile.")
         helper.SetForegroundColour(palette["muted"])
         helper.Wrap(440)
         root.Add(helper, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
-        self.list = ThemedListBox(self)
-        self.list.Set(
-            tuple("{}{}".format(profile.name, "  [default]" if profile.profile_id == default_id else "") for profile in self._profiles)
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(wx.StaticText(self, label="Profile"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self._profile_ids = ("") + tuple(profile.profile_id for profile in self._profiles)
+        self.choice = ThemedChoice(
+            self,
+            choices=("None",) + tuple(profile.name for profile in self._profiles),
         )
-        if self._profiles:
-            self.list.SetSelection(0)
-        self.list.Bind(wx.EVT_LISTBOX_DCLICK, self._on_recall)
-        root.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
+        self.choice.SetMinSize(wx.Size(300, 30))
+        if selected_id in self._profile_ids:
+            self.choice.SetSelection(self._profile_ids.index(selected_id))
+        row.Add(self.choice, 1, wx.EXPAND)
+        root.Add(row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         buttons.AddStretchSpacer(1)
         buttons.Add(KobeeAction(self, "Cancel", lambda: self.EndModal(wx.ID_CANCEL)), 0, wx.RIGHT, 7)
-        buttons.Add(KobeeAction(self, "Recall profile", self._recall, primary=True), 0)
+        buttons.Add(KobeeAction(self, "Apply", self._apply, primary=True), 0)
         root.Add(buttons, 0, wx.EXPAND | wx.ALL, 14)
         self.SetSizer(root)
-        self.SetMinSize(wx.Size(500, 330))
-        self.SetSize(wx.Size(540, 380))
+        self.SetMinSize(wx.Size(470, 190))
+        self.SetSize(wx.Size(500, 210))
 
-    def _on_recall(self, event):
-        self._recall()
-
-    def _recall(self):
-        index = self.list.GetSelection()
-        if not 0 <= index < len(self._profiles):
-            return
-        self.selected_profile_id = self._profiles[index].profile_id
+    def _apply(self):
+        index = self.choice.GetSelection()
+        self.selected_profile_id = self._profile_ids[index] if 0 <= index < len(self._profile_ids) else ""
         self.EndModal(wx.ID_OK)
 
 
@@ -955,49 +954,12 @@ class ToolPage(wx.Panel):
         columns.Add(self.card_columns[1], 1, wx.EXPAND | wx.LEFT, 6)
         self.content.SetSizer(columns)
         self.root.Add(self.content, 1, wx.EXPAND | wx.ALL, 14)
-        self._build_profile_card()
         self._build()
         self._build_section_nav()
         self._update_card_layout(force=True)
         self._show_section(self.sections[0])
         self.content.FitInside()
         self.Bind(wx.EVT_SIZE, self._on_size)
-
-    def _build_profile_card(self):
-        """Give profile actions a first-class editor section, not side buttons."""
-        box = self._card("Profile")
-        helper = wx.StaticText(
-            self._active_parent,
-            label="Save the current tool setup for reuse, or recall a saved setup.",
-        )
-        helper.SetForegroundColour(_palette()["muted"])
-        helper.Wrap(420)
-        box.Add(helper, 0, wx.EXPAND | wx.BOTTOM, 12)
-        status_row = wx.BoxSizer(wx.HORIZONTAL)
-        status_label = wx.StaticText(self._active_parent, label="Active profile")
-        status_row.Add(status_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
-        self.profile_status_label = wx.StaticText(self._active_parent, label="App defaults")
-        self.profile_status_label.SetFont(self.profile_status_label.GetFont().Bold())
-        status_row.Add(self.profile_status_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        box.Add(status_row, 0, wx.EXPAND | wx.BOTTOM, 14)
-        actions = wx.BoxSizer(wx.HORIZONTAL)
-        actions.Add(
-            KobeeAction(self._active_parent, "Recall profile…", self.dialog._recall_profile_for_active_tool),
-            0, wx.RIGHT, 7,
-        )
-        actions.Add(
-            KobeeAction(self._active_parent, "Save profile…", self.dialog._save_profile_for_active_tool),
-            0, wx.RIGHT, 7,
-        )
-        actions.Add(
-            KobeeAction(self._active_parent, "Manage profiles…", lambda: self.dialog._open_settings(initial_page=1)),
-            0,
-        )
-        box.Add(actions, 0)
-
-    def set_profile_status(self, value):
-        self.profile_status_label.SetLabel(value)
-        self.profile_status_label.GetParent().Layout()
 
     def _card(self, title):
         card = SettingsCard(self.content, title)
@@ -2020,7 +1982,7 @@ class StudioEditorDialog(wx.Dialog):
             page.set_measurement_unit(self.measurement_unit)
         self._route_settings(settings)
         self._default_applied_tools.add(self._tool)
-        self._refresh_profile_controls()
+        self._refresh_profile_bar()
         apply_native_theme(self, wx, _palette())
         self._loading = False
         self.request_preview(immediate=True)
@@ -2062,7 +2024,9 @@ class StudioEditorDialog(wx.Dialog):
         defaults.update(DEFAULT_LABEL_DIMENSIONS)
         defaults["LayerComboBox"] = FRONT_SILKSCREEN
         try:
-            defaults.update(self.profile_store.load("labels").settings)
+            profile = self.profile_store.load("labels")
+            defaults.update(profile.settings)
+            self._recalled_profile_ids["labels"] = profile.profile_id
         except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
             pass
         return defaults, None
@@ -2171,6 +2135,31 @@ class StudioEditorDialog(wx.Dialog):
         self.tool_sizer.AddStretchSpacer(1)
         root.Add(self.tool_bar, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 6)
 
+        # Profiles are a concise, tool-level workflow control. Keeping the
+        # row separate from target layers avoids treating them as navigation.
+        self.profile_bar = wx.Panel(self)
+        self.profile_bar.SetBackgroundColour(palette["subnav"])
+        profile_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.profile_bar.SetSizer(profile_sizer)
+        profile_sizer.AddStretchSpacer(1)
+        self.profile_status = wx.StaticText(self.profile_bar, label="Profile: None")
+        self.profile_status.SetFont(self.profile_status.GetFont().Bold())
+        self.profile_status.SetForegroundColour(palette["text"])
+        profile_sizer.Add(self.profile_status, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        profile_sizer.Add(
+            KobeeAction(self.profile_bar, "Load…", self._recall_profile_for_active_tool),
+            0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6,
+        )
+        profile_sizer.Add(
+            KobeeAction(self.profile_bar, "Save…", self._save_profile_for_active_tool),
+            0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6,
+        )
+        profile_sizer.Add(
+            KobeeAction(self.profile_bar, "?", self._show_profile_help),
+            0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 14,
+        )
+        root.Add(self.profile_bar, 0, wx.EXPAND | wx.BOTTOM, 4)
+
         # Placement is a first-class decision, not a preview setting.  Keep
         # every selected PCB layer visible and independently controllable.
         self.placement_bar = wx.Panel(self)
@@ -2277,22 +2266,20 @@ class StudioEditorDialog(wx.Dialog):
     def _recall_profile_for_active_tool(self):
         module = self._profile_module()
         profiles = self.profile_store.list(module)
-        if not profiles:
-            wx.MessageBox(
-                "There are no saved {} profiles yet. Set this tool up, then use Save profile… in the Profile section.",
-                "Kobee Studio Profiles", wx.OK | wx.ICON_INFORMATION, self,
-            )
-            return
         dialog = ProfileRecallDialog(
-            self, MODULE_LABELS_FOR_PROFILE[module], profiles, self.profile_store.default_id(module)
+            self, MODULE_LABELS_FOR_PROFILE[module], profiles, self._recalled_profile_ids.get(module)
         )
         try:
-            if dialog.ShowModal() != wx.ID_OK or not dialog.selected_profile_id:
+            if dialog.ShowModal() != wx.ID_OK:
+                return
+            if not dialog.selected_profile_id:
+                self._recalled_profile_ids.pop(module, None)
+                self._refresh_profile_bar()
                 return
             profile = self.profile_store.load(module, dialog.selected_profile_id)
             self._recalled_profile_ids[module] = profile.profile_id
             self._apply_profile_settings(dict(profile.settings))
-            self._refresh_profile_controls()
+            self._refresh_profile_bar()
         except (OSError, ValueError, LookupError) as error:
             wx.MessageBox(str(error), "Could not recall profile", wx.OK | wx.ICON_ERROR, self)
         finally:
@@ -2332,7 +2319,7 @@ class StudioEditorDialog(wx.Dialog):
                     return
                 try:
                     self.profile_store.save(module, recalled.name, self.CurrentSettings(), profile_id=recalled.profile_id)
-                    self._refresh_profile_controls()
+                    self._refresh_profile_bar()
                 except (OSError, ValueError) as error:
                     wx.MessageBox(str(error), "Could not overwrite profile", wx.OK | wx.ICON_ERROR, self)
                 return
@@ -2342,7 +2329,7 @@ class StudioEditorDialog(wx.Dialog):
                 return
             profile = self.profile_store.save(module, prompt.GetValue(), self.CurrentSettings())
             self._recalled_profile_ids[module] = profile.profile_id
-            self._refresh_profile_controls()
+            self._refresh_profile_bar()
         except (OSError, ValueError) as error:
             wx.MessageBox(str(error), "Could not save profile", wx.OK | wx.ICON_ERROR, self)
         finally:
@@ -2381,28 +2368,32 @@ class StudioEditorDialog(wx.Dialog):
             self._cancel()
             return
         self._refresh_symbol_catalog()
-        self._refresh_profile_controls()
+        self._refresh_profile_bar()
         self.request_preview(immediate=True)
 
-    def _refresh_profile_controls(self):
-        if not hasattr(self, "page_by_tool"):
+    def _show_profile_help(self):
+        wx.MessageBox(
+            "Profiles save the current settings for this tool, such as its typography, container, symbol, and target layers. "
+            "Load applies a saved profile. Save lets you create a new profile or overwrite the one currently loaded. "
+            "Set a default profile in Settings to apply it when starting new artwork.",
+            "Profiles",
+            wx.OK | wx.ICON_INFORMATION,
+            self,
+        )
+
+    def _refresh_profile_bar(self):
+        if not hasattr(self, "profile_status"):
             return
-        for page in self.page_by_tool.values():
-            module = profile_module_for_mode(page.mode)
-            selected_id = self._recalled_profile_ids.get(module)
-            status = "App defaults"
+        module = self._profile_module()
+        profile_id = self._recalled_profile_ids.get(module)
+        name = "None"
+        if profile_id:
             try:
-                if selected_id:
-                    profile = self.profile_store.load(module, selected_id)
-                    status = "Recalled: {}".format(profile.name)
-                else:
-                    default_id = self.profile_store.default_id(module)
-                    if default_id:
-                        profile = self.profile_store.load(module, default_id)
-                        status = "Default: {}".format(profile.name)
+                name = self.profile_store.load(module, profile_id).name
             except (LookupError, OSError, TypeError, ValueError):
                 self._recalled_profile_ids.pop(module, None)
-            page.set_profile_status(status)
+        self.profile_status.SetLabel("Profile: {}".format(name))
+        self.profile_bar.Layout()
 
     def _apply_profile_settings(self, settings):
         self._loading = True
@@ -2479,7 +2470,7 @@ class StudioEditorDialog(wx.Dialog):
             self._show_active_page()
         finally:
             self.Thaw()
-        self._refresh_profile_controls()
+        self._refresh_profile_bar()
         # QR/barcode construction can be comparatively expensive.  Let wx
         # finish changing pages before the debounced preview work begins.
         self.request_preview()
@@ -2491,6 +2482,7 @@ class StudioEditorDialog(wx.Dialog):
             try:
                 profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
                 self.page_by_tool[tool].apply(profile.settings)
+                self._recalled_profile_ids[profile.module] = profile.profile_id
                 layer = profile.settings.get("LayerComboBox", FRONT_SILKSCREEN)
                 layers = profile.settings.get("OutputLayers", (layer,))
                 self._set_output_layers(layers if isinstance(layers, (tuple, list)) else (layer,), preview_layer=layer)
@@ -2503,7 +2495,7 @@ class StudioEditorDialog(wx.Dialog):
             self._show_active_page()
         finally:
             self.Thaw()
-        self._refresh_profile_controls()
+        self._refresh_profile_bar()
         self.request_preview()
 
     def _rebuild_tool_bar(self):
