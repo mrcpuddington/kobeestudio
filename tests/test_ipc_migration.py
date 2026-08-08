@@ -293,7 +293,7 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
         self.assertEqual("testing", metadata["versions"][0]["status"])
-        self.assertEqual("1.4.4", metadata["versions"][0]["version"])
+        self.assertEqual("1.4.0", metadata["versions"][0]["version"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
