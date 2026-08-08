@@ -103,22 +103,26 @@ def main() -> int:
 
         geometry = TextGeometry()
         _trace("constructing editor")
-        dialog = MainDialog(
-            None,
-            str(config_dir / "ipc-config.json"),
-            geometry.buzzard,
-            place,
-            editor_session=session,
-            build_label="IPC",
-        )
-        _trace("editor constructed")
-        configure_window_branding(dialog, BRAND_ICON, wx)
-        app.SetTopWindow(dialog)
-        _trace("showing editor")
-        try:
-            dialog.ShowModal()
-        finally:
-            dialog.Destroy()
+        while True:
+            dialog = MainDialog(
+                None,
+                str(config_dir / "ipc-config.json"),
+                geometry.buzzard,
+                place,
+                editor_session=session,
+                build_label="IPC",
+            )
+            _trace("editor constructed")
+            configure_window_branding(dialog, BRAND_ICON, wx)
+            app.SetTopWindow(dialog)
+            _trace("showing editor")
+            try:
+                dialog.ShowModal()
+                restart_requested = bool(getattr(dialog, "restart_requested", False))
+            finally:
+                dialog.Destroy()
+            if not restart_requested:
+                break
         if pending_move is not None:
             try:
                 placement.start_interactive_move(pending_move)

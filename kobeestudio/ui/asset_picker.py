@@ -352,7 +352,10 @@ class AssetPickerDialog(wx.Dialog):
         dc.SetBrush(wx.Brush(palette["card"] if selected else palette["surface"]))
         dc.DrawRoundedRectangle(3, 3, width - 6, height - 6, 10)
         if item.icon_id:
-            self._draw_icon(dc, item.icon_id, (12, 12, 34, 34), "#FFFFFF", self._symbol_catalog)
+            # White artwork is correct against the dark picker, but disappears
+            # entirely on the light surface. Draw symbols in the same
+            # foreground colour as their title instead.
+            self._draw_icon(dc, item.icon_id, (12, 12, 34, 34), palette["text"], self._symbol_catalog)
             self._draw_fitted_text(
                 dc,
                 item.title,

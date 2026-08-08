@@ -938,18 +938,6 @@ class ToolPage(wx.Panel):
         self.section_sizer = wx.BoxSizer(wx.VERTICAL)
         self.section_bar.SetSizer(self.section_sizer)
         self.section_sizer.AddSpacer(12)
-        profile_label = wx.StaticText(self.section_bar, label="PROFILES")
-        profile_label.SetForegroundColour(_palette()["muted"])
-        profile_label.SetFont(profile_label.GetFont().Bold())
-        self.section_sizer.Add(profile_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        self.section_sizer.Add(
-            KobeeAction(self.section_bar, "Recall…", self.dialog._recall_profile_for_active_tool),
-            0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5,
-        )
-        self.section_sizer.Add(
-            KobeeAction(self.section_bar, "Save…", self.dialog._save_profile_for_active_tool),
-            0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10,
-        )
         self.root.Add(self.section_bar, 0, wx.EXPAND)
         self.content = wx.ScrolledWindow(
             self,
@@ -967,12 +955,49 @@ class ToolPage(wx.Panel):
         columns.Add(self.card_columns[1], 1, wx.EXPAND | wx.LEFT, 6)
         self.content.SetSizer(columns)
         self.root.Add(self.content, 1, wx.EXPAND | wx.ALL, 14)
+        self._build_profile_card()
         self._build()
         self._build_section_nav()
         self._update_card_layout(force=True)
         self._show_section(self.sections[0])
         self.content.FitInside()
         self.Bind(wx.EVT_SIZE, self._on_size)
+
+    def _build_profile_card(self):
+        """Give profile actions a first-class editor section, not side buttons."""
+        box = self._card("Profile")
+        helper = wx.StaticText(
+            self._active_parent,
+            label="Save the current tool setup for reuse, or recall a saved setup.",
+        )
+        helper.SetForegroundColour(_palette()["muted"])
+        helper.Wrap(420)
+        box.Add(helper, 0, wx.EXPAND | wx.BOTTOM, 12)
+        status_row = wx.BoxSizer(wx.HORIZONTAL)
+        status_label = wx.StaticText(self._active_parent, label="Active profile")
+        status_row.Add(status_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        self.profile_status_label = wx.StaticText(self._active_parent, label="App defaults")
+        self.profile_status_label.SetFont(self.profile_status_label.GetFont().Bold())
+        status_row.Add(self.profile_status_label, 1, wx.ALIGN_CENTER_VERTICAL)
+        box.Add(status_row, 0, wx.EXPAND | wx.BOTTOM, 14)
+        actions = wx.BoxSizer(wx.HORIZONTAL)
+        actions.Add(
+            KobeeAction(self._active_parent, "Recall profile…", self.dialog._recall_profile_for_active_tool),
+            0, wx.RIGHT, 7,
+        )
+        actions.Add(
+            KobeeAction(self._active_parent, "Save profile…", self.dialog._save_profile_for_active_tool),
+            0, wx.RIGHT, 7,
+        )
+        actions.Add(
+            KobeeAction(self._active_parent, "Manage profiles…", lambda: self.dialog._open_settings(initial_page=1)),
+            0,
+        )
+        box.Add(actions, 0)
+
+    def set_profile_status(self, value):
+        self.profile_status_label.SetLabel(value)
+        self.profile_status_label.GetParent().Layout()
 
     def _card(self, title):
         card = SettingsCard(self.content, title)
@@ -1982,6 +2007,7 @@ class StudioEditorDialog(wx.Dialog):
         self._editing_existing = False
         self._default_applied_tools = set()
         self._recalled_profile_ids = {}
+        self.restart_requested = False
         self._output_layers = (FRONT_SILKSCREEN,)
         self._text_vectorizer = TextVectorizer(self.buzzard)
         self._timer = wx.Timer(self)
@@ -1994,6 +2020,7 @@ class StudioEditorDialog(wx.Dialog):
             page.set_measurement_unit(self.measurement_unit)
         self._route_settings(settings)
         self._default_applied_tools.add(self._tool)
+        self._refresh_profile_controls()
         apply_native_theme(self, wx, _palette())
         self._loading = False
         self.request_preview(immediate=True)
@@ -2252,7 +2279,7 @@ class StudioEditorDialog(wx.Dialog):
         profiles = self.profile_store.list(module)
         if not profiles:
             wx.MessageBox(
-                "There are no saved {} profiles yet. Set this tool up, then use Save… in the left sidebar.",
+                "There are no saved {} profiles yet. Set this tool up, then use Save profile… in the Profile section.",
                 "Kobee Studio Profiles", wx.OK | wx.ICON_INFORMATION, self,
             )
             return
@@ -2265,6 +2292,7 @@ class StudioEditorDialog(wx.Dialog):
             profile = self.profile_store.load(module, dialog.selected_profile_id)
             self._recalled_profile_ids[module] = profile.profile_id
             self._apply_profile_settings(dict(profile.settings))
+            self._refresh_profile_controls()
         except (OSError, ValueError, LookupError) as error:
             wx.MessageBox(str(error), "Could not recall profile", wx.OK | wx.ICON_ERROR, self)
         finally:
@@ -2304,6 +2332,7 @@ class StudioEditorDialog(wx.Dialog):
                     return
                 try:
                     self.profile_store.save(module, recalled.name, self.CurrentSettings(), profile_id=recalled.profile_id)
+                    self._refresh_profile_controls()
                 except (OSError, ValueError) as error:
                     wx.MessageBox(str(error), "Could not overwrite profile", wx.OK | wx.ICON_ERROR, self)
                 return
@@ -2313,12 +2342,13 @@ class StudioEditorDialog(wx.Dialog):
                 return
             profile = self.profile_store.save(module, prompt.GetValue(), self.CurrentSettings())
             self._recalled_profile_ids[module] = profile.profile_id
+            self._refresh_profile_controls()
         except (OSError, ValueError) as error:
             wx.MessageBox(str(error), "Could not save profile", wx.OK | wx.ICON_ERROR, self)
         finally:
             prompt.Destroy()
 
-    def _open_settings(self):
+    def _open_settings(self, initial_page=0):
         dialog = SettingsDialog(
             self,
             preferences_store=self.preferences_store,
@@ -2334,14 +2364,45 @@ class StudioEditorDialog(wx.Dialog):
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
             current_module=self._profile_module(),
+            initial_page=initial_page,
             preferences_changed=self._on_preferences_changed,
         )
+        restart_requested = False
         try:
             dialog.ShowModal()
+            restart_requested = dialog.restart_editor
         finally:
             dialog.Destroy()
+        if restart_requested:
+            # Settings changed the complete on-disk data set. Close this
+            # editor instance so the host entry point can construct a fresh
+            # one with the restored preferences, assets, and profiles.
+            self.restart_requested = True
+            self._cancel()
+            return
         self._refresh_symbol_catalog()
+        self._refresh_profile_controls()
         self.request_preview(immediate=True)
+
+    def _refresh_profile_controls(self):
+        if not hasattr(self, "page_by_tool"):
+            return
+        for page in self.page_by_tool.values():
+            module = profile_module_for_mode(page.mode)
+            selected_id = self._recalled_profile_ids.get(module)
+            status = "App defaults"
+            try:
+                if selected_id:
+                    profile = self.profile_store.load(module, selected_id)
+                    status = "Recalled: {}".format(profile.name)
+                else:
+                    default_id = self.profile_store.default_id(module)
+                    if default_id:
+                        profile = self.profile_store.load(module, default_id)
+                        status = "Default: {}".format(profile.name)
+            except (LookupError, OSError, TypeError, ValueError):
+                self._recalled_profile_ids.pop(module, None)
+            page.set_profile_status(status)
 
     def _apply_profile_settings(self, settings):
         self._loading = True
@@ -2408,13 +2469,17 @@ class StudioEditorDialog(wx.Dialog):
         tools = [label for item_family, label, mode in TOOL_DEFINITIONS if item_family == family]
         self._family = family
         if self._tool not in tools:
-            self._tool = tools[0]
+            # Route through the normal tool selector so a default profile is
+            # applied consistently when a family is first opened.
+            self._select_tool(tools[0])
+            return
         self.Freeze()
         try:
             self._update_tab_state()
             self._show_active_page()
         finally:
             self.Thaw()
+        self._refresh_profile_controls()
         # QR/barcode construction can be comparatively expensive.  Let wx
         # finish changing pages before the debounced preview work begins.
         self.request_preview()
@@ -2438,6 +2503,7 @@ class StudioEditorDialog(wx.Dialog):
             self._show_active_page()
         finally:
             self.Thaw()
+        self._refresh_profile_controls()
         self.request_preview()
 
     def _rebuild_tool_bar(self):

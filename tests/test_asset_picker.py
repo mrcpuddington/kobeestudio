@@ -37,6 +37,11 @@ class AssetPickerTests(unittest.TestCase):
         contents = source.read_text(encoding="utf-8")
         self.assertIn("self.m_AssetScroller.ShowScrollbars(never, never)", contents)
 
+    def test_picker_uses_theme_foreground_for_symbol_thumbnails(self):
+        source = Path(__file__).resolve().parents[1] / "kobeestudio" / "ui" / "asset_picker.py"
+        contents = source.read_text(encoding="utf-8")
+        self.assertIn('palette["text"], self._symbol_catalog', contents)
+
     def test_picker_uses_explicit_card_coordinates_for_all_cards(self):
         source = Path(__file__).resolve().parents[1] / "kobeestudio" / "ui" / "asset_picker.py"
         contents = source.read_text(encoding="utf-8")

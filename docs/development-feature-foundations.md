@@ -40,9 +40,9 @@ Project-only uploads use the same asset schema at:
 
 Project-only quick labels similarly live at
 `<project directory>/.kobeestudio/labels/v1/items/`. The whole instance-wide
-folder is a portable data library: Settings → **Library** exports it as a
-small ZIP. Restoring an archive explicitly replaces the current portable
-library after a warning, so a new machine can receive an exact backup. It
+folder is portable Kobee Studio data: Settings → **Data & backup** creates a
+small ZIP backup. Restoring a backup explicitly replaces the current data
+after a warning, so a new machine can receive an exact copy. It
 includes preferences, profiles, custom SVGs, and quick labels; installed
 package files are intentionally excluded.
 
@@ -111,9 +111,9 @@ The editor header opens **Settings**, with five pages:
 - **Uploads** has sub-tabs for SVG symbols and quick labels. Symbol variants
   are managed on a selected family with `default` and `rounded` as the two
   supported variant classes.
-- **Library** has Backup & reset and Bundled visibility sub-tabs.
+- **Data & backup** has Backup & reset and Bundled visibility sub-tabs.
 - **About & help** is a top-level Settings tab.
   Hide rules are stored in `preferences.json`, so an update never resets them;
   hiding a symbol does not hide a linked quick label. Reset requires a typed
-  confirmation and removes mutable library content only, returning to shipped
+  confirmation and removes mutable user data only, returning to shipped
   defaults.

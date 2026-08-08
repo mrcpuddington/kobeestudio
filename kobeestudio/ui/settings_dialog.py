@@ -123,6 +123,7 @@ class SettingsDialog(wx.Dialog):
         hidden_label_ids=(),
         current_module: str,
         preferences_changed: Callable[[AppPreferences], None],
+        initial_page: int = 0,
     ):
         super().__init__(
             parent,
@@ -144,6 +145,7 @@ class SettingsDialog(wx.Dialog):
         self._profiles = ()
         self._upload_items = ()
         self._quick_labels = ()
+        self.restart_editor = False
 
         root = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Simplebook(self)
@@ -186,7 +188,7 @@ class SettingsDialog(wx.Dialog):
             self.notebook.AddPage(page, "")
         self._page_buttons = []
         page_tabs = wx.BoxSizer(wx.HORIZONTAL)
-        for index, label in enumerate(("General", "Profiles and defaults", "Uploads", "Library", "About & help")):
+        for index, label in enumerate(("General", "Profiles and defaults", "Uploads", "Data & backup", "About & help")):
             button = ThemedActionButton(self, label, lambda page=index: self._select_page(page), primary=index == 0)
             self._page_buttons.append(button)
             page_tabs.Add(button, 0, wx.RIGHT, 6)
@@ -206,7 +208,7 @@ class SettingsDialog(wx.Dialog):
         self._build_quick_labels_page()
         self._build_library_page()
         self._apply_theme()
-        self._select_page(0)
+        self._select_page(max(0, min(int(initial_page), len(self._page_buttons) - 1)))
         self._select_asset_page(0)
         self._select_library_page(0)
 
@@ -561,25 +563,25 @@ class SettingsDialog(wx.Dialog):
     def _build_library_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.library_backup_page.SetSizer(root)
-        root.Add(self._heading(self.library_backup_page, "Portable data library"), 0, wx.ALL, 14)
-        info = wx.StaticText(self.library_backup_page, label="Your personal SVGs, quick labels, profiles, and preferences are kept outside the installed package at:\n{}".format(self.preferences_store.root))
+        root.Add(self._heading(self.library_backup_page, "Kobee Studio data"), 0, wx.ALL, 14)
+        info = wx.StaticText(self.library_backup_page, label="Your personal SVGs, quick labels, profiles, preferences, and hidden-item choices are stored outside the installed package at:\n{}".format(self.preferences_store.root))
         info.Wrap(620)
         root.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
-        note = wx.StaticText(self.library_backup_page, label="Export this library to move it to another machine. Import replaces the current library after a clear confirmation, making it suitable for restoring an exact backup.")
+        note = wx.StaticText(self.library_backup_page, label="Create a data backup to move your complete setup to another machine. Restoring a backup replaces the current Kobee Studio data after confirmation, so it is an exact restore rather than a merge.")
         note.Wrap(620)
         root.Add(note, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        export = ThemedActionButton(self.library_backup_page, "Export library…", lambda: self._export_library(None))
-        imported = ThemedActionButton(self.library_backup_page, "Import library…", lambda: self._import_library(None))
+        export = ThemedActionButton(self.library_backup_page, "Create data backup…", lambda: self._export_library(None))
+        imported = ThemedActionButton(self.library_backup_page, "Restore data backup…", lambda: self._import_library(None))
         actions.Add(export, 0, wx.RIGHT, 6)
         actions.Add(imported, 0)
         root.Add(actions, 0, wx.LEFT | wx.RIGHT, 14)
         root.AddStretchSpacer(1)
         root.Add(wx.StaticLine(self.library_backup_page), 0, wx.EXPAND | wx.ALL, 14)
-        warning = wx.StaticText(self.library_backup_page, label="Reset to shipped defaults removes every custom SVG, quick label, profile, and preference in this library. This cannot be undone.")
+        warning = wx.StaticText(self.library_backup_page, label="Resetting removes every custom SVG, quick label, profile, preference, and hidden-item choice. Shipped defaults remain. This cannot be undone.")
         warning.Wrap(620)
         root.Add(warning, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
-        root.Add(ThemedActionButton(self.library_backup_page, "Reset library to shipped defaults…", lambda: self._reset_library(None)), 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        root.Add(ThemedActionButton(self.library_backup_page, "Reset data to shipped defaults…", lambda: self._reset_library(None)), 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
 
         visibility_root = wx.BoxSizer(wx.VERTICAL)
         self.library_visibility_page.SetSizer(visibility_root)
@@ -619,47 +621,55 @@ class SettingsDialog(wx.Dialog):
         info_root.Add(help_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
 
     def _export_library(self, event):
-        dialog = wx.FileDialog(self, "Export Kobee Studio library", wildcard="Kobee Studio library (*.zip)|*.zip", style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+        dialog = wx.FileDialog(
+            self,
+            "Create Kobee Studio data backup",
+            defaultFile="kobee-studio-data-backup.zip",
+            wildcard="Kobee Studio data backup (*.zip)|*.zip",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        )
         try:
             if dialog.ShowModal() != wx.ID_OK:
                 return
             count = export_library(self.preferences_store.root, Path(dialog.GetPath()))
-            wx.MessageBox("Exported {} file(s).".format(count), "Library exported", wx.OK | wx.ICON_INFORMATION, self)
+            wx.MessageBox("Created a backup with {} data file(s).".format(count), "Data backup created", wx.OK | wx.ICON_INFORMATION, self)
         except (OSError, ValueError, zipfile.BadZipFile) as error:
-            wx.MessageBox(str(error), "Could not export library", wx.OK | wx.ICON_ERROR, self)
+            wx.MessageBox(str(error), "Could not create data backup", wx.OK | wx.ICON_ERROR, self)
         finally:
             dialog.Destroy()
 
     def _import_library(self, event):
-        dialog = wx.FileDialog(self, "Import Kobee Studio library", wildcard="Kobee Studio library (*.zip)|*.zip", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        dialog = wx.FileDialog(self, "Restore Kobee Studio data backup", wildcard="Kobee Studio data backup (*.zip)|*.zip", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         try:
             if dialog.ShowModal() != wx.ID_OK:
                 return
             if wx.MessageBox(
-                "Restore this library and replace all current preferences, custom SVGs, quick labels, and profiles? This cannot be undone from Kobo Studio.",
-                "Replace current library",
+                "Restore this backup? It replaces your current Kobee Studio data, including preferences, custom SVGs, quick labels, profiles, and hidden-item choices. This cannot be undone.",
+                "Replace Kobee Studio data",
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
                 self,
             ) != wx.YES:
                 return
             count = restore_library(Path(dialog.GetPath()), self.preferences_store.root)
-            wx.MessageBox("Restored {} file(s). Reopen Kobo Studio to load the restored preferences and library.".format(count), "Library restored", wx.OK | wx.ICON_INFORMATION, self)
+            self.restart_editor = True
+            wx.MessageBox("Restored {} data file(s). Kobee Studio will now restart to load the restored data.".format(count), "Data restored", wx.OK | wx.ICON_INFORMATION, self)
+            self.EndModal(wx.ID_OK)
         except (OSError, ValueError, zipfile.BadZipFile) as error:
-            wx.MessageBox(str(error), "Could not import library", wx.OK | wx.ICON_ERROR, self)
+            wx.MessageBox(str(error), "Could not restore data backup", wx.OK | wx.ICON_ERROR, self)
         finally:
             dialog.Destroy()
 
     def _reset_library(self, event):
         if wx.MessageBox(
             "This removes all custom SVGs, quick labels, profiles, display preferences, and hidden-item choices. Bundled defaults remain. Continue?",
-            "Reset library to shipped defaults",
+            "Reset Kobee Studio data",
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
             self,
         ) != wx.YES:
             return
         confirm = wx.TextEntryDialog(
             self,
-            "Type RESET to permanently remove this library's custom data.",
+            "Type RESET to permanently remove your custom Kobee Studio data.",
             "Confirm reset to shipped defaults",
         )
         try:
@@ -669,16 +679,11 @@ class SettingsDialog(wx.Dialog):
             preferences = AppPreferences()
             self.preferences_store.save(preferences)
             self.preferences_changed(preferences)
-            self._hidden_symbol_ids.clear()
-            self._hidden_label_ids.clear()
-            self.appearance_choice.SetStringSelection("Follow system")
-            self.unit_choice.SetStringSelection("Millimetres (mm)")
-            self._refresh_uploads()
-            self._refresh_quick_labels()
-            self._refresh_visibility()
-            wx.MessageBox("The library has been reset to shipped defaults.", "Library reset", wx.OK | wx.ICON_INFORMATION, self)
+            self.restart_editor = True
+            wx.MessageBox("Kobee Studio data has been reset to shipped defaults. Kobee Studio will now restart.", "Data reset", wx.OK | wx.ICON_INFORMATION, self)
+            self.EndModal(wx.ID_OK)
         except OSError as error:
-            wx.MessageBox(str(error), "Could not reset library", wx.OK | wx.ICON_ERROR, self)
+            wx.MessageBox(str(error), "Could not reset Kobee Studio data", wx.OK | wx.ICON_ERROR, self)
         finally:
             confirm.Destroy()
 

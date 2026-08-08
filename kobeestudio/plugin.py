@@ -88,17 +88,21 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
 
             geometry = TextGeometry()
             self._log_dependency_versions()
-            dialog = MainDialog(None, self.config_file, geometry.buzzard, self._generate_and_place)
-            icon_path = (
-                Path(__file__).resolve().parent
-                / "resources"
-                / "kobee-studio-platform-icon.png"
-            )
-            configure_window_branding(dialog, icon_path, wx)
-            try:
-                dialog.ShowModal()
-            finally:
-                dialog.Destroy()
+            while True:
+                dialog = MainDialog(None, self.config_file, geometry.buzzard, self._generate_and_place)
+                icon_path = (
+                    Path(__file__).resolve().parent
+                    / "resources"
+                    / "kobee-studio-platform-icon.png"
+                )
+                configure_window_branding(dialog, icon_path, wx)
+                try:
+                    dialog.ShowModal()
+                    restart_requested = bool(getattr(dialog, "restart_requested", False))
+                finally:
+                    dialog.Destroy()
+                if not restart_requested:
+                    break
         except Exception as error:
             self._show_error("Kobee Studio could not start", error)
 
