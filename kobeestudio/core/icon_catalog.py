@@ -482,20 +482,14 @@ def _render_legacy_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
 
 
 def render_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
-    """Render production legacy geometry or the flagged bundled SVG equivalent."""
-    from .feature_flags import SVG_SYMBOLS, development_feature_enabled
-
-    if development_feature_enabled(SVG_SYMBOLS):
-        from .svg_symbols import SymbolCatalog
-
-        try:
-            polygons, size = _bundled_svg_catalog().render(asset_id, height_mm)
-        except ValueError as error:
-            if "Unknown SVG symbol variant" in str(error):
-                raise ValueError("Unknown built-in icon: {}".format(asset_id))
-            raise
-        return IconVectors(polygons=polygons, size=size)
-    return _render_legacy_builtin_icon(asset_id, height_mm)
+    """Render the bundled SVG source of truth for a shipped symbol."""
+    try:
+        polygons, size = _bundled_svg_catalog().render(asset_id, height_mm)
+    except ValueError as error:
+        if "Unknown SVG symbol variant" in str(error):
+            raise ValueError("Unknown built-in icon: {}".format(asset_id))
+        raise
+    return IconVectors(polygons=polygons, size=size)
 
 
 @lru_cache(maxsize=1)
@@ -507,13 +501,7 @@ def _bundled_svg_catalog():
 
 
 def render_symbol(asset_id: str, height_mm: float, variant: str = "default", catalog=None) -> IconVectors:
-    """Flag-gated entry point that also supports variants and custom symbols."""
-    from .feature_flags import SVG_SYMBOLS, development_feature_enabled
-
-    if not development_feature_enabled(SVG_SYMBOLS):
-        if variant != "default":
-            raise ValueError("Symbol variants require the svg_symbols development feature")
-        return _render_legacy_builtin_icon(asset_id, height_mm)
+    """Render any bundled or user-managed symbol variant."""
     if catalog is None:
         from .svg_symbols import symbol_catalog_for_context
 

@@ -9,13 +9,6 @@ import zipfile
 import wx
 
 from ..core.app_preferences import AppPreferences, AppPreferencesStore
-from ..core.feature_flags import (
-    ALTERNATIVE_UNITS,
-    CUSTOM_ASSETS,
-    SETTINGS_PROFILES,
-    SVG_SYMBOLS,
-    FeatureFlags,
-)
 from ..core.measurement_units import MeasurementUnit
 from ..core.quick_labels import QuickLabelStore
 from ..core.settings_profiles import SettingsProfileStore
@@ -126,7 +119,6 @@ class SettingsDialog(wx.Dialog):
         global_label_store: QuickLabelStore,
         project_label_store: Optional[QuickLabelStore],
         symbol_catalog,
-        flags: FeatureFlags,
         hidden_symbol_ids=(),
         hidden_label_ids=(),
         current_module: str,
@@ -149,7 +141,6 @@ class SettingsDialog(wx.Dialog):
         self.symbol_catalog = symbol_catalog
         self._hidden_symbol_ids = set(hidden_symbol_ids)
         self._hidden_label_ids = set(hidden_label_ids)
-        self.flags = flags
         self.current_module = current_module
         self.capture_settings = capture_settings
         self.apply_profile = apply_profile
@@ -304,27 +295,11 @@ class SettingsDialog(wx.Dialog):
         self.unit_choice.SetStringSelection(
             "Mils (mil)" if preferences.measurement_unit is MeasurementUnit.MILS else "Millimetres (mm)"
         )
-        self.unit_choice.Enable(self.flags.enabled(ALTERNATIVE_UNITS))
         grid.Add(self.unit_choice, 1, wx.EXPAND)
-        if not self.flags.enabled(ALTERNATIVE_UNITS):
-            note = wx.StaticText(
-                self.general_page,
-                label="Alternative units are currently behind the alternative_units development flag.",
-            )
-            note.Wrap(580)
-            root.Add(note, 0, wx.ALL, 14)
 
     def _build_profile_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.profile_page.SetSizer(root)
-        if not self.flags.enabled(SETTINGS_PROFILES):
-            message = wx.StaticText(
-                self.profile_page,
-                label="Named profiles are currently behind the settings_profiles development flag.",
-            )
-            root.Add(message, 0, wx.ALL, 16)
-            return
-
         root.Add(self._heading(self.profile_page, "Module profiles"), 0, wx.ALL, 14)
         top = wx.BoxSizer(wx.HORIZONTAL)
         top.Add(wx.StaticText(self.profile_page, label="Module"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
@@ -466,13 +441,6 @@ class SettingsDialog(wx.Dialog):
     def _build_upload_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.upload_page.SetSizer(root)
-        if not self.flags.enabled(CUSTOM_ASSETS):
-            message = wx.StaticText(
-                self.upload_page,
-                label="SVG uploads are currently behind the custom_assets development flag.",
-            )
-            root.Add(message, 0, wx.ALL, 16)
-            return
         root.Add(self._heading(self.upload_page, "Custom SVG assets"), 0, wx.ALL, 14)
         filters = wx.BoxSizer(wx.HORIZONTAL)
         filters.Add(wx.StaticText(self.upload_page, label="Scope"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
@@ -485,11 +453,7 @@ class SettingsDialog(wx.Dialog):
         self.scope_choice.Bind(wx.EVT_CHOICE, self._on_upload_filter_changed)
         filters.Add(self.scope_choice, 0, wx.RIGHT, 14)
         filters.Add(wx.StaticText(self.upload_page, label="Type"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-        namespace_choices = (
-            ("Symbols", "Graphics")
-            if self.flags.enabled(SVG_SYMBOLS)
-            else ("Graphics",)
-        )
+        namespace_choices = ("Symbols", "Graphics")
         self.namespace_choice = ThemedChoice(self.upload_page, choices=namespace_choices)
         self.namespace_choice.SetSelection(0)
         self.namespace_choice.Bind(wx.EVT_CHOICE, self._on_upload_filter_changed)
@@ -513,24 +477,11 @@ class SettingsDialog(wx.Dialog):
                 wx.LEFT | wx.RIGHT | wx.BOTTOM,
                 14,
             )
-        if not self.flags.enabled(SVG_SYMBOLS):
-            root.Add(
-                wx.StaticText(
-                    self.upload_page,
-                    label="Symbol uploads also require the svg_symbols development flag.",
-                ),
-                0,
-                wx.LEFT | wx.RIGHT | wx.BOTTOM,
-                14,
-            )
         self._refresh_uploads()
 
     def _build_quick_labels_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.quick_labels_page.SetSizer(root)
-        if not self.flags.enabled(CUSTOM_ASSETS):
-            root.Add(wx.StaticText(self.quick_labels_page, label="Quick-label management is behind the custom_assets development flag."), 0, wx.ALL, 16)
-            return
         root.Add(self._heading(self.quick_labels_page, "Quick labels"), 0, wx.ALL, 14)
         helper = wx.StaticText(self.quick_labels_page, label="Create personal or project labels here. Bundled labels are protected, so app updates never overwrite your changes.")
         helper.Wrap(630)
@@ -677,7 +628,7 @@ class SettingsDialog(wx.Dialog):
         info_root = wx.BoxSizer(wx.VERTICAL)
         self.info_page.SetSizer(info_root)
         info_root.Add(self._heading(self.info_page, "Kobee Studio"), 0, wx.ALL, 14)
-        build = wx.StaticText(self.info_page, label="Version {}\nDevelopment features: {}".format(__version__, ", ".join(sorted(self.flags.enabled_flags)) or "None"))
+        build = wx.StaticText(self.info_page, label="Version {}\nTesting stream".format(__version__))
         info_root.Add(build, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         help_text = wx.StaticText(self.info_page, label="Help and guides\nhttps://www.coreybusuttil.com/kobeestudio/docs/\n\nReport an issue or contribute\nhttps://github.com/mrcpuddington/kobeestudio")
         help_text.Wrap(620)

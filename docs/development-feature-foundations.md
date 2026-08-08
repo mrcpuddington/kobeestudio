@@ -1,14 +1,8 @@
-# Development feature foundations
+# Feature foundations
 
-These services deliberately exist below the UI layer. Production behavior is
-unchanged until features are enabled through `KOBEE_DEV_FEATURES`.
-
-```sh
-KOBEE_DEV_FEATURES=svg_symbols,custom_assets,settings_profiles,alternative_units
-```
-
-Unknown flag names fail closed. Shipping builds that do not set the variable
-continue to use the legacy Python icon catalog.
+SVG symbols, custom assets, profiles, and measurement preferences are standard
+Kobee Studio functionality. The testing-stream package exposes them by default;
+there is no runtime environment flag to enable them.
 
 ## Storage layout
 
@@ -21,9 +15,8 @@ kobeestudio/resources/
 ```
 
 The SVGs in `kobeestudio/resources/symbols/` are the bundled source assets.
-`pcm/build.py` only copies them into a package; it never regenerates or edits
-them. There is no SVG regeneration step in the repository, so contributor SVG
-work cannot be overwritten by a normal build.
+There is no SVG regeneration step in the repository, so contributor SVG work
+cannot be overwritten by packaging.
 
 Instance-wide user data is outside the installed plugin:
 
@@ -66,8 +59,8 @@ Custom symbols use an immutable `custom.<uuid>` ID. Upload another SVG with that
 ID and a different variant name to extend its variant family.
 
 The initial shipped convention is **default** plus **rounded** where an
-alternative is supplied. The picker shows a “N variants” hint on a family’s
-default item and exposes a Variant selector. Uploads deliberately offer only
+alternative is supplied. The picker exposes a Variant selector and then shows
+one card per symbol family for that selected variant. Uploads deliberately offer only
 these two variants for now; a future variant class is a renderer/UI feature,
 not a free-form user field. There is no separate variant editor: use
 **Uploads → Symbols → Add variant** on the selected symbol family.
@@ -118,13 +111,9 @@ The editor header opens **Settings**, with five pages:
 - **Uploads** has sub-tabs for SVG symbols and quick labels. Symbol variants
   are managed on a selected family with `default` and `rounded` as the two
   supported variant classes.
-- **Library** has Backup & reset, Bundled visibility, and About & help sub-tabs.
+- **Library** has Backup & reset and Bundled visibility sub-tabs.
+- **About & help** is a top-level Settings tab.
   Hide rules are stored in `preferences.json`, so an update never resets them;
   hiding a symbol does not hide a linked quick label. Reset requires a typed
   confirmation and removes mutable library content only, returning to shipped
   defaults.
-
-The page remains present with development features disabled, but flagged
-controls explain which `KOBEE_DEV_FEATURES` value enables them. This keeps the
-legacy Python symbol renderer and millimetre behavior as the production
-fallback while the new services are validated.

@@ -19,7 +19,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .composition import Point, Size
 from .data_paths import project_data_root, user_data_root
-from .feature_flags import CUSTOM_ASSETS, SVG_SYMBOLS, FeatureFlags
 from .quick_labels import QuickLabelStore
 from .shape_geometry import Polygon, polygon_bounds
 
@@ -586,24 +585,17 @@ class SymbolCatalog:
 def symbol_catalog_for_context(
     project: Optional[Union[str, Path]] = None,
     data_root: Optional[Path] = None,
-    flags: Optional[FeatureFlags] = None,
     hidden_symbol_ids: Sequence[str] = (),
     hidden_label_ids: Sequence[str] = (),
 ) -> SymbolCatalog:
-    """Build the catalog for one app/project context, respecting upload flags."""
-    flags = flags or FeatureFlags.from_environment()
+    """Build the complete shipped and user-managed catalog for one context."""
     stores: List[SvgAssetStore] = []
     label_stores: List[QuickLabelStore] = []
-    # Custom symbols are meaningful only when the SVG renderer is also active.
-    # Generic graphics remain independently manageable by SvgAssetStore.
-    if flags.enabled(CUSTOM_ASSETS) and flags.enabled(SVG_SYMBOLS):
-        stores.append(SvgAssetStore.global_store(data_root))
-        if project is not None:
-            stores.append(SvgAssetStore.project_store(project))
-    if flags.enabled(CUSTOM_ASSETS):
-        label_stores.append(QuickLabelStore.global_store(data_root))
-        if project is not None:
-            label_stores.append(QuickLabelStore.project_store(project))
+    stores.append(SvgAssetStore.global_store(data_root))
+    label_stores.append(QuickLabelStore.global_store(data_root))
+    if project is not None:
+        stores.append(SvgAssetStore.project_store(project))
+        label_stores.append(QuickLabelStore.project_store(project))
     raw_catalog = SymbolCatalog.discover(custom_stores=tuple(stores), custom_label_stores=tuple(label_stores))
     hidden_symbols = frozenset(str(item) for item in hidden_symbol_ids)
     hidden_labels = frozenset(str(item) for item in hidden_label_ids)

@@ -3,8 +3,8 @@
 This document describes how Kobee Studio moves from a code change to a tested
 beta and then to a stable release.
 
-The source repository is the home for code, tests, the PCM build script and
-GitHub Actions. The eventual PCM distribution repository will contain the
+The source repository is the home for code, tests, and GitHub Actions. The
+eventual PCM distribution repository will contain the
 generated `repository.json` and `packages.json` files that KiCad reads.
 
 ## The flow
@@ -23,18 +23,11 @@ Production approval
 Stable GitHub Release + stable PCM repository
 ```
 
-## Local development
+## Package authority
 
-Local builds are for fast iteration and private testing:
-
-```bash
-python3 pcm/build.py
-```
-
-The generated package is in `pcm/build/`. Install it in KiCad with **Plugin
-and Content Manager → Install from File**.
-
-Local builds do not publish anything and do not change GitHub releases.
+Packages are built by GitHub Actions from an explicit source revision. Testers
+install the testing-stream package from PCM or its release asset; they do not
+need to build an install ZIP locally.
 
 ## Validation workflow
 
@@ -96,7 +89,6 @@ The recommended final arrangement is:
 ```text
 mrcpuddington/kobeestudio
   Source code
-  pcm/build.py
   .github/workflows/ci.yml
   .github/workflows/publish.yml
 
@@ -113,8 +105,7 @@ updates the testing or stable catalogue, and publishes the resulting JSON.
 
 ## Why the worker is the release authority
 
-Local builds remain useful during development, but official packages should be
-built by Actions because the worker:
+Official packages are built by Actions because the worker:
 
 - starts from an explicit commit or tag;
 - runs the same checks every time;

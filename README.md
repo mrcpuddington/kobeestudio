@@ -173,25 +173,11 @@ If the toolbar button does not appear:
 
 More installation help is available in the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
 
-### Build and install from source
+### Testing releases
 
-If you are contributing or want to test the current source, build the IPC
-package locally and install the generated ZIP through KiCad's Plugin and
-Content Manager:
-
-```sh
-git clone https://github.com/mrcpuddington/kobeestudio.git
-cd kobeestudio
-git checkout v1.3.4
-python3 pcm/build.py
-```
-
-Then choose **Install from File…** in KiCad's Plugin and Content Manager and
-select:
-
-```text
-pcm/build/Kobee-Studio-1.3.4-pcm.zip
-```
+Kobee Studio testing releases are built and published by the release workflow.
+Install them from the testing PCM repository or the attached release asset;
+there is no local package-build step for testers.
 
 ### Platform support
 

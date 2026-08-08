@@ -18,7 +18,6 @@ import wx
 from ..core.app_preferences import AppPreferences, AppPreferencesStore
 from ..core.composition import DocumentStyle, Padding, ShapeStyle, TypographyStyle
 from ..core.component_callout import ComponentCalloutSpec
-from ..core.feature_flags import ALTERNATIVE_UNITS, SETTINGS_PROFILES, SVG_SYMBOLS, FeatureFlags
 from ..core.icon_catalog import render_symbol
 from ..core.machine_codes import (
     CODE128_DEFAULT_HEIGHT_MM,
@@ -1661,11 +1660,7 @@ class ToolPage(wx.Panel):
         event.Skip()
 
     def _choose_preset(self, event):
-        linked_catalog = (
-            self.dialog.symbol_catalog
-            if self.dialog.feature_flags.enabled(SVG_SYMBOLS)
-            else None
-        )
+        linked_catalog = self.dialog.symbol_catalog
         dialog = AssetPickerDialog(
             self,
             "Choose a quick label",
@@ -1836,15 +1831,10 @@ class StudioEditorDialog(wx.Dialog):
     def __init__(self, parent, config, buzzard, func, editor_session=None, build_label=""):
         self.config_file = config
         self.data_root = Path(config).expanduser().parent
-        self.feature_flags = FeatureFlags.from_environment()
         self.preferences_store = AppPreferencesStore(self.data_root)
         self.profile_store = SettingsProfileStore(self.data_root)
         self.preferences = self.preferences_store.load()
-        effective_unit = (
-            self.preferences.measurement_unit
-            if self.feature_flags.enabled(ALTERNATIVE_UNITS)
-            else MeasurementUnit.MILLIMETRES
-        )
+        effective_unit = self.preferences.measurement_unit
         self.measurement_unit = effective_unit
         set_appearance_preference(self.preferences.appearance)
         self.project_path = _active_board_path(editor_session)
@@ -1863,7 +1853,6 @@ class StudioEditorDialog(wx.Dialog):
         self.symbol_catalog = symbol_catalog_for_context(
             project=self.project_path,
             data_root=self.data_root,
-            flags=self.feature_flags,
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
         )
@@ -1937,11 +1926,10 @@ class StudioEditorDialog(wx.Dialog):
         defaults = mode_defaults("Label")
         defaults.update(DEFAULT_LABEL_DIMENSIONS)
         defaults["LayerComboBox"] = FRONT_SILKSCREEN
-        if self.feature_flags.enabled(SETTINGS_PROFILES):
-            try:
-                defaults.update(self.profile_store.load("labels").settings)
-            except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
-                pass
+        try:
+            defaults.update(self.profile_store.load("labels").settings)
+        except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
+            pass
         return defaults, None
 
     @staticmethod
@@ -2146,9 +2134,7 @@ class StudioEditorDialog(wx.Dialog):
             symbol_catalog=symbol_catalog_for_context(
                 project=self.project_path,
                 data_root=self.data_root,
-                flags=self.feature_flags,
             ),
-            flags=self.feature_flags,
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
             current_module=self._profile_module(),
@@ -2175,11 +2161,7 @@ class StudioEditorDialog(wx.Dialog):
         old_appearance = self.preferences.appearance
         self.preferences = preferences
         set_appearance_preference(preferences.appearance)
-        requested_unit = (
-            preferences.measurement_unit
-            if self.feature_flags.enabled(ALTERNATIVE_UNITS)
-            else MeasurementUnit.MILLIMETRES
-        )
+        requested_unit = preferences.measurement_unit
         if requested_unit is not self.measurement_unit:
             self._loading = True
             try:
@@ -2201,7 +2183,6 @@ class StudioEditorDialog(wx.Dialog):
         self.symbol_catalog = symbol_catalog_for_context(
             project=self.project_path,
             data_root=self.data_root,
-            flags=self.feature_flags,
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
         )
@@ -2247,11 +2228,7 @@ class StudioEditorDialog(wx.Dialog):
     def _select_tool(self, tool):
         self._tool = tool
         self._family = self.page_by_tool[tool].family
-        if (
-            not self._editing_existing
-            and tool not in self._default_applied_tools
-            and self.feature_flags.enabled(SETTINGS_PROFILES)
-        ):
+        if not self._editing_existing and tool not in self._default_applied_tools:
             try:
                 profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
                 self.page_by_tool[tool].apply(profile.settings)

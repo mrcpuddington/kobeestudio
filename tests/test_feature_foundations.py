@@ -1,4 +1,4 @@
-"""Checks for flags, measurement preferences, and persistent profiles."""
+"""Checks for measurement preferences and persistent profiles."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from pathlib import Path
 
 from kobeestudio.core.app_preferences import AppPreferences, AppPreferencesStore
 from kobeestudio.core.data_paths import project_data_root, user_data_root
-from kobeestudio.core.feature_flags import FeatureFlags, SVG_SYMBOLS
 from kobeestudio.core.library_archive import export_library, import_library, reset_library, restore_library
 from kobeestudio.core.measurement_units import (
     MeasurementUnit,
@@ -18,17 +17,6 @@ from kobeestudio.core.measurement_units import (
     to_millimetres,
 )
 from kobeestudio.core.settings_profiles import SettingsProfileStore, profile_module_for_mode
-
-
-class FeatureFlagTests(unittest.TestCase):
-    def test_features_are_off_by_default_and_parse_explicit_environment(self):
-        self.assertFalse(FeatureFlags.from_environment({}).enabled(SVG_SYMBOLS))
-        flags = FeatureFlags.from_environment({"KOBEE_DEV_FEATURES": "svg_symbols, alternative_units"})
-        self.assertTrue(flags.enabled(SVG_SYMBOLS))
-
-    def test_unknown_flags_fail_closed(self):
-        with self.assertRaisesRegex(ValueError, "Unknown"):
-            FeatureFlags.from_environment({"KOBEE_DEV_FEATURES": "typo"})
 
 
 class DataPathTests(unittest.TestCase):

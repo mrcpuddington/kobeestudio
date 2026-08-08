@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from kobeestudio.core.icon_catalog import BUILTIN_ICONS, LABEL_PRESETS, render_builtin_icon, render_symbol
-from kobeestudio.core.feature_flags import FeatureFlags
 from kobeestudio.core.svg_symbols import (
     SvgAssetStore,
     SymbolCatalog,
@@ -72,14 +69,11 @@ class BundledSymbolTests(unittest.TestCase):
             parse_symbol_reference(format_symbol_reference("builtin.ground", "rounded")),
         )
 
-    def test_flag_switches_to_each_bundled_svg_renderer(self):
+    def test_each_builtin_icon_uses_the_bundled_svg_renderer(self):
         for icon in BUILTIN_ICONS:
             with self.subTest(icon=icon.asset_id):
-                with patch.dict(os.environ, {"KOBEE_DEV_FEATURES": ""}, clear=False):
-                    legacy = render_builtin_icon(icon.asset_id, 1.2)
-                with patch.dict(os.environ, {"KOBEE_DEV_FEATURES": "svg_symbols"}, clear=False):
-                    svg = render_builtin_icon(icon.asset_id, 1.2)
-                self.assertAlmostEqual(legacy.size.height, svg.size.height, places=6)
+                svg = render_builtin_icon(icon.asset_id, 1.2)
+                self.assertAlmostEqual(1.2, svg.size.height, places=6)
                 self.assertTrue(svg.polygons)
 
 
@@ -157,33 +151,14 @@ class CustomAssetStoreTests(unittest.TestCase):
             self.assertEqual(1, len(SvgAssetStore.project_store(project).list("graphics")))
             self.assertEqual((), SvgAssetStore.global_store(root / "global").list("graphics"))
 
-    def test_context_catalog_only_exposes_uploads_when_the_flag_is_enabled(self):
+    def test_context_catalog_exposes_uploaded_symbols_by_default(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "symbol.svg"
             source.write_bytes(SIMPLE_SVG)
             uploaded = SvgAssetStore.global_store(root).upload(source, "symbols", "Private")
-            disabled = symbol_catalog_for_context(data_root=root, flags=FeatureFlags())
-            with self.assertRaises(ValueError):
-                disabled.resolve(uploaded.asset_id)
-            enabled = symbol_catalog_for_context(
-                data_root=root,
-                flags=FeatureFlags(frozenset(("custom_assets", "svg_symbols"))),
-            )
-            self.assertEqual(uploaded.asset_id, enabled.resolve(uploaded.asset_id).asset_id)
-
-    def test_custom_symbol_requires_both_asset_and_renderer_flags(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "symbol.svg"
-            source.write_bytes(SIMPLE_SVG)
-            uploaded = SvgAssetStore.global_store(root).upload(source, "symbols", "Private")
-            for flags in (
-                FeatureFlags(frozenset(("custom_assets",))),
-                FeatureFlags(frozenset(("svg_symbols",))),
-            ):
-                with self.assertRaises(ValueError):
-                    symbol_catalog_for_context(data_root=root, flags=flags).resolve(uploaded.asset_id)
+            catalog = symbol_catalog_for_context(data_root=root)
+            self.assertEqual(uploaded.asset_id, catalog.resolve(uploaded.asset_id).asset_id)
 
     def test_changed_uploaded_bytes_are_rejected_by_checksum(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -212,18 +187,13 @@ class QuickLabelStoreTests(unittest.TestCase):
             store = QuickLabelStore.global_store(root)
             label = store.save("My AGND", "Power", "builtin.ground")
             self.assertTrue((root / "labels" / "v1" / "items" / (label.preset_id + ".json")).is_file())
-            catalog = symbol_catalog_for_context(
-                data_root=root,
-                flags=FeatureFlags(frozenset(("custom_assets", "svg_symbols"))),
-            )
+            catalog = symbol_catalog_for_context(data_root=root)
             self.assertEqual("My AGND", {item.preset_id: item.text for item in catalog.labels}[label.preset_id])
             store.delete(label.preset_id)
             self.assertEqual((), store.list())
 
     def test_hidden_symbols_do_not_hide_linked_quick_labels(self):
-        catalog = symbol_catalog_for_context(
-            flags=FeatureFlags(), hidden_symbol_ids=("builtin.ground",), hidden_label_ids=("boot",)
-        )
+        catalog = symbol_catalog_for_context(hidden_symbol_ids=("builtin.ground",), hidden_label_ids=("boot",))
         self.assertNotIn("builtin.ground", {item.asset_id for item in catalog.symbols})
         self.assertIn("gnd", {item.preset_id for item in catalog.labels})
         self.assertNotIn("boot", {item.preset_id for item in catalog.labels})
