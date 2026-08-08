@@ -141,4 +141,91 @@ jobs:
                 --target "${{ inputs.source_ref }}" \
                 --generate-notes
             fi
+
+      - name: Check PCM repository credential
+        env:
+          PCM_REPOSITORY_TOKEN: ${{ secrets.PCM_REPOSITORY_TOKEN }}
+        run: |
+          if [ -z "$PCM_REPOSITORY_TOKEN" ]; then
+            echo "PCM_REPOSITORY_TOKEN is not configured for this repository."
+            exit 1
+          fi
+
+      - name: Check out PCM catalogue
+        uses: actions/checkout@v4
+        with:
+          repository: mrcpuddington/mrcpuddington-kicad-repository
+          ref: ${{ inputs.channel == 'stable' && 'main' || 'testing' }}
+          token: ${{ secrets.PCM_REPOSITORY_TOKEN }}
+          path: pcm-catalogue
+
+      - name: Update PCM catalogue
+        shell: python
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          import datetime as dt
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          source_metadata = json.loads(
+              Path("pcm/build/metadata.json").read_text(encoding="utf-8")
+          )
+          version_entry = source_metadata["versions"][0]
+          version = version_entry["version"]
+          channel = os.environ["CHANNEL"]
+          release_tag = os.environ["RELEASE_TAG"]
+          archive_name = Path(os.environ["ARCHIVE"]).name
+
+          version_entry["download_url"] = (
+              "https://github.com/mrcpuddington/kobeestudio/releases/"
+              f"download/{release_tag}/{archive_name}"
+          )
+          packages = {"packages": [source_metadata]}
+          catalogue = Path("pcm-catalogue")
+          packages_path = catalogue / "packages.json"
+          packages_path.write_text(
+              json.dumps(packages, indent=2) + "\n", encoding="utf-8"
+          )
+
+          repository_path = catalogue / "repository.json"
+          repository = json.loads(repository_path.read_text(encoding="utf-8"))
+          branch = "main" if channel == "stable" else "testing"
+          repository["packages"]["url"] = (
+              "https://raw.githubusercontent.com/"
+              "mrcpuddington/mrcpuddington-kicad-repository/"
+              f"{branch}/packages.json"
+          )
+          repository["packages"]["sha256"] = hashlib.sha256(
+              packages_path.read_bytes()
+          ).hexdigest()
+          now = dt.datetime.now(dt.timezone.utc)
+          repository["packages"]["update_time_utc"] = now.strftime(
+              "%Y-%m-%d %H:%M:%S"
+          )
+          repository["packages"]["update_timestamp"] = int(now.timestamp())
+          repository_path.write_text(
+              json.dumps(repository, indent=2) + "\n", encoding="utf-8"
+          )
+
+          print(f"Updated {channel} catalogue to Kobee Studio {version}")
+
+      - name: Commit and push PCM catalogue
+        working-directory: pcm-catalogue
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add repository.json packages.json
+          if git diff --cached --quiet; then
+            echo "PCM catalogue is already up to date."
+            exit 0
+          fi
+          git commit -m "Publish Kobee Studio ${{ steps.package.outputs.version }} $CHANNEL"
+          git push origin "HEAD:$([ "$CHANNEL" = "stable" ] && echo main || echo testing)"
           fi
