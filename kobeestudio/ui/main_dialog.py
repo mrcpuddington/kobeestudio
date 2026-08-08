@@ -350,6 +350,7 @@ class MainDialog(UpstreamDialog):
         self._applying_mode_defaults = False
         self._dynamic_refit_pending = False
         self._preview_pending = False
+        self._updating_machine_code_content = False
         self._editing_existing_artwork = False
         self._component_defaults_applied = False
         self.artwork = None
@@ -1410,7 +1411,11 @@ class MainDialog(UpstreamDialog):
         self.m_MachineCodeCaptionCtrl.Bind(wx.EVT_TEXT, self._on_live_artwork_changed)
 
     def _on_live_artwork_changed(self, event):
-        if self._studio_controls_ready and not self._applying_mode_defaults:
+        if (
+            self._studio_controls_ready
+            and not self._applying_mode_defaults
+            and not self._updating_machine_code_content
+        ):
             self._request_preview(event)
         event.Skip()
 
@@ -1643,12 +1648,19 @@ class MainDialog(UpstreamDialog):
             self.m_MachineCodeShowContentCheckbox.IsChecked()
             and not self.m_MachineCodeContentCtrl.GetValue().strip()
         ):
-            self.m_MachineCodeContentCtrl.SetValue(
-                self.m_MultiLineText.GetValue().strip()
-            )
-        self._update_machine_code_ui()
-        self.ReGenerateFlag(event)
-        self.ReGeneratePreview()
+            self._updating_machine_code_content = True
+            try:
+                self.m_MachineCodeContentCtrl.SetValue(
+                    self.m_MultiLineText.GetValue().strip()
+                )
+            finally:
+                self._updating_machine_code_content = False
+        # Windows wx can fault when a checkbox's native event both changes a
+        # child text value and forces the scroller to lay out immediately.
+        # Make the controls visible now, but leave its refit until the event
+        # has returned and schedule one preview for the completed state.
+        self._update_machine_code_ui(defer_layout=True)
+        self._request_preview(event)
         event.Skip()
 
     def _on_underline_changed(self, event):
@@ -1912,7 +1924,7 @@ class MainDialog(UpstreamDialog):
         self.m_ComponentPanel.Layout()
         self._schedule_dynamic_refit()
 
-    def _update_machine_code_ui(self):
+    def _update_machine_code_ui(self, defer_layout=False):
         if not hasattr(self, "m_MachineCodePanel"):
             return
         advanced = self._advanced_visible()
@@ -1963,7 +1975,8 @@ class MainDialog(UpstreamDialog):
                 "UTF-8 payload, maximum 512 bytes. Quiet-zone and readability safeguards "
                 "are automatic; advanced settings expose exact sizing."
             )
-        self.m_MachineCodePanel.Layout()
+        if not defer_layout:
+            self.m_MachineCodePanel.Layout()
         self._schedule_dynamic_refit()
 
     def _schedule_dynamic_refit(self):

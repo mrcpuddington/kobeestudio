@@ -80,6 +80,24 @@ class StudioArtworkTests(unittest.TestCase):
         )
         self.assertIsNot(first, changed_type)
 
+    def test_text_vectors_reuse_outlines_across_font_height_changes(self):
+        typography = TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.2)
+        first = self.vectorizer.render("ARRAY", typography)
+        original_generate = self.vectorizer.buzzard.generate
+        try:
+            self.vectorizer.buzzard.generate = lambda text: self.fail(
+                "font outlines should be reused for a height-only change"
+            )
+            resized = self.vectorizer.render(
+                "ARRAY",
+                TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.8),
+            )
+        finally:
+            self.vectorizer.buzzard.generate = original_generate
+
+        self.assertEqual(len(first.polygons), len(resized.polygons))
+        self.assertAlmostEqual(first.size.height * 1.5, resized.size.height, places=6)
+
     def test_main_text_can_be_underlined_as_exported_geometry(self):
         plain = render_label_artwork(
             self.vectorizer,
