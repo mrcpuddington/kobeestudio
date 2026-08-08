@@ -371,13 +371,18 @@ class ThemedActionButton(wx.Control):
         self.primary = bool(primary)
         self.hovered = False
         width, _height = parent.GetTextExtent(label)
-        self.SetMinSize(wx.Size(width + 28, 32))
+        self._best_size = wx.Size(width + 28, 32)
+        self.SetInitialSize(self._best_size)
+        self.SetMinSize(self._best_size)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_LEFT_UP, self._on_click)
         self.Bind(wx.EVT_KEY_DOWN, self._on_key)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
+
+    def DoGetBestSize(self):
+        return self._best_size
 
     def _on_click(self, event):
         if self.IsEnabled():

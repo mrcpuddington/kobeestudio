@@ -142,6 +142,7 @@ class SettingsDialog(wx.Dialog):
         self._hidden_label_ids = set(hidden_label_ids)
         self.current_module = current_module
         self.preferences_changed = preferences_changed
+        self._saved_preferences = self.preferences_store.load()
         self._profiles = ()
         self._upload_items = ()
         self._quick_labels = ()
@@ -621,6 +622,22 @@ class SettingsDialog(wx.Dialog):
         info_root.Add(help_text, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
 
     def _export_library(self, event):
+        if self._preferences_from_controls() != self._saved_preferences:
+            choice = wx.MessageDialog(
+                self,
+                "You have unsaved application settings. Save them before creating the backup?",
+                "Include unsaved settings",
+                wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION,
+            )
+            try:
+                choice.SetYesNoLabels("Save and back up", "Back up saved data")
+                result = choice.ShowModal()
+            finally:
+                choice.Destroy()
+            if result == wx.ID_CANCEL:
+                return
+            if result == wx.ID_YES and not self._save_preferences():
+                return
         dialog = wx.FileDialog(
             self,
             "Create Kobee Studio data backup",
@@ -819,23 +836,32 @@ class SettingsDialog(wx.Dialog):
         except OSError as error:
             wx.MessageBox(str(error), "Could not delete SVG", wx.OK | wx.ICON_ERROR, self)
 
-    def _on_ok(self, event=None):
+    def _preferences_from_controls(self):
         appearance = {
             "Follow system": "system",
             "Light": "light",
             "Dark": "dark",
         }[self.appearance_choice.GetStringSelection()]
         unit = MeasurementUnit.MILS if self.unit_choice.GetStringSelection() == "Mils (mil)" else MeasurementUnit.MILLIMETRES
-        preferences = AppPreferences(
+        return AppPreferences(
             appearance=appearance,
             measurement_unit=unit,
             hidden_symbol_ids=tuple(self._hidden_symbol_ids),
             hidden_label_ids=tuple(self._hidden_label_ids),
         )
+
+    def _save_preferences(self):
+        preferences = self._preferences_from_controls()
         try:
             self.preferences_store.save(preferences)
             self.preferences_changed(preferences)
         except (OSError, ValueError) as error:
             wx.MessageBox(str(error), "Could not save settings", wx.OK | wx.ICON_ERROR, self)
+            return False
+        self._saved_preferences = preferences
+        return True
+
+    def _on_ok(self, event=None):
+        if not self._save_preferences():
             return
         self.EndModal(wx.ID_OK)

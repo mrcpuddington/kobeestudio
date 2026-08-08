@@ -134,9 +134,9 @@ class IpcMigrationTests(unittest.TestCase):
 
         class Session:
             class board:
-                name = "/tmp/example.kicad_pcb"
+                name = str(ROOT / "example.kicad_pcb")
 
-        self.assertEqual(Path("/tmp/example.kicad_pcb"), _active_board_path(Session()))
+        self.assertEqual(ROOT / "example.kicad_pcb", _active_board_path(Session()))
         Session.board.name = "unsaved.kicad_pcb"
         self.assertIsNone(_active_board_path(Session()))
         Session.board.name = "/tmp/not-a-board.txt"
@@ -158,7 +158,7 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertNotIn("class StudioEditorDialog(UpstreamDialog)", source)
         self.assertIn("class PreviewCanvas(wx.Panel):", source)
         self.assertIn("self._cache", source)
-        self.assertIn("self._timer.StartOnce(150)", source)
+        self.assertIn("self._timer.StartOnce(300)", source)
         self.assertNotIn("Reparent(", source)
         self.assertNotIn("Clear(delete_windows=True)", source)
         self.assertNotIn(".Update()", source)
@@ -167,7 +167,7 @@ class IpcMigrationTests(unittest.TestCase):
             "isinstance(control, (wx.Choice, ThemedChoice, PickerButton, SegmentedChoice))",
             source,
         )
-        self.assertIn("page.content.Scroll(0, 0)", source)
+        self.assertIn("page._schedule_layout(scroll_to_top=True)", source)
         self.assertIn("self.content = wx.ScrolledWindow", source)
         self.assertIn("self.content.ShowScrollbars(never, never)", source)
         self.assertNotIn("self.columns_sizer.SetItemProportion", source)
@@ -196,10 +196,17 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("self.pages.ChangeSelection", source)
         self.assertIn("self.Freeze()", source)
         self.assertIn("self.request_preview()", source)
+        self.assertIn("wx.CallAfter(self._apply_scheduled_layout)", source)
+        self.assertIn("def DoGetBestSize(self):", source)
+        self.assertIn("# which squeezes this final action row down to a thin, unusable strip.", source)
         self.assertIn("callback=self._choose_preset", source)
         self.assertIn("callback=self._choose_icon", source)
         self.assertIn('"Settings",', source)
-        self.assertIn("class SettingsDialog(wx.Dialog):", (ROOT / "kobeestudio/ui/settings_dialog.py").read_text())
+        settings_source = (ROOT / "kobeestudio/ui/settings_dialog.py").read_text()
+        self.assertIn("class SettingsDialog(wx.Dialog):", settings_source)
+        self.assertIn("Include unsaved settings", settings_source)
+        self.assertIn("Save and back up", settings_source)
+        self.assertIn("def _preferences_from_controls", settings_source)
         self.assertIn("SymbolAssetId", source)
         self.assertIn("MEASUREMENT_SETTING_KEYS", source)
         self.assertIn("wx.CallAfter(self.callback, None)", source)

@@ -236,15 +236,22 @@ class KobeeTab(wx.Control):
         self.hovered = False
         width, height = parent.GetTextExtent(label)
         if kind == "side":
-            self.SetMinSize(wx.Size(112, 38))
+            self._best_size = wx.Size(112, 38)
         else:
             icon_width = 20 if icon else 0
-            self.SetMinSize(wx.Size(width + icon_width + (28 if kind == "family" else 24), 38))
+            self._best_size = wx.Size(
+                width + icon_width + (28 if kind == "family" else 24), 38
+            )
+        self.SetInitialSize(self._best_size)
+        self.SetMinSize(self._best_size)
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_LEFT_UP, self._activate)
         self.Bind(wx.EVT_KEY_DOWN, self._on_key)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
+
+    def DoGetBestSize(self):
+        return self._best_size
 
     def set_active(self, active):
         self.active = bool(active)
@@ -327,12 +334,17 @@ class KobeeAction(wx.Control):
         self.primary = primary
         self.hovered = False
         width, height = parent.GetTextExtent(label)
-        self.SetMinSize(wx.Size(width + 30, 36))
+        self._best_size = wx.Size(width + 30, 36)
+        self.SetInitialSize(self._best_size)
+        self.SetMinSize(self._best_size)
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_LEFT_UP, lambda event: self.callback())
         self.Bind(wx.EVT_KEY_DOWN, self._on_key)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
+
+    def DoGetBestSize(self):
+        return self._best_size
 
     def _on_key(self, event):
         if event.GetKeyCode() in (wx.WXK_SPACE, wx.WXK_RETURN):
@@ -734,8 +746,12 @@ class ProfileRecallDialog(wx.Dialog):
         buttons.Add(KobeeAction(self, "Apply", self._apply, primary=True), 0)
         root.Add(buttons, 0, wx.EXPAND | wx.ALL, 14)
         self.SetSizer(root)
-        self.SetMinSize(wx.Size(470, 190))
-        self.SetSize(wx.Size(500, 210))
+        # A 210 px outer height leaves only 171 px of client space on Windows,
+        # which squeezes this final action row down to a thin, unusable strip.
+        self.Fit()
+        best_size = self.GetSize()
+        self.SetMinSize(wx.Size(max(470, best_size.width), best_size.height))
+        self.SetSize(wx.Size(max(500, best_size.width), best_size.height))
 
     def _apply(self):
         index = self.choice.GetSelection()
@@ -928,6 +944,8 @@ class ToolPage(wx.Panel):
         self.cards = []
         self.sections = []
         self.section_buttons = {}
+        self._layout_pending = False
+        self._scroll_to_top = False
         self.SetBackgroundColour(_palette()["controls"])
         self.root = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(self.root)
@@ -960,6 +978,26 @@ class ToolPage(wx.Panel):
         self._show_section(self.sections[0])
         self.content.FitInside()
         self.Bind(wx.EVT_SIZE, self._on_size)
+
+    def _schedule_layout(self, *, scroll_to_top=False):
+        """Finish a settings visibility change after the native input event."""
+        self._scroll_to_top = self._scroll_to_top or bool(scroll_to_top)
+        if self._layout_pending:
+            return
+        self._layout_pending = True
+        wx.CallAfter(self._apply_scheduled_layout)
+
+    def _apply_scheduled_layout(self):
+        self._layout_pending = False
+        if not self or self.IsBeingDeleted():
+            return
+        scroll_to_top = self._scroll_to_top
+        self._scroll_to_top = False
+        self.Layout()
+        self.content.Layout()
+        self.content.FitInside()
+        if scroll_to_top:
+            self.content.Scroll(0, 0)
 
     def _card(self, title):
         card = SettingsCard(self.content, title)
@@ -1050,9 +1088,7 @@ class ToolPage(wx.Panel):
             right_column_item.SetProportion(0 if len(visible_cards) == 1 else 1)
         for name, button in self.section_buttons.items():
             button.set_active(name == section)
-        self.content.Layout()
-        self.content.FitInside()
-        self.content.Scroll(0, 0)
+        self._schedule_layout(scroll_to_top=True)
 
     def _grid(self, box, columns=1):
         grid = wx.FlexGridSizer(0, columns * 2, 7, 6)
@@ -1280,18 +1316,16 @@ class ToolPage(wx.Panel):
         self._set_field_visible("IconPositionChoice", symbol_enabled and has_symbol and mode != "Symbol only")
         self._set_field_visible("IconHeightCtrl", symbol_enabled and has_symbol)
         self._set_field_visible("IconGapCtrl", symbol_enabled and has_symbol and mode != "Symbol only")
-        self._content_card.Layout()
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _on_content_mode_changed(self, event):
         self._update_content_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _on_content_layout_changed(self, event):
         self._update_content_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _build_container(self, shapes):
@@ -1344,7 +1378,7 @@ class ToolPage(wx.Panel):
         if "IndependentEdgesChoice" in self.controls:
             self.controls["IndependentEdgesChoice"].SetStringSelection("Matched")
         self._update_container_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _on_independent_edges_changed(self, event):
@@ -1357,12 +1391,12 @@ class ToolPage(wx.Panel):
             if current:
                 self._last_standard_shape = current
         self._update_container_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _on_container_variant_changed(self, event):
         self._update_container_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _effective_shape_choice(self):
@@ -1433,9 +1467,7 @@ class ToolPage(wx.Panel):
                 end_label.SetLabel("Right edge")
             start_label.Wrap(108)
             end_label.Wrap(108)
-        self._container_card.Layout()
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _update_text_details_ui(self):
         """Keep optional text effects out of the way until they are enabled."""
@@ -1447,12 +1479,11 @@ class ToolPage(wx.Panel):
         self._set_field_visible("UnderlineGapCtrl", underline)
         self._set_field_visible("lineoverStyleChoice", inline)
         self._set_field_visible("lineoverThicknessCtrl", inline)
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _on_text_details_changed(self, event):
         self._update_text_details_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _update_header_opening_ui(self):
@@ -1463,12 +1494,11 @@ class ToolPage(wx.Panel):
             == "Continuous plug opening"
         )
         self._set_field_visible("HeaderOpeningEndPaddingCtrl", continuous)
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _on_header_opening_changed(self, event):
         self._update_header_opening_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _update_component_safe_zone_ui(self):
@@ -1479,12 +1509,11 @@ class ToolPage(wx.Panel):
             == "Rounded rectangle"
         )
         self._set_field_visible("ComponentCutoutRadiusCtrl", rounded)
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _on_component_cutout_changed(self, event):
         self._update_component_safe_zone_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _update_machine_code_ui(self):
@@ -1502,12 +1531,11 @@ class ToolPage(wx.Panel):
         self._set_field_visible("MachineCodeContentCtrl", readable)
         self._set_field_visible("MachineCodeContentHeightCtrl", readable)
         self._set_field_visible("MachineCodeContentGapCtrl", readable)
-        self.Layout()
-        self.content.FitInside()
+        self._schedule_layout()
 
     def _on_machine_code_changed(self, event):
         self._update_machine_code_ui()
-        self.dialog.request_preview(immediate=True)
+        self.dialog.request_preview()
         event.Skip()
 
     def _font_names(self):
@@ -1792,7 +1820,7 @@ class ToolPage(wx.Panel):
                             "Label + symbol" if symbol_reference else "Label"
                         )
                     self._update_content_ui()
-                    self.dialog.request_preview(immediate=True)
+                    self.dialog.request_preview()
         finally:
             dialog.Destroy()
 
@@ -1827,7 +1855,7 @@ class ToolPage(wx.Panel):
                 ):
                     self.controls["ContentModeChoice"].SetStringSelection("Label + symbol")
                 self._update_content_ui()
-                self.dialog.request_preview(immediate=True)
+                self.dialog.request_preview()
         finally:
             dialog.Destroy()
 
@@ -1985,8 +2013,9 @@ class StudioEditorDialog(wx.Dialog):
         self._refresh_profile_bar()
         apply_native_theme(self, wx, _palette())
         self._loading = False
-        self.request_preview(immediate=True)
         self.Centre(wx.BOTH)
+        # Let Windows paint the dialog before generating geometry for its first preview.
+        wx.CallAfter(self.request_preview)
 
     def _initial_settings(self):
         if self.editor_session is not None:
@@ -2369,7 +2398,7 @@ class StudioEditorDialog(wx.Dialog):
             return
         self._refresh_symbol_catalog()
         self._refresh_profile_bar()
-        self.request_preview(immediate=True)
+        self.request_preview()
 
     def _show_profile_help(self):
         wx.MessageBox(
@@ -2401,7 +2430,7 @@ class StudioEditorDialog(wx.Dialog):
             self._route_settings(dict(settings))
         finally:
             self._loading = False
-        self.request_preview(immediate=True)
+        self.request_preview()
 
     def _on_preferences_changed(self, preferences):
         old_appearance = self.preferences.appearance
@@ -2416,7 +2445,7 @@ class StudioEditorDialog(wx.Dialog):
                 self.measurement_unit = requested_unit
             finally:
                 self._loading = False
-            self.request_preview(immediate=True)
+            self.request_preview()
         if old_appearance != preferences.appearance:
             wx.MessageBox(
                 "The appearance preference was saved and will be applied the next time Kobee Studio opens.",
@@ -2476,25 +2505,35 @@ class StudioEditorDialog(wx.Dialog):
         self.request_preview()
 
     def _select_tool(self, tool):
+        if tool == self._tool and not self._loading:
+            return
         self._tool = tool
         self._family = self.page_by_tool[tool].family
-        if not self._editing_existing and tool not in self._default_applied_tools:
-            try:
-                profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
-                self.page_by_tool[tool].apply(profile.settings)
-                self._recalled_profile_ids[profile.module] = profile.profile_id
-                layer = profile.settings.get("LayerComboBox", FRONT_SILKSCREEN)
-                layers = profile.settings.get("OutputLayers", (layer,))
-                self._set_output_layers(layers if isinstance(layers, (tuple, list)) else (layer,), preview_layer=layer)
-            except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
-                pass
-        self._default_applied_tools.add(tool)
-        self.Freeze()
+        was_loading = self._loading
+        self._loading = True
         try:
-            self._update_tab_state()
-            self._show_active_page()
+            if not self._editing_existing and tool not in self._default_applied_tools:
+                try:
+                    profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
+                    self.page_by_tool[tool].apply(profile.settings)
+                    self._recalled_profile_ids[profile.module] = profile.profile_id
+                    layer = profile.settings.get("LayerComboBox", FRONT_SILKSCREEN)
+                    layers = profile.settings.get("OutputLayers", (layer,))
+                    self._set_output_layers(
+                        layers if isinstance(layers, (tuple, list)) else (layer,),
+                        preview_layer=layer,
+                    )
+                except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            self._default_applied_tools.add(tool)
+            self.Freeze()
+            try:
+                self._update_tab_state()
+                self._show_active_page()
+            finally:
+                self.Thaw()
         finally:
-            self.Thaw()
+            self._loading = was_loading
         self._refresh_profile_bar()
         self.request_preview()
 
@@ -2514,8 +2553,7 @@ class StudioEditorDialog(wx.Dialog):
     def _show_active_page(self):
         page = self.page_by_tool[self._tool]
         self.pages.ChangeSelection(self.page_index_by_tool[self._tool])
-        page.Layout()
-        page.content.Scroll(0, 0)
+        page._schedule_layout(scroll_to_top=True)
 
     def _route_settings(self, settings):
         mode = settings.get("StudioModeChoice", "Label")
@@ -2579,7 +2617,7 @@ class StudioEditorDialog(wx.Dialog):
             wx.MessageBox("At least one target layer is required.", "Target layers", wx.OK | wx.ICON_INFORMATION, self)
         self._set_output_layers(layers, preview_layer=self.output_layer)
         if not self._loading:
-            self.request_preview(immediate=True)
+            self.request_preview()
         event.Skip()
 
     def CurrentSettings(self):
@@ -2603,13 +2641,15 @@ class StudioEditorDialog(wx.Dialog):
         event.Skip()
 
     def request_preview(self, immediate=False):
+        if self._loading:
+            return
         self._timer.Stop()
         if immediate:
             self._pending_preview = False
             self._regenerate_preview()
         else:
             self._pending_preview = True
-            self._timer.StartOnce(150)
+            self._timer.StartOnce(300)
 
     def _on_preview_timer(self, event):
         if self._pending_preview:
