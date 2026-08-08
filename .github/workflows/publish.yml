@@ -229,4 +229,3 @@ jobs:
           fi
           git commit -m "Publish Kobee Studio ${{ steps.package.outputs.version }} $CHANNEL"
           git push origin "HEAD:$([ "$CHANNEL" = "stable" ] && echo main || echo testing)"
-          fi
