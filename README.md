@@ -8,10 +8,27 @@
   Design beautiful labels, icons, connector overlays and PCB artwork without leaving KiCad.
 </p>
 
-> **Current status:** **Kobee Studio 1.3.4 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
+<p align="center">
+  <a href="#install-kobee-studio--kicad-10"><strong>↓ Skip to install instructions</strong></a>
+</p>
+
+> **Current status:** **Kobee Studio 1.4.0 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
 > Linux uses the same plug-in package, but still needs full UI and artwork validation, so it is not recommended yet for anything critical. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
-</p>
+## Quick install
+
+Install the stable release through KiCad's Plugin and Content Manager:
+
+```text
+https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/main/repository.json
+```
+
+1. Copy the stable repository URL above.
+2. In KiCad, open **Plugin and Content Manager → Manage repositories**, choose **Add**, paste the URL, and save.
+3. Refresh the catalogue, find **Kobee Studio 1.4.0**, and choose **Install**.
+
+For troubleshooting, ZIP installation, testing builds and platform details, see
+the [full installation instructions](#install-kobee-studio--kicad-10).
 
 <p align="center">
   <img
@@ -34,24 +51,31 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.3.4
+## What’s in 1.4.0
 
-| Tool                 | What it does                                                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Labels               | Filled, inverted and outline labels with flexible shapes, padding, borders and mixed ends.                      |
-| Icons & quick labels | Searchable PCB-safe symbols and common labels, usable standalone or with text.                                  |
-| Header overlays      | Pin labels for single-row 2.54 mm headers, with clearances, openings and editable layout.                       |
-| QR & barcodes        | QR codes and compact Code 128 markings with fabrication-minded size checks.                                     |
-| Component callouts   | Labels that frame packages, switches and LED arrays while keeping the component clear.                          |
-| Layers               | Front/back silk, copper and solder-mask artwork.                                                                |
+| Capability                    | What it does                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Parametric labels             | Filled, inverted and outline labels with flexible shapes, padding, borders, mixed ends and underlines. |
+| Icons and quick labels        | Searchable PCB-safe symbols and reusable labels, usable standalone, beside text or inside a label.     |
+| Custom SVG uploads            | Add your own icons and symbol variants, with project-only or personal library scope.                   |
+| Library visibility            | Hide or show bundled symbols and quick labels so the picker stays focused on your workflow.            |
+| Saved profiles                | Save, recall, delete and set defaults for tool settings across future artwork sessions.                |
+| Millimetres and mils          | Switch measurement display units while keeping artwork geometry consistent internally.                 |
+| Header overlays               | Pin labels for single-row 2.54 mm headers, with clearances, openings and editable layout.              |
+| Component callouts and arrays | Frame packages, switches and LED arrays, or repeat callouts in editable rows and columns.              |
+| QR codes and barcodes         | Generate fabrication-minded QR and Code 128 artwork with optional readable text.                       |
+| Layer control                 | Generate artwork on front/back silkscreen, copper and solder-mask layers.                              |
 
 Everything lands as an ordinary, editable KiCad footprint. Kobee Studio never changes the electrical footprint underneath it.
 
 Need a hand while you work? Use **Need help?** in the top-right of the editor to open the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/) for installation, tutorials and practical guidance.
 
-# Features
+## Features
 
----
+Kobee Studio keeps the workflow inside PCB Editor while producing ordinary,
+editable KiCad footprints.
+
+### Output layers
 
 Generate artwork on:
 
@@ -112,9 +136,8 @@ For repeated parts, **Component Array** extends the same idea into a vertical st
     alt="Kobee Studio feature showcase icons board"
     width="900">
 
-> **🚧 Work in Progress:** The icon picker is functional, but the icon library is still being validated. Some icons may require refinement to ensure they render correctly and produce reliable silkscreen output on manufactured PCBs.
-
-Kobee Studio includes a growing collection of PCB-safe icons.
+Kobee Studio includes a growing collection of PCB-safe icons, plus a custom SVG
+library for icons and symbol variants that are specific to your own boards.
 
 Current icons include:
 
@@ -122,7 +145,9 @@ Current icons include:
 
 * Many More
 
-Icons can be used: Standalone, Beside text, Inside labels
+Icons can be used standalone, beside text or inside labels. Use **Settings →
+Uploads** to add custom SVG assets, and **Settings → Bundled visibility** to
+hide or restore shipped symbols and quick labels.
 
 ---
 
@@ -143,27 +168,55 @@ Small codes should always be checked against the chosen PCB finish, fabricator c
 
 ---
 
-# Roadmap
+## Roadmap
 
 Kobee Studio is growing beyond labels into a complete PCB graphics toolkit.
 
-Ive started to create a more robust **[Roadmap](https://github.com/mrcpuddington/kobeestudio/blob/main/ROADMAP.md)** which will be updated as time goes on
+I've started to create a more robust **[Roadmap](https://github.com/mrcpuddington/kobeestudio/blob/main/ROADMAP.md)**, which will be updated as the project evolves.
 
----
-
-# Install Kobee Studio — KiCad 10
+## Install Kobee Studio — KiCad 10
 
 Kobee Studio is a KiCad plugin, not a footprint library.
 
-### Install the current release
+### Preferred: install through KiCad PCM
 
-Kobee Studio 1.3.4 uses KiCad's supported IPC plug-in method and is the
-recommended release for KiCad 10 on macOS and Windows.
+The preferred installation method is KiCad's Plugin and Content Manager. It
+keeps the package metadata, updates and version history connected to the
+Kobee Studio catalogue.
 
-1. Download `Kobee-Studio-1.3.4-pcm.zip` from the [Kobee Studio 1.3.4 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.3.4). Do not unzip it.
-2. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
-3. Select the downloaded ZIP and approve the install.
-4. Open a board in PCB Editor, then choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
+1. Open KiCad's **Plugin and Content Manager**.
+2. Open **Manage repositories**, choose **Add**, and add the stable catalogue:
+
+   ```text
+   https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/main/repository.json
+   ```
+
+3. Save the repository list and refresh the package catalogue.
+4. Find **Kobee Studio**, select version **1.4.0**, and choose **Install**.
+
+If you previously added an older Kobee Studio repository URL, remove it before
+adding the stable URL above. Keep the testing repository separate so stable
+users do not accidentally install development builds.
+
+For those who want to try out the current Beta builds, plese install the following catalogue in addition to the abov, using the same isntructions:
+
+```text
+https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/testing/repository.json
+```
+
+The testing catalogue is intentionally a rolling channel and may contain
+pre-release builds that have not had the same validation as stable releases.
+
+### Other option: install the ZIP manually
+
+Use this route when KiCad cannot reach a repository, or when you need to test a
+specific release asset. Download `Kobee-Studio-1.4.0-pcm.zip` from the [Kobee
+Studio 1.4.0 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.4.0).
+Do not unzip it.
+
+1. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
+2. Select the downloaded ZIP and approve the install.
+3. Open a board in PCB Editor, then choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
 
 If the toolbar button does not appear:
 
@@ -183,21 +236,21 @@ there is no local package-build step for testers.
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.3.4 tested working release                      |
-| Windows  | KiCad 10      | 1.3.4 tested working release                      |
+| macOS    | KiCad 10      | 1.4.0 tested working stable release              |
+| Windows  | KiCad 10      | 1.4.0 tested working stable release              |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---
 
-# Help and contributing
+## Help and contributing
 
 For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
 
-Bug reports, ideas and pull requests are always welcome through Github. If you build something cool with Kobee Studio, I'd genuinely love to see it.
+Bug reports, ideas and pull requests are always welcome through GitHub. If you build something cool with Kobee Studio, I'd genuinely love to see it.
 
 ---
 
-# Acknowledgements
+## Acknowledgements
 
 Kobee Studio builds upon the work of some fantastic open-source projects.
 
@@ -213,7 +266,7 @@ Without their work, Kobee Studio wouldn't exist.
 
 ---
 
-# License
+## License
 
 Kobee Studio is distributed under GPL-2.0-only (GNU GPL version 2 only), a GPL-compatible open-source licence suitable for KiCad Python-plugin distribution. It incorporates MIT-licensed KiBuzzard material and retains Greg Davill’s original copyright and MIT permission notice alongside all other third-party notices.
 
