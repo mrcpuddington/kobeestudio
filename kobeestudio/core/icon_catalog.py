@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
@@ -446,7 +447,7 @@ LABEL_PRESETS = (
 PRESET_BY_ID: Dict[str, LabelPreset] = {preset.preset_id: preset for preset in LABEL_PRESETS}
 
 
-def render_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
+def _render_legacy_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
     """Scale and centre a built-in icon at a requested physical height."""
     if asset_id not in ICON_BY_ID:
         raise ValueError("Unknown built-in icon: {}".format(asset_id))
@@ -478,3 +479,32 @@ def render_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
         polygons=polygons,
         size=rendered_size,
     )
+
+
+def render_builtin_icon(asset_id: str, height_mm: float) -> IconVectors:
+    """Render the bundled SVG source of truth for a shipped symbol."""
+    try:
+        polygons, size = _bundled_svg_catalog().render(asset_id, height_mm)
+    except ValueError as error:
+        if "Unknown SVG symbol variant" in str(error):
+            raise ValueError("Unknown built-in icon: {}".format(asset_id))
+        raise
+    return IconVectors(polygons=polygons, size=size)
+
+
+@lru_cache(maxsize=1)
+def _bundled_svg_catalog():
+    """Bundled resources cannot change during a running plugin process."""
+    from .svg_symbols import SymbolCatalog
+
+    return SymbolCatalog.discover()
+
+
+def render_symbol(asset_id: str, height_mm: float, variant: str = "default", catalog=None) -> IconVectors:
+    """Render any bundled or user-managed symbol variant."""
+    if catalog is None:
+        from .svg_symbols import symbol_catalog_for_context
+
+        catalog = symbol_catalog_for_context()
+    polygons, size = catalog.render(asset_id, height_mm, variant)
+    return IconVectors(polygons=polygons, size=size)

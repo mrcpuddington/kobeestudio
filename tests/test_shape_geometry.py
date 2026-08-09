@@ -153,7 +153,7 @@ class ShapeGeometryTests(unittest.TestCase):
                 self.assertEqual(2 if end_cap == "square" else 1, len(right_edge))
 
     def test_independent_end_caps_support_extended_styles_on_either_side(self):
-        for cap in ("square", "rounded", "chamfered", "point", "notch"):
+        for cap in ("square", "rounded", "chamfered", "point", "notch", "skew_forward", "skew_back"):
             for side in ("start", "end"):
                 with self.subTest(cap=cap, side=side):
                     contour = shape_contour(

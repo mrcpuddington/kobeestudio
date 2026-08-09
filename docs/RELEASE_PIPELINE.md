@@ -36,6 +36,12 @@ and Content Manager → Install from File**.
 
 Local builds do not publish anything and do not change GitHub releases.
 
+## Package authority
+
+Packages are built by GitHub Actions from an explicit source revision. Testers
+install the testing-stream package from PCM or its release asset; they do not
+need to build an install ZIP locally.
+
 ## Validation workflow
 
 `.github/workflows/ci.yml` runs on pull requests and on pushes to `main` and

@@ -55,6 +55,27 @@ def configure_application_branding(
 
 def configure_window_branding(window: Any, icon_path: Path, wx_module: Any) -> bool:
     """Apply the Kobee icon to the top-level wx window and Windows taskbar."""
+    if all(
+        hasattr(wx_module, name)
+        for name in ("Image", "Bitmap", "Icon", "IconBundle")
+    ) and hasattr(window, "SetIcons"):
+        try:
+            source = wx_module.Image(str(icon_path), wx_module.BITMAP_TYPE_PNG)
+            if not source.IsOk():
+                return False
+            bundle = wx_module.IconBundle()
+            for size in (16, 24, 32, 48, 64, 128, 256):
+                image = source.Copy()
+                image.Rescale(size, size, wx_module.IMAGE_QUALITY_HIGH)
+                icon = wx_module.Icon()
+                icon.CopyFromBitmap(wx_module.Bitmap(image))
+                bundle.AddIcon(icon)
+            window.SetIcons(bundle)
+            return True
+        except (AttributeError, OSError, TypeError):
+            # Older wx builds can lack one of the image conversion methods.
+            # Their single-icon path is still better than leaving Python's icon.
+            pass
     try:
         icon = wx_module.Icon(str(icon_path), wx_module.BITMAP_TYPE_PNG)
         if not icon.IsOk():

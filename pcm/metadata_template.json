@@ -2,14 +2,14 @@
     "$schema": "https://go.kicad.org/pcm/schemas/v2",
     "name": "Kobee Studio",
     "description": "Create PCB labels, symbols, component callouts, header overlays, QR Codes, and barcodes inside KiCad",
-    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels with optional underlines, PCB symbols, searchable presets, component callouts and arrays, configurable 2.54 mm header overlays, QR Codes, Code 128 barcodes, and optional readable text beneath machine codes. Kobee Studio evolved from KiBuzzard by Greg Davill. The released 1.2 series is tested with KiCad 10 on macOS and Windows. Version 1.3 moves the plugin to KiCad's supported IPC API and remains a prerelease while cross-platform IPC validation continues.",
+    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels with optional underlines, PCB symbols, searchable presets, custom SVG uploads, icon and quick-label visibility controls, saved profiles, mm and mil display units, component callouts and arrays, configurable 2.54 mm header overlays, QR Codes, Code 128 barcodes, and optional readable text beneath machine codes. Kobee Studio evolved from KiBuzzard and now provides a modern KiCad 10 IPC workflow for creating consistent PCB graphics.",
     "identifier": "com.github.mrcpuddington.kobeestudio",
     "type": "plugin",
     "author": {
         "name": "Corey Busuttil",
         "contact": {
             "github": "https://github.com/mrcpuddington",
-            "web": "https://www.coreybusuttil.com"
+        "web": "https://kobee.com.au"
         }
     },
     "maintainer": {
@@ -21,14 +21,14 @@
     },
     "license": "GPL-2.0",
     "resources": {
-        "homepage": "https://www.coreybusuttil.com/kobeestudio/",
-        "documentation": "https://www.coreybusuttil.com/kobeestudio/docs/",
+        "homepage": "https://kobee.com.au",
+        "documentation": "https://kobee.com.au/tutorials/kobee-studio-docs",
         "repository": "https://github.com/mrcpuddington/kobeestudio",
         "issues": "https://github.com/mrcpuddington/kobeestudio/issues"
     },
     "versions": [
         {
-            "version": "1.3.4",
+            "version": "1.4.0",
             "status": "stable",
             "kicad_version": "10.0",
             "runtime": "ipc"

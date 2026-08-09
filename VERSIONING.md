@@ -30,8 +30,8 @@ Git tag:     v1.4.0-beta.1
 Subsequent beta tags are:
 
 ```text
+v1.4.0-beta.1
 v1.4.0-beta.2
-v1.4.0-beta.3
 ```
 
 For local or manual beta testing, each beta can be installed from its GitHub

@@ -27,7 +27,7 @@ SHAPE_KINDS = (
 )
 ALIGNMENTS = ("left", "center", "right")
 DIRECTIONS = ("left", "right")
-END_CAP_STYLES = ("square", "rounded", "chamfered", "point", "notch")
+END_CAP_STYLES = ("square", "rounded", "chamfered", "point", "notch", "skew_forward", "skew_back")
 
 
 def _finite(name: str, value: float) -> None:
@@ -155,12 +155,15 @@ class IconObject:
     position: Point = field(default_factory=Point)
     size: Size = field(default_factory=lambda: Size(2.0, 2.0))
     rotation_deg: float = 0.0
+    variant: str = "default"
     kind: str = field(default="icon", init=False)
 
     def __post_init__(self) -> None:
         _validate_object_id(self.object_id)
         if not self.asset_id:
             raise ValueError("Icon asset_id cannot be empty")
+        if not self.variant:
+            raise ValueError("Icon variant cannot be empty")
         if self.size.width <= 0 or self.size.height <= 0:
             raise ValueError("Icon size must be greater than zero")
         _finite("icon.rotation_deg", self.rotation_deg)
@@ -330,7 +333,7 @@ def _object_to_dict(item: CompositionObject) -> Dict[str, Any]:
     if isinstance(item, TextObject):
         data.update({"text": item.text, "style_role": item.style_role})
     elif isinstance(item, IconObject):
-        data.update({"asset_id": item.asset_id, "size": _size_dict(item.size)})
+        data.update({"asset_id": item.asset_id, "variant": item.variant, "size": _size_dict(item.size)})
     elif isinstance(item, ShapeObject):
         data.update({"shape": item.shape, "size": _size_dict(item.size), "content_ids": list(item.content_ids)})
     elif isinstance(item, GuideObject):
@@ -421,7 +424,12 @@ def _object_from_dict(data: Mapping[str, Any]) -> CompositionObject:
     if kind == "text":
         return TextObject(text=str(data.get("text", "")), style_role=str(data.get("style_role", "primary")), **common)
     if kind == "icon":
-        return IconObject(asset_id=str(data.get("asset_id", "")), size=_size_from(data.get("size", {})), **common)
+        return IconObject(
+            asset_id=str(data.get("asset_id", "")),
+            variant=str(data.get("variant", "default")),
+            size=_size_from(data.get("size", {})),
+            **common
+        )
     if kind == "shape":
         return ShapeObject(
             shape=str(data.get("shape", "rectangle")),

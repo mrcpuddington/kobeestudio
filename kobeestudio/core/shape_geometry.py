@@ -158,6 +158,16 @@ def _custom_ends(
                 Point(half_width - feature, 0.0),
                 Point(half_width, half_height),
             )
+        if style == "skew_forward":
+            return (
+                Point(half_width, -half_height),
+                Point(half_width - feature, half_height),
+            )
+        if style == "skew_back":
+            return (
+                Point(half_width - feature, -half_height),
+                Point(half_width, half_height),
+            )
         return (Point(half_width, -half_height), Point(half_width, half_height))
 
     start_inset = join_x(start_cap)

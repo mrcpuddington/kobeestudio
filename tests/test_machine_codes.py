@@ -79,7 +79,7 @@ class MachineCodeTests(unittest.TestCase):
 
     def test_qr_can_show_editable_human_readable_text(self):
         artwork = render_machine_code_artwork(
-            "https://www.coreybusuttil.com/kobeestudio/docs/",
+            "https://kobee.com.au/tutorials/kobee-studio-docs",
             "qr",
             QR_MIN_MODULE_MM,
             CODE128_DEFAULT_HEIGHT_MM,
