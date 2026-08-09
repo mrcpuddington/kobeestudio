@@ -3,6 +3,7 @@ import os
 import time
 import copy
 import re
+import logging
 import wx
 
 from fontTools.ttLib import ttFont
@@ -12,6 +13,12 @@ from fontTools.pens.basePen import decomposeQuadraticSegment
 from svg2mod import svg, svg2mod
 from svg2mod.exporter import Svg2ModExport, Svg2ModExportLatest, DEFAULT_DPI
 from svg2mod.importer import Svg2ModImport
+
+# svg2mod configures DEBUG/INFO stream handlers at import time, including an
+# "unfiltered" stdout logger. KiCad captures IPC process output on Windows;
+# repeated live previews can fill that pipe and block the renderer forever.
+logging.getLogger("svg2mod").setLevel(logging.ERROR)
+logging.getLogger("svg2mod-unfiltered").setLevel(logging.ERROR)
 
 class Padding():
     def __init__(self):
@@ -25,7 +32,7 @@ class Buzzard():
     def __init__(self):
         self.fontName = 'FredokaOne'
         self.layer = 'F.Cu'
-        self.verbose = True
+        self.verbose = False
         self.scaleFactor = 96/4
         self.subSampling = 0.1
         self.traceWidth = 0.1

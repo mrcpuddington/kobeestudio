@@ -423,11 +423,11 @@ class RoundedTextField(wx.Panel):
         self._multiline = multiline
         style = wx.BORDER_NONE
         if multiline:
-            style |= wx.TE_MULTILINE | getattr(wx, "TE_NO_VSCROLL", 0)
+            # Header and array editors can contain dozens of rows. A native
+            # vertical scrollbar keeps the caret visible beyond the fixed
+            # six-line viewport on Windows.
+            style |= wx.TE_MULTILINE | wx.VSCROLL
         self.editor = wx.TextCtrl(self, value=value, style=style)
-        if multiline and hasattr(self.editor, "ShowScrollbars"):
-            never = getattr(wx, "SHOW_SB_NEVER", 0)
-            self.editor.ShowScrollbars(never, never)
         self.editor.SetOwnBackgroundColour(_palette()["active"])
         self.editor.SetBackgroundColour(_palette()["active"])
         self.editor.SetOwnForegroundColour(_palette()["text"])
@@ -451,13 +451,21 @@ class RoundedTextField(wx.Panel):
     def WriteText(self, value):
         self.editor.WriteText(str(value))
 
+    def SetMaxLength(self, length):
+        self.editor.SetMaxLength(int(length))
+
+    def ShowEnd(self):
+        self.editor.ShowPosition(self.editor.GetLastPosition())
+
     def SetFocus(self):
         return self.editor.SetFocus()
 
     def _relay_text(self, event):
         command = wx.CommandEvent(wx.EVT_TEXT.typeId, self.GetId())
         command.SetEventObject(self)
-        self.ProcessWindowEvent(command)
+        # Do not recurse through the wrapper's handlers from a native Windows
+        # text callback. Queue one command event for the normal wx event loop.
+        wx.PostEvent(self, command)
 
     def _on_paint(self, event):
         palette = _palette()
@@ -502,7 +510,7 @@ class SegmentedChoice(wx.Control):
         self.Refresh(False)
         command = wx.CommandEvent(wx.EVT_CHOICE.typeId, self.GetId())
         command.SetEventObject(self)
-        self.ProcessWindowEvent(command)
+        wx.PostEvent(self, command)
 
     def _on_click(self, event):
         point = event.GetPosition()
@@ -775,8 +783,10 @@ class PreviewCanvas(wx.Panel):
         self._pan = wx.Point(0, 0)
         self._drag_anchor = None
         self._cache = ((), (), ())
+        self._size_timer = wx.Timer(self)
         self.Bind(wx.EVT_PAINT, self._on_paint)
         self.Bind(wx.EVT_SIZE, self._on_size)
+        self.Bind(wx.EVT_TIMER, self._on_size_timer, self._size_timer)
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
         self.Bind(wx.EVT_LEFT_DOWN, self._on_left_down)
         self.Bind(wx.EVT_LEFT_UP, self._on_left_up)
@@ -784,6 +794,7 @@ class PreviewCanvas(wx.Panel):
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_left_up)
 
     def set_artwork(self, filled, strokes, guides, layer, error=None):
+        self._size_timer.Stop()
         self._filled = tuple(tuple(poly) for poly in filled)
         self._strokes = tuple(tuple(stroke.points) for stroke in strokes)
         self._guides = tuple(tuple(poly) for poly in guides)
@@ -795,17 +806,22 @@ class PreviewCanvas(wx.Panel):
     def fit(self):
         self._zoom = 1.0
         self._pan = wx.Point(0, 0)
-        self._rebuild_cache()
         self.Refresh(False)
 
     def zoom(self, factor):
         self._zoom = max(0.4, min(4.0, self._zoom * float(factor)))
-        self._rebuild_cache()
         self.Refresh(False)
 
     def _on_size(self, event):
-        self._rebuild_cache()
+        # Windows emits a stream of size events while the dialog settles or is
+        # dragged. Re-fitting a dense QR/header preview for every event can
+        # monopolise the UI thread, so rebuild once after the burst.
+        self._size_timer.StartOnce(80)
         event.Skip()
+
+    def _on_size_timer(self, event):
+        self._rebuild_cache()
+        self.Refresh(False)
 
     def _on_wheel(self, event):
         self.zoom(1.12 if event.GetWheelRotation() > 0 else 1.0 / 1.12)
@@ -826,17 +842,16 @@ class PreviewCanvas(wx.Panel):
         if self._drag_anchor is None or not event.Dragging() or not event.LeftIsDown():
             return
         self._pan = event.GetPosition() - self._drag_anchor
-        self._rebuild_cache()
         self.Refresh(False)
 
     @staticmethod
-    def _device_points(polygons, zoom, pan):
+    def _device_points(polygons):
         result = []
         for polygon in polygons:
             points = [
                 wx.Point(
-                    int(round(x * zoom + pan.x)),
-                    int(round(y * zoom + pan.y)),
+                    int(round(x)),
+                    int(round(y)),
                 )
                 for x, y in polygon
             ]
@@ -850,7 +865,7 @@ class PreviewCanvas(wx.Panel):
             sources = self._filled + self._strokes + self._guides
             converted = preview_polygons(sources, self._layer)
             fitted = fit_preview_polygons(converted, width, height, margin=0.12)
-            device = self._device_points(fitted, self._zoom, self._pan)
+            device = self._device_points(fitted)
             filled_end = len(self._filled)
             stroke_end = filled_end + len(self._strokes)
             self._cache = (
@@ -889,7 +904,14 @@ class PreviewCanvas(wx.Panel):
                     if self._inside_rounded_rect(x, y, canvas_rect, radius):
                         dc.DrawPoint(x, y)
             filled, strokes, guides = self._cache
-            dc.SetDeviceOrigin(size.width // 2, size.height // 2)
+            # Geometry is fitted only when artwork or canvas size changes.
+            # Native DC transforms keep wheel/drag events constant-time even
+            # for repeated artwork containing thousands of polygons.
+            dc.SetDeviceOrigin(
+                size.width // 2 + self._pan.x,
+                size.height // 2 + self._pan.y,
+            )
+            dc.SetUserScale(self._zoom, self._zoom)
             foreground = palette["text"]
             dc.SetPen(wx.Pen(foreground, 1))
             dc.SetBrush(wx.Brush(foreground))
@@ -909,6 +931,7 @@ class PreviewCanvas(wx.Panel):
             # Never unwind through wx's native paint callback. A paint-time
             # Python exception can invalidate the native DC and crash KiCad.
             traceback.print_exc()
+            dc.SetUserScale(1.0, 1.0)
             dc.SetDeviceOrigin(0, 0)
             dc.SetBackground(wx.Brush(background))
             dc.Clear()
@@ -1683,7 +1706,14 @@ class ToolPage(wx.Panel):
         else:
             barcode = self.label == "Barcode"
             code = self._card("Code 128 barcode" if barcode else "QR code")
-            payload = self.text("KOBEE-001" if barcode else MODE_DEFAULTS["QR / Barcode"]["MultiLineText"], True)
+            payload = self.text(
+                "KOBEE-001"
+                if barcode
+                else MODE_DEFAULTS["QR / Barcode"]["MultiLineText"],
+                not barcode,
+            )
+            if barcode:
+                payload.SetMaxLength(48)
             code.Add(wx.StaticText(self._active_parent, label="Payload"), 0, wx.TOP | wx.BOTTOM, 7)
             code.Add(payload, 0, wx.EXPAND | wx.BOTTOM, 9)
             self.controls["MultiLineText"] = payload
@@ -1698,10 +1728,14 @@ class ToolPage(wx.Panel):
             presentation = self._card("Presentation")
             grid = self._grid(presentation)
             if not barcode:
-                self._add(grid, "MachineCodeCaptionCtrl", "Footer text", self.text("SCAN ME"))
+                caption = self.text("SCAN ME")
+                caption.SetMaxLength(32)
+                self._add(grid, "MachineCodeCaptionCtrl", "Footer text", caption)
                 self._add(grid, "MachineCodeCaptionHeightCtrl", "Footer height (mm)", self.spin(0.8, 10, 1.2, 0.1, 1))
             self._add(grid, "MachineCodeShowContentCheckbox", "Readable text", self.checkbox("Show text below code", False))
-            self._add(grid, "MachineCodeContentCtrl", "Text below code", self.text("kobee.com.au" if not barcode else "KOBEE-001"))
+            readable_text = self.text("kobee.com.au" if not barcode else "KOBEE-001")
+            readable_text.SetMaxLength(96)
+            self._add(grid, "MachineCodeContentCtrl", "Text below code", readable_text)
             self._add(grid, "MachineCodeContentHeightCtrl", "Text height (mm)", self.spin(0.6, 10, 0.9, 0.1, 1))
             self._add(grid, "MachineCodeContentGapCtrl", "Text gap (mm)", self.spin(0, 10, 0.5, 0.1, 1))
             if not barcode:
@@ -1728,6 +1762,7 @@ class ToolPage(wx.Panel):
         value = "\n".join(labels)
         if value != control.GetValue():
             control.ChangeValue(value)
+            control.ShowEnd()
 
     def _on_header_pin_count_changed(self, event):
         self._resize_lines(self.controls["HeaderPinCountCtrl"].GetValue(), "Pin")
@@ -1991,6 +2026,7 @@ class StudioEditorDialog(wx.Dialog):
         self.error = None
         self._last_valid = None
         self._pending_preview = False
+        self._preview_fingerprint = None
         self._loading = True
         self._family = "labels"
         self._tool = "Standard"
@@ -2461,6 +2497,9 @@ class StudioEditorDialog(wx.Dialog):
             hidden_symbol_ids=self.preferences.hidden_symbol_ids,
             hidden_label_ids=self.preferences.hidden_label_ids,
         )
+        # An uploaded SVG may have changed while its selected asset ID stayed
+        # the same, so the settings fingerprint alone cannot prove equivalence.
+        self._preview_fingerprint = None
         for page in self.page_by_tool.values():
             button = page.controls.get("IconChoice")
             if button is not None:
@@ -2700,6 +2739,10 @@ class StudioEditorDialog(wx.Dialog):
 
     def _regenerate_preview(self):
         settings = self.CurrentSettings()
+        fingerprint = json.dumps(settings, sort_keys=True, separators=(",", ":"))
+        if fingerprint == self._preview_fingerprint:
+            return
+        self._preview_fingerprint = fingerprint
         mode = self.active_page.mode
         text = str(settings.get("MultiLineText", ""))
         style = self._document_style(settings)

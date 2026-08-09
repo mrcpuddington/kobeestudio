@@ -275,7 +275,9 @@ MODE_DEFAULTS = {
         "MultiLineText": "LED 1\nLED 2\nLED 3",
         "FontComboBox": COMPONENT_STYLE_DEFAULTS["font"],
         "HeightCtrl": COMPONENT_STYLE_DEFAULTS["height_mm"],
-        "AlignmentChoice": COMPONENT_STYLE_DEFAULTS["alignment"],
+        # Array rows should share a stable leading edge. Right alignment made
+        # narrow glyphs such as the 1 in "LED 1" look like a first-row indent.
+        "AlignmentChoice": "Left",
         "ShapeChoice": "Rounded rectangle",
         "CornerRadiusCtrl": COMPONENT_STYLE_DEFAULTS["outer_radius_mm"],
         "ComponentArrayCountCtrl": 3,

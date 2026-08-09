@@ -191,7 +191,9 @@ class AssetPickerTests(unittest.TestCase):
         self.assertEqual("Continuous plug opening", header["HeaderOpeningChoice"])
 
         self.assertEqual("COMPONENT", mode_defaults("Component Callout")["MultiLineText"])
-        self.assertEqual("LED 1\nLED 2\nLED 3", mode_defaults("Component Array")["MultiLineText"])
+        array = mode_defaults("Component Array")
+        self.assertEqual("LED 1\nLED 2\nLED 3", array["MultiLineText"])
+        self.assertEqual("Left", array["AlignmentChoice"])
         self.assertEqual(
             "https://github.com/mrcpuddington/kobeestudio",
             mode_defaults("QR / Barcode")["MultiLineText"],

@@ -615,7 +615,7 @@ class SettingsDialog(wx.Dialog):
         info_root = wx.BoxSizer(wx.VERTICAL)
         self.info_page.SetSizer(info_root)
         info_root.Add(self._heading(self.info_page, "Kobee Studio"), 0, wx.ALL, 14)
-        build = wx.StaticText(self.info_page, label="Version {}\nStable release".format(__version__))
+        build = wx.StaticText(self.info_page, label="Version {}\nTesting build".format(__version__))
         info_root.Add(build, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         help_text = wx.StaticText(self.info_page, label="Help and guides\nhttps://kobee.com.au/tutorials/kobee-studio-docs\n\nReport an issue or contribute\nhttps://github.com/mrcpuddington/kobeestudio")
         help_text.Wrap(620)

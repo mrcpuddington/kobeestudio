@@ -77,7 +77,7 @@ class ThemedChoice(wx.Control):
     def _emit_choice(self):
         event = wx.CommandEvent(wx.EVT_CHOICE.typeId, self.GetId())
         event.SetEventObject(self)
-        self.ProcessWindowEvent(event)
+        wx.PostEvent(self, event)
 
     def _select(self, index):
         if not 0 <= index < len(self._choices) or index == self._selection:
@@ -236,14 +236,16 @@ class ThemedSpinCtrlDouble(wx.Control):
     def _notify(self, event_type):
         event = wx.CommandEvent(event_type.typeId, self.GetId())
         event.SetEventObject(self)
-        self.ProcessWindowEvent(event)
+        wx.PostEvent(self, event)
 
     def _on_text(self, event):
         try:
             self._value = self._clamp(self.editor.GetValue())
         except ValueError:
             pass
-        self._notify(wx.EVT_TEXT)
+        changed = wx.CommandEvent(wx.EVT_TEXT.typeId, self.GetId())
+        changed.SetEventObject(self)
+        wx.PostEvent(self, changed)
 
     def _on_text_enter(self, event):
         self.SetValue(self.GetValue())
@@ -348,7 +350,7 @@ class ThemedTextField(wx.Panel):
     def _relay_text(self, event):
         command = wx.CommandEvent(wx.EVT_TEXT.typeId, self.GetId())
         command.SetEventObject(self)
-        self.ProcessWindowEvent(command)
+        wx.PostEvent(self, command)
 
     def _on_paint(self, event):
         colours = _colours()
@@ -497,7 +499,7 @@ class ThemedListBox(wx.Control):
         changed = wx.CommandEvent(wx.EVT_LISTBOX.typeId, self.GetId())
         changed.SetEventObject(self)
         changed.SetInt(index)
-        self.ProcessWindowEvent(changed)
+        wx.PostEvent(self, changed)
 
     def _on_motion(self, event):
         index = self._index_at(event.GetPosition())
@@ -606,7 +608,7 @@ class ThemedCheckBox(wx.Control):
         event = wx.CommandEvent(wx.EVT_CHECKBOX.typeId, self.GetId())
         event.SetEventObject(self)
         event.SetInt(int(self._value))
-        self.ProcessWindowEvent(event)
+        wx.PostEvent(self, event)
 
     def _on_click(self, event):
         if self.IsEnabled():

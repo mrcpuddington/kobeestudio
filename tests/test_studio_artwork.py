@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unittest
 
@@ -79,6 +80,15 @@ class StudioArtworkTests(unittest.TestCase):
             TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.3),
         )
         self.assertIsNot(first, changed_type)
+
+    def test_embedded_svg_converter_does_not_log_live_preview_progress(self):
+        self.assertGreaterEqual(
+            logging.getLogger("svg2mod").getEffectiveLevel(), logging.ERROR
+        )
+        self.assertGreaterEqual(
+            logging.getLogger("svg2mod-unfiltered").getEffectiveLevel(),
+            logging.ERROR,
+        )
 
     def test_text_vectors_reuse_outlines_across_font_height_changes(self):
         typography = TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.2)

@@ -177,6 +177,28 @@ class ComponentCalloutTests(unittest.TestCase):
         )
         self.assertEqual(artwork.component_callout, restored)
 
+    def test_left_aligned_component_array_rows_share_a_leading_edge(self):
+        style = self.style("left")
+        artwork = render_component_callout_artwork(
+            self.vectorizer,
+            self.spec(
+                title="LED 1\nLED 22\nLED 333",
+                subtitle="",
+                array_count=3,
+                array_orientation="vertical",
+                array_pitch_mm=5.0,
+                style=style,
+            ),
+        )
+        labels = [item for item in artwork.document.objects if item.kind == "text"]
+        left_edges = []
+        for label in labels:
+            vectors = self.vectorizer.render(label.text, style.typography)
+            left_edges.append(label.position.x - vectors.size.width / 2.0)
+        self.assertTrue(
+            all(abs(edge - left_edges[0]) < 1e-9 for edge in left_edges[1:])
+        )
+
     def test_component_array_rejects_overlapping_pitch(self):
         with self.assertRaisesRegex(ValueError, "spacing must be at least"):
             render_component_callout_artwork(
