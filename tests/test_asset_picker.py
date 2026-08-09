@@ -51,7 +51,7 @@ class AssetPickerTests(unittest.TestCase):
 
     def test_in_app_help_uses_the_hosted_kobee_studio_docs(self):
         self.assertEqual(
-            "https://www.coreybusuttil.com/kobeestudio/docs/",
+            "https://kobee.com.au/tutorials/kobee-studio-docs",
             KOBEE_STUDIO_DOCS_URL,
         )
 

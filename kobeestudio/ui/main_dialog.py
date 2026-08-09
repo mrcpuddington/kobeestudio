@@ -44,7 +44,7 @@ from ..version import __version__
 from .asset_picker import AssetPickerDialog, icon_picker_items, label_picker_items
 
 
-KOBEE_STUDIO_DOCS_URL = "https://www.coreybusuttil.com/kobeestudio/docs/"
+KOBEE_STUDIO_DOCS_URL = "https://kobee.com.au/tutorials/kobee-studio-docs"
 
 
 LAYER_LABELS = {

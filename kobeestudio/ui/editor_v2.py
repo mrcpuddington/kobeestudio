@@ -102,7 +102,7 @@ from .main_dialog import (
 )
 
 
-KOBEE_STUDIO_DOCS_URL = "https://www.coreybusuttil.com/kobeestudio/docs/"
+KOBEE_STUDIO_DOCS_URL = "https://kobee.com.au/tutorials/kobee-studio-docs"
 ACCENT = wx.Colour(235, 177, 20)
 ACCENT_TEXT = wx.Colour(48, 36, 4)
 PREVIEW_LAYER_LABELS = {

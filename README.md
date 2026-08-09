@@ -30,6 +30,9 @@ https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/m
 For troubleshooting, ZIP installation, testing builds and platform details, see
 the [full installation instructions](#install-kobee-studio--kicad-10).
 
+If you want the backstory, I wrote a short post about outgrowing KiBuzzard and
+starting Kobee Studio: [I outgrew KiBuzzard, so I built a KiCad PCB graphics plugin](https://kobee.com.au/news/i-outgrew-kibuzzard-kobee-studio).
+
 <p align="center">
   <img
     src="examples/showcase/renders/kobee-studio-showcase.png"
@@ -68,7 +71,7 @@ The long-term vision is for Kobee Studio to become the go-to graphics toolkit fo
 
 Everything lands as an ordinary, editable KiCad footprint. Kobee Studio never changes the electrical footprint underneath it.
 
-Need a hand while you work? Use **Need help?** in the top-right of the editor to open the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/) for installation, tutorials and practical guidance.
+Need a hand while you work? Use **Need help?** in the top-right of the editor to open the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs) for installation, tutorials and practical guidance.
 
 ## Features
 
@@ -224,7 +227,7 @@ If the toolbar button does not appear:
 2. Open PCB Editor's **Preferences/Settings → Action Plugins** page and make sure **Show Button** is enabled for **Create PCB Artwork**.
 3. Use **Refresh Plugins**, then restart PCB Editor.
 
-More installation help is available in the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
+More installation help is available in the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
 
 ### Testing releases
 
@@ -244,7 +247,7 @@ there is no local package-build step for testers.
 
 ## Help and contributing
 
-For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://www.coreybusuttil.com/kobeestudio/docs/).
+For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
 
 Bug reports, ideas and pull requests are always welcome through GitHub. If you build something cool with Kobee Studio, I'd genuinely love to see it.
 
