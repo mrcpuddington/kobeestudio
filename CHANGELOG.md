@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1 - 2026-08-09
+
+- Hardened the KiCad 10 IPC editor on Windows by removing re-entrant control events and silencing renderer output that could block KiCad's captured process stream.
+- Reduced launch and editing stalls by coalescing preview updates, caching repeated geometry, and keeping zoom, pan, and resize work lightweight.
+- Fixed multiline editing for large pin headers and component arrays, QR readable-text toggles, label editing, and component-array row alignment.
+- Preserved the same artwork and placement behavior on macOS while expanding Windows stress coverage across every artwork tool and output layer.
+
 ## 1.3.3 Beta - 2026-08-05
 
 - Beta build for testing the KiCad 10 IPC path while `1.2.1` remains the stable release.

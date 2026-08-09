@@ -12,7 +12,7 @@
   <a href="#install-kobee-studio--kicad-10"><strong>↓ Skip to install instructions</strong></a>
 </p>
 
-> **Current status:** **Kobee Studio 1.4.0 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
+> **Current status:** **Kobee Studio 1.4.1 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
 > Linux uses the same plug-in package, but still needs full UI and artwork validation, so it is not recommended yet for anything critical. If you test on Linux, bug reports, screenshots, and board files are very welcome.
 
 ## Quick install
@@ -25,7 +25,7 @@ https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/m
 
 1. Copy the stable repository URL above.
 2. In KiCad, open **Plugin and Content Manager → Manage repositories**, choose **Add**, paste the URL, and save.
-3. Refresh the catalogue, find **Kobee Studio 1.4.0**, and choose **Install**.
+3. Refresh the catalogue, find **Kobee Studio 1.4.1**, and choose **Install**.
 
 For troubleshooting, ZIP installation, testing builds and platform details, see
 the [full installation instructions](#install-kobee-studio--kicad-10).
@@ -54,7 +54,7 @@ Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBu
 
 The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
 
-## What’s in 1.4.0
+## What’s in 1.4.1
 
 | Capability                    | What it does                                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -195,13 +195,13 @@ Kobee Studio catalogue.
    ```
 
 3. Save the repository list and refresh the package catalogue.
-4. Find **Kobee Studio**, select version **1.4.0**, and choose **Install**.
+4. Find **Kobee Studio**, select version **1.4.1**, and choose **Install**.
 
 If you previously added an older Kobee Studio repository URL, remove it before
 adding the stable URL above. Keep the testing repository separate so stable
 users do not accidentally install development builds.
 
-For those who want to try out the current Beta builds, plese install the following catalogue in addition to the abov, using the same isntructions:
+To try current beta builds, add the testing catalogue using the same instructions:
 
 ```text
 https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/testing/repository.json
@@ -213,8 +213,8 @@ pre-release builds that have not had the same validation as stable releases.
 ### Other option: install the ZIP manually
 
 Use this route when KiCad cannot reach a repository, or when you need to test a
-specific release asset. Download `Kobee-Studio-1.4.0-pcm.zip` from the [Kobee
-Studio 1.4.0 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.4.0).
+specific release asset. Download `Kobee-Studio-1.4.1-pcm.zip` from the [Kobee
+Studio 1.4.1 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.4.1).
 Do not unzip it.
 
 1. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
@@ -239,8 +239,8 @@ there is no local package-build step for testers.
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.4.0 tested working stable release              |
-| Windows  | KiCad 10      | 1.4.0 tested working stable release              |
+| macOS    | KiCad 10      | 1.4.1 tested working stable release              |
+| Windows  | KiCad 10      | 1.4.1 tested working stable release              |
 | Linux    | KiCad 10      | Install path documented; full validation planned |
 
 ---
