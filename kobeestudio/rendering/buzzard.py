@@ -14,6 +14,8 @@ from svg2mod import svg, svg2mod
 from svg2mod.exporter import Svg2ModExport, Svg2ModExportLatest, DEFAULT_DPI
 from svg2mod.importer import Svg2ModImport
 
+from ..core.font_library import FontLibraryStore
+
 # svg2mod configures DEBUG/INFO stream handlers at import time, including an
 # "unfiltered" stdout logger. KiCad captures IPC process output on Windows;
 # repeated live previews can fill that pipe and block the renderer forever.
@@ -54,6 +56,7 @@ class Buzzard():
         fnt_lib = svg.Text._system_fonts
         if fnt_lib is None:
             fnt_lib = {}
+            svg.Text._system_fonts = fnt_lib
 
         # Load included fonts 
         typeface_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'fonts')
@@ -64,6 +67,17 @@ class Buzzard():
                 continue
 
             fnt_lib[os.path.splitext(os.path.basename(entry_path))[0]] = {'Path':entry_path}
+
+        # User-installed faces live outside the package so upgrades cannot
+        # overwrite them. Corrupt entries are filtered by FontLibraryStore.
+        for face in FontLibraryStore().list():
+            fnt_lib[face.renderer_name] = {'Path': str(face.path)}
+
+    def register_font(self, renderer_name, path):
+        fnt_lib = svg.Text._system_fonts
+        if fnt_lib is None:
+            fnt_lib = {}; svg.Text._system_fonts = fnt_lib
+        fnt_lib[str(renderer_name)] = {'Path': str(path)}
 
     def generate(self, inString):
         self.svgText = self.renderLabel(inString)

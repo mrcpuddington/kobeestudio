@@ -121,3 +121,7 @@ class IpcSession:
 
     def discard(self, transaction) -> None:
         self.board.drop_commit(transaction)
+
+    def board_tools(self):
+        from .board_tools import BoardToolsService
+        return BoardToolsService(self)

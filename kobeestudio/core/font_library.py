@@ -1,0 +1,255 @@
+"""Versioned, update-safe storage for user-installed Google Font faces."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import tempfile
+import urllib.request
+import uuid
+import sys
+import io
+import re
+import urllib.parse
+import ssl
+import certifi
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Optional, Tuple
+
+_VENDOR = str(Path(__file__).resolve().parents[1] / "vendor")
+if _VENDOR not in sys.path:
+    sys.path.insert(0, _VENDOR)
+
+from fontTools.ttLib import TTFont
+
+from .data_paths import user_data_root
+
+
+FONT_SCHEMA_VERSION = 1
+MAX_FONT_BYTES = 32 * 1024 * 1024
+MAX_CATALOG_BYTES = 16 * 1024 * 1024
+GOOGLE_FONTS_METADATA_URL = "https://fonts.google.com/metadata/fonts"
+GOOGLE_FONTS_CSS_URL = "https://fonts.googleapis.com/css2"
+
+
+def _urlopen(request, timeout=30):
+    return urllib.request.urlopen(request, timeout=timeout,
+                                  context=ssl.create_default_context(cafile=certifi.where()))
+
+
+def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".font-", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2, allow_nan=False, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, str(path))
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def _font_names(path: Path) -> Tuple[str, str]:
+    try:
+        font = TTFont(str(path), lazy=True)
+        names = font["name"]
+        family = names.getDebugName(1) or names.getDebugName(16) or path.stem
+        face = names.getDebugName(2) or names.getDebugName(17) or "Regular"
+        font.close()
+    except Exception as error:
+        raise ValueError("Downloaded file is not a valid OpenType font: {}".format(error)) from error
+    return str(family).strip(), str(face).strip()
+
+
+@dataclass(frozen=True)
+class FontFace:
+    face_id: str
+    family: str
+    style: str
+    weight: int
+    renderer_name: str
+    path: Path
+    source_url: str
+    licence_url: str = ""
+    content_sha256: str = ""
+
+    @property
+    def display_name(self) -> str:
+        return "{} — {} {}".format(self.family, self.weight, self.style.title())
+
+
+class FontLibraryStore:
+    """Owns global installed font files and a best-effort Google catalog cache."""
+
+    def __init__(self, data_root: Optional[Path] = None) -> None:
+        self.data_root = Path(data_root) if data_root is not None else user_data_root()
+        self.root = self.data_root / "fonts" / "v1"
+        self.catalog_path = self.root / "catalog.json"
+
+    def list(self) -> Tuple[FontFace, ...]:
+        result = []
+        if not self.root.exists():
+            return ()
+        for directory in sorted(self.root.iterdir()):
+            if directory.is_symlink() or not directory.is_dir():
+                continue
+            metadata_path = directory / "metadata.json"
+            if metadata_path.is_symlink() or not metadata_path.is_file():
+                continue
+            try:
+                payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+                if payload.get("schema_version") != FONT_SCHEMA_VERSION:
+                    continue
+                filename = str(payload["filename"])
+                if Path(filename).name != filename:
+                    continue
+                font_path = directory / filename
+                if font_path.is_symlink() or not font_path.is_file():
+                    continue
+                digest = hashlib.sha256(font_path.read_bytes()).hexdigest()
+                if digest != payload.get("content_sha256"):
+                    continue
+                _font_names(font_path)
+                result.append(FontFace(
+                    face_id=str(payload["face_id"]), family=str(payload["family"]),
+                    style=str(payload.get("style", "normal")), weight=int(payload.get("weight", 400)),
+                    renderer_name=str(payload["renderer_name"]), path=font_path,
+                    source_url=str(payload.get("source_url", "")),
+                    licence_url=str(payload.get("licence_url", "")), content_sha256=digest,
+                ))
+            except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return tuple(sorted(result, key=lambda item: (item.family.casefold(), item.weight, item.style)))
+
+    def install_bytes(
+        self, data: bytes, *, family: str, style: str = "normal", weight: int = 400,
+        source_url: str = "", licence_url: str = "", licence_text: str = "",
+    ) -> FontFace:
+        if not isinstance(data, bytes) or not data or len(data) > MAX_FONT_BYTES:
+            raise ValueError("Font file must be between 1 byte and 32 MiB")
+        family = str(family).strip()
+        style = str(style).strip().lower() or "normal"
+        weight = int(weight)
+        if not family or len(family) > 120 or style not in ("normal", "italic") or not 1 <= weight <= 1000:
+            raise ValueError("Invalid font family, style, or weight")
+        face_id = str(uuid.uuid4())
+        destination = self.root / face_id
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=".install-", dir=str(destination.parent)))
+        try:
+            font_path = staging / "font.ttf"
+            try:
+                font = TTFont(io.BytesIO(data), lazy=False)
+                # Google CSS normally serves WOFF2. Decode it to a static TTF
+                # so the existing polygon renderer has one predictable input.
+                font.flavor = None
+                font.save(str(font_path))
+                font.close()
+            except Exception as error:
+                raise ValueError("Downloaded file is not a valid OpenType font: {}".format(error)) from error
+            with font_path.open("rb") as stream:
+                normalized_data = stream.read()
+            if len(normalized_data) > MAX_FONT_BYTES:
+                raise ValueError("Decoded font exceeds the 32 MiB safety limit")
+            actual_family, actual_face = _font_names(font_path)
+            renderer_name = "{}-{}-{}-{}".format(
+                actual_family.replace(" ", ""), weight, style, face_id[:8]
+            )
+            digest = hashlib.sha256(normalized_data).hexdigest()
+            if licence_text:
+                (staging / "LICENSE.txt").write_text(licence_text, encoding="utf-8")
+            _atomic_json(staging / "metadata.json", {
+                "schema_version": FONT_SCHEMA_VERSION, "face_id": face_id,
+                "family": family or actual_family, "face_name": actual_face,
+                "style": style, "weight": weight, "renderer_name": renderer_name,
+                "filename": "font.ttf", "source_url": str(source_url),
+                "licence_url": str(licence_url), "content_sha256": digest,
+            })
+            os.replace(str(staging), str(destination))
+        except Exception:
+            shutil.rmtree(str(staging), ignore_errors=True)
+            raise
+        return next(item for item in self.list() if item.face_id == face_id)
+
+    def download(self, **face) -> FontFace:
+        source_url = str(face.get("source_url", ""))
+        if not source_url.startswith("https://"):
+            raise ValueError("Google Font downloads require an HTTPS source URL")
+        request = urllib.request.Request(source_url, headers={"User-Agent": "Kobee-Studio"})
+        with _urlopen(request, timeout=30) as response:
+            data = response.read(MAX_FONT_BYTES + 1)
+        return self.install_bytes(data, **face)
+
+    def download_google_face(self, family: str, weight: int = 400, style: str = "normal") -> FontFace:
+        family, weight, style = str(family).strip(), int(weight), str(style).lower()
+        if not family or not 1 <= weight <= 1000 or style not in ("normal", "italic"):
+            raise ValueError("Invalid Google Font face")
+        axis = "ital,wght@1,{}".format(weight) if style == "italic" else "wght@{}".format(weight)
+        query = urllib.parse.urlencode({"family": "{}:{}".format(family, axis)})
+        request = urllib.request.Request(
+            "{}?{}".format(GOOGLE_FONTS_CSS_URL, query),
+            headers={"User-Agent": "Mozilla/5.0 Kobee-Studio"},
+        )
+        with _urlopen(request, timeout=30) as response:
+            css = response.read(1024 * 1024).decode("utf-8", "replace")
+        urls = re.findall(r"url\((https://[^)]+)\)", css)
+        if not urls:
+            raise ValueError("Google Fonts did not provide that face")
+        source_url = urls[-1]
+        request = urllib.request.Request(source_url, headers={"User-Agent": "Kobee-Studio"})
+        with _urlopen(request, timeout=30) as response:
+            data = response.read(MAX_FONT_BYTES + 1)
+        return self.install_bytes(
+            data, family=family, weight=weight, style=style, source_url=source_url,
+            licence_url="https://github.com/google/fonts/tree/main/ofl",
+        )
+
+    def delete(self, face_id: str) -> None:
+        match = next((item for item in self.list() if item.face_id == face_id), None)
+        if match is None:
+            raise LookupError("Font face was not found")
+        directory = match.path.parent
+        tombstone = directory.with_name(".delete-{}".format(uuid.uuid4()))
+        os.replace(str(directory), str(tombstone))
+        shutil.rmtree(str(tombstone))
+
+    def load_catalog(self) -> Tuple[Mapping[str, Any], ...]:
+        candidates = (self.catalog_path, Path(__file__).resolve().parents[1] / "resources" / "google_fonts_catalog.json")
+        for path in candidates:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                families = payload.get("families", payload) if isinstance(payload, Mapping) else payload
+                if isinstance(families, list):
+                    return tuple(item for item in families if isinstance(item, Mapping))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return ()
+
+    def refresh_catalog(self) -> Tuple[Mapping[str, Any], ...]:
+        request = urllib.request.Request(GOOGLE_FONTS_METADATA_URL, headers={"User-Agent": "Kobee-Studio"})
+        with _urlopen(request, timeout=30) as response:
+            raw = response.read(MAX_CATALOG_BYTES + 1)
+        if len(raw) > MAX_CATALOG_BYTES:
+            raise ValueError("Google Fonts catalog response is too large")
+        if raw.startswith(b")]}\'"):
+            raw = raw.split(b"\n", 1)[-1]
+        payload = json.loads(raw.decode("utf-8"))
+        families = payload.get("familyMetadataList", payload.get("families", ()))
+        if not isinstance(families, list):
+            raise ValueError("Google Fonts returned an unsupported catalog")
+        self.root.mkdir(parents=True, exist_ok=True)
+        _atomic_json(self.catalog_path, {"schema_version": 1, "families": families})
+        return tuple(item for item in families if isinstance(item, Mapping))
+
+
+def installed_renderer_paths(stores: Iterable[FontLibraryStore]) -> Tuple[Tuple[str, Path], ...]:
+    return tuple((face.renderer_name, face.path) for store in stores for face in store.list())

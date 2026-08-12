@@ -170,6 +170,29 @@ class IconObject:
 
 
 @dataclass(frozen=True)
+class GraphicObject:
+    object_id: str
+    asset_id: str
+    geometry_svg: str
+    position: Point = field(default_factory=Point)
+    size: Size = field(default_factory=lambda: Size(20.0, 20.0))
+    rotation_deg: float = 0.0
+    mirror_horizontal: bool = False
+    mirror_vertical: bool = False
+    kind: str = field(default="graphic", init=False)
+
+    def __post_init__(self) -> None:
+        _validate_object_id(self.object_id)
+        if not self.asset_id:
+            raise ValueError("Graphic asset_id cannot be empty")
+        if not self.geometry_svg.strip():
+            raise ValueError("Graphic fallback geometry cannot be empty")
+        if self.size.width <= 0 or self.size.height <= 0:
+            raise ValueError("Graphic size must be greater than zero")
+        _finite("graphic.rotation_deg", self.rotation_deg)
+
+
+@dataclass(frozen=True)
 class ShapeObject:
     object_id: str
     shape: str = "rectangle"
@@ -222,7 +245,7 @@ class GroupObject:
         _finite("group.rotation_deg", self.rotation_deg)
 
 
-CompositionObject = Union[TextObject, IconObject, ShapeObject, GuideObject, GroupObject]
+CompositionObject = Union[TextObject, IconObject, GraphicObject, ShapeObject, GuideObject, GroupObject]
 
 
 def _validate_object_id(object_id: str) -> None:
@@ -334,6 +357,10 @@ def _object_to_dict(item: CompositionObject) -> Dict[str, Any]:
         data.update({"text": item.text, "style_role": item.style_role})
     elif isinstance(item, IconObject):
         data.update({"asset_id": item.asset_id, "variant": item.variant, "size": _size_dict(item.size)})
+    elif isinstance(item, GraphicObject):
+        data.update({"asset_id": item.asset_id, "geometry_svg": item.geometry_svg,
+                     "size": _size_dict(item.size), "mirror_horizontal": item.mirror_horizontal,
+                     "mirror_vertical": item.mirror_vertical})
     elif isinstance(item, ShapeObject):
         data.update({"shape": item.shape, "size": _size_dict(item.size), "content_ids": list(item.content_ids)})
     elif isinstance(item, GuideObject):
@@ -429,6 +456,12 @@ def _object_from_dict(data: Mapping[str, Any]) -> CompositionObject:
             variant=str(data.get("variant", "default")),
             size=_size_from(data.get("size", {})),
             **common
+        )
+    if kind == "graphic":
+        return GraphicObject(
+            asset_id=str(data.get("asset_id", "")), geometry_svg=str(data.get("geometry_svg", "")),
+            size=_size_from(data.get("size", {})), mirror_horizontal=bool(data.get("mirror_horizontal", False)),
+            mirror_vertical=bool(data.get("mirror_vertical", False)), **common
         )
     if kind == "shape":
         return ShapeObject(

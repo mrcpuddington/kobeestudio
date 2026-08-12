@@ -23,6 +23,9 @@ def _copy_plugin() -> None:
         "plugin.json",
         "requirements.txt",
         "kobeestudio_ipc.py",
+        "kobeestudio_add_designator.py",
+        "kobeestudio_remove_designators.py",
+        "kobeestudio_remove_silkscreen.py",
         "kobee-toolbar-24.png",
         "kobee-toolbar-48.png",
     ):

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict, Optional
 import zipfile
+import threading
 
 import wx
 
@@ -14,6 +15,9 @@ from ..core.quick_labels import QuickLabelStore
 from ..core.settings_profiles import SettingsProfileStore
 from ..core.svg_symbols import SvgAssetStore
 from ..core.library_archive import export_library, reset_library, restore_library
+from ..core.font_library import FontLibraryStore
+from ..core.component_presets import ComponentPresetStore
+from ..core.raster_trace import RasterTraceSettings, trace_png_file
 from ..version import __version__
 from .theme import apply_native_theme, is_dark_mode
 from .themed_controls import ThemedActionButton, ThemedChoice, ThemedListBox
@@ -25,6 +29,8 @@ MODULE_LABELS = {
     "component_callouts": "Component callouts",
     "component_arrays": "Component arrays",
     "machine_codes": "QR codes and barcodes",
+    "graphics": "Imported graphics",
+    "board_tools": "Board tools",
 }
 MODULE_BY_LABEL = {label: module for module, label in MODULE_LABELS.items()}
 SYMBOL_CATEGORIES = ("Custom", "Controls", "Direction", "Electrical", "PCB", "Safety")
@@ -105,6 +111,75 @@ class QuickLabelDetailsDialog(wx.Dialog):
         return self.text_ctrl.GetValue(), self.category_ctrl.GetValue(), symbol_id, variant
 
 
+class ComponentPresetDetailsDialog(wx.Dialog):
+    def __init__(self, parent, preset=None):
+        super().__init__(parent, title="Edit component preset" if preset else "Add component preset")
+        root = wx.BoxSizer(wx.VERTICAL)
+        grid = wx.FlexGridSizer(0, 2, 9, 10); grid.AddGrowableCol(1)
+        root.Add(grid, 0, wx.EXPAND | wx.ALL, 14)
+        values = {
+            "name": preset.name if preset else "Custom component",
+            "width": preset.width_mm if preset else 5.0,
+            "height": preset.height_mm if preset else 5.0,
+            "radius": preset.cutout_radius_mm if preset else 0.2,
+        }
+        self.name = wx.TextCtrl(self, value=values["name"])
+        self.width = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=values["width"], inc=0.1)
+        self.height = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=values["height"], inc=0.1)
+        self.shape = ThemedChoice(self, choices=("Rectangle", "Rounded rectangle", "Pill", "Tactile switch"))
+        shape_id = preset.cutout_shape if preset else "rounded_rectangle"
+        self.shape.SetStringSelection({"rectangle":"Rectangle", "rounded_rectangle":"Rounded rectangle", "pill":"Pill", "tactile_switch":"Tactile switch"}[shape_id])
+        self.radius = wx.SpinCtrlDouble(self, min=0, max=1000, initial=values["radius"], inc=0.05)
+        for label, control in (("Name", self.name), ("Width (mm)", self.width), ("Height (mm)", self.height), ("Cutout", self.shape), ("Radius (mm)", self.radius)):
+            grid.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL); grid.Add(control, 1, wx.EXPAND)
+        root.Add(self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        self.SetSizerAndFit(root); self.SetMinSize(wx.Size(460, -1))
+
+    def values(self):
+        shape = {"Rectangle":"rectangle", "Rounded rectangle":"rounded_rectangle", "Pill":"pill", "Tactile switch":"tactile_switch"}[self.shape.GetStringSelection()]
+        return self.name.GetValue(), self.width.GetValue(), self.height.GetValue(), shape, self.radius.GetValue()
+
+
+class PngTraceDialog(wx.Dialog):
+    """Interactive, bounded PNG trace controls with a live monochrome preview."""
+    def __init__(self, parent, source: Path):
+        super().__init__(parent, title="Convert PNG to PCB graphic", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.source = Path(source); self.result = None
+        root = wx.BoxSizer(wx.HORIZONTAL); controls = wx.BoxSizer(wx.VERTICAL)
+        grid = wx.FlexGridSizer(0, 2, 8, 9); grid.AddGrowableCol(1); controls.Add(grid, 0, wx.EXPAND)
+        self.threshold = wx.Slider(self, minValue=0, maxValue=255, value=128)
+        self.alpha = wx.Slider(self, minValue=0, maxValue=255, value=16)
+        self.smoothing = wx.SpinCtrl(self, min=0, max=3, initial=0)
+        self.despeckle = wx.SpinCtrl(self, min=0, max=10000, initial=0)
+        self.width = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=20, inc=0.1)
+        self.invert = wx.CheckBox(self, label="Invert black and white")
+        self.crop = wx.CheckBox(self, label="Crop transparent/empty edges"); self.crop.SetValue(True)
+        for label, control in (("Threshold",self.threshold),("Alpha cutoff",self.alpha),("Smoothing",self.smoothing),("Despeckle pixels",self.despeckle),("Output width (mm)",self.width)):
+            grid.Add(wx.StaticText(self,label=label),0,wx.ALIGN_CENTER_VERTICAL); grid.Add(control,1,wx.EXPAND)
+        controls.Add(self.invert,0,wx.TOP,10); controls.Add(self.crop,0,wx.TOP,7)
+        self.status = wx.StaticText(self,label=""); controls.Add(self.status,0,wx.EXPAND|wx.TOP,10)
+        controls.AddStretchSpacer(1); controls.Add(self.CreateStdDialogButtonSizer(wx.OK|wx.CANCEL),0,wx.EXPAND|wx.TOP,10)
+        self.preview = wx.StaticBitmap(self); self.preview.SetMinSize(wx.Size(380,380))
+        root.Add(controls,0,wx.EXPAND|wx.ALL,14); root.Add(self.preview,1,wx.EXPAND|wx.TOP|wx.RIGHT|wx.BOTTOM,14)
+        self.SetSizer(root); self.SetMinSize(wx.Size(760,470)); self.SetSize(wx.Size(840,540))
+        for control in (self.threshold,self.alpha,self.smoothing,self.despeckle,self.width,self.invert,self.crop):
+            control.Bind(wx.EVT_SLIDER if isinstance(control,wx.Slider) else wx.EVT_CHECKBOX if isinstance(control,wx.CheckBox) else wx.EVT_SPINCTRL, self._changed)
+        self._update_preview()
+
+    def settings(self):
+        return RasterTraceSettings(self.threshold.GetValue(), self.invert.GetValue(), self.alpha.GetValue(), self.crop.GetValue(), self.smoothing.GetValue(), self.despeckle.GetValue(), self.width.GetValue())
+
+    def _changed(self,event): self._update_preview(); event.Skip()
+    def _update_preview(self):
+        try:
+            self.result = trace_png_file(self.source,self.settings())
+            stream = wx.MemoryInputStream(self.result.preview_png,len(self.result.preview_png)); image = wx.Image(stream,wx.BITMAP_TYPE_PNG)
+            target = self.preview.GetClientSize(); scale=min(max(1,target.width)/image.GetWidth(),max(1,target.height)/image.GetHeight())
+            image=image.Scale(max(1,int(image.GetWidth()*scale)),max(1,int(image.GetHeight()*scale)),wx.IMAGE_QUALITY_HIGH)
+            self.preview.SetBitmap(wx.Bitmap(image)); self.status.SetLabel("{} × {} traced pixels".format(*self.result.pixel_size))
+        except Exception as error: self.result=None; self.status.SetLabel(str(error))
+
+
 class SettingsDialog(wx.Dialog):
     """Manage preferences and user data without coupling it to editor layout."""
 
@@ -123,13 +198,16 @@ class SettingsDialog(wx.Dialog):
         hidden_label_ids=(),
         current_module: str,
         preferences_changed: Callable[[AppPreferences], None],
+        font_store: Optional[FontLibraryStore] = None,
+        global_component_store: Optional[ComponentPresetStore] = None,
+        project_component_store: Optional[ComponentPresetStore] = None,
         initial_page: int = 0,
     ):
         super().__init__(
             parent,
             title="Kobee Studio Settings",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
-            size=wx.Size(720, 560),
+            size=wx.Size(980, 620),
         )
         self.preferences_store = preferences_store
         self.profile_store = profile_store
@@ -137,6 +215,9 @@ class SettingsDialog(wx.Dialog):
         self.project_asset_store = project_asset_store
         self.global_label_store = global_label_store
         self.project_label_store = project_label_store
+        self.font_store = font_store or FontLibraryStore(preferences_store.root)
+        self.global_component_store = global_component_store or ComponentPresetStore.global_store(preferences_store.root)
+        self.project_component_store = project_component_store
         self.symbol_catalog = symbol_catalog
         self._hidden_symbol_ids = set(hidden_symbol_ids)
         self._hidden_label_ids = set(hidden_label_ids)
@@ -152,7 +233,9 @@ class SettingsDialog(wx.Dialog):
         self.notebook = wx.Simplebook(self)
         self.general_page = wx.Panel(self.notebook)
         self.profile_page = wx.Panel(self.notebook)
+        self.fonts_page = wx.Panel(self.notebook)
         self.assets_page = wx.Panel(self.notebook)
+        self.components_page = wx.Panel(self.notebook)
         self.asset_book = wx.Simplebook(self.assets_page)
         self.upload_page = wx.Panel(self.asset_book)
         self.quick_labels_page = wx.Panel(self.asset_book)
@@ -166,7 +249,7 @@ class SettingsDialog(wx.Dialog):
         asset_root = wx.BoxSizer(wx.VERTICAL)
         asset_tabs = wx.BoxSizer(wx.HORIZONTAL)
         self._asset_page_buttons = []
-        for index, label in enumerate(("Symbols", "Quick labels")):
+        for index, label in enumerate(("Icons & graphics", "Quick labels")):
             button = ThemedActionButton(self.assets_page, label, lambda page=index: self._select_asset_page(page), primary=index == 0)
             self._asset_page_buttons.append(button)
             asset_tabs.Add(button, 0, wx.RIGHT, 6)
@@ -185,11 +268,11 @@ class SettingsDialog(wx.Dialog):
         library_root.Add(library_tabs, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
         library_root.Add(self.library_book, 1, wx.EXPAND | wx.TOP, 4)
         self.library_page.SetSizer(library_root)
-        for page in (self.general_page, self.profile_page, self.assets_page, self.library_page, self.info_page):
+        for page in (self.general_page, self.profile_page, self.fonts_page, self.assets_page, self.components_page, self.library_page, self.info_page):
             self.notebook.AddPage(page, "")
         self._page_buttons = []
-        page_tabs = wx.BoxSizer(wx.HORIZONTAL)
-        for index, label in enumerate(("General", "Profiles and defaults", "Uploads", "Data & backup", "About & help")):
+        page_tabs = wx.WrapSizer(wx.HORIZONTAL)
+        for index, label in enumerate(("General", "Profiles", "Fonts", "Asset library", "Component presets", "Data & backup", "About")):
             button = ThemedActionButton(self, label, lambda page=index: self._select_page(page), primary=index == 0)
             self._page_buttons.append(button)
             page_tabs.Add(button, 0, wx.RIGHT, 6)
@@ -205,8 +288,10 @@ class SettingsDialog(wx.Dialog):
 
         self._build_general_page()
         self._build_profile_page()
+        self._build_fonts_page()
         self._build_upload_page()
         self._build_quick_labels_page()
+        self._build_components_page()
         self._build_library_page()
         self._apply_theme()
         self._select_page(max(0, min(int(initial_page), len(self._page_buttons) - 1)))
@@ -242,10 +327,10 @@ class SettingsDialog(wx.Dialog):
         }
         self.SetBackgroundColour(palette["window"])
         self.notebook.SetBackgroundColour(palette["surface"])
-        for page in (self.general_page, self.profile_page, self.assets_page, self.upload_page, self.quick_labels_page, self.library_page, self.library_backup_page, self.library_visibility_page, self.info_page):
+        for page in (self.general_page, self.profile_page, self.fonts_page, self.assets_page, self.upload_page, self.quick_labels_page, self.components_page, self.library_page, self.library_backup_page, self.library_visibility_page, self.info_page):
             page.SetBackgroundColour(palette["surface"])
         apply_native_theme(self, wx, palette)
-        for control in (getattr(self, "profile_list", None), getattr(self, "upload_list", None), getattr(self, "quick_label_list", None), getattr(self, "visibility_list", None)):
+        for control in (getattr(self, "profile_list", None), getattr(self, "font_catalog_list", None), getattr(self, "installed_font_list", None), getattr(self, "component_list", None), getattr(self, "upload_list", None), getattr(self, "quick_label_list", None), getattr(self, "visibility_list", None)):
             if control is None:
                 continue
             try:
@@ -389,6 +474,134 @@ class SettingsDialog(wx.Dialog):
         except (OSError, ValueError, LookupError) as error:
             wx.MessageBox(str(error), "Could not delete profile", wx.OK | wx.ICON_ERROR, self)
 
+    def _build_fonts_page(self):
+        root = wx.BoxSizer(wx.VERTICAL); self.fonts_page.SetSizer(root)
+        root.Add(self._heading(self.fonts_page, "Google Fonts library"), 0, wx.ALL, 14)
+        search_row = wx.BoxSizer(wx.HORIZONTAL)
+        self.font_search = wx.SearchCtrl(self.fonts_page, style=wx.TE_PROCESS_ENTER)
+        self.font_search.SetDescriptiveText("Search Google Fonts")
+        self.font_search.Bind(wx.EVT_TEXT, lambda event: self._refresh_font_catalog())
+        search_row.Add(self.font_search, 1, wx.RIGHT, 8)
+        search_row.Add(ThemedActionButton(self.fonts_page, "Refresh catalog", self._refresh_font_catalog_online), 0)
+        root.Add(search_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        columns = wx.BoxSizer(wx.HORIZONTAL)
+        catalog_col = wx.BoxSizer(wx.VERTICAL); installed_col = wx.BoxSizer(wx.VERTICAL)
+        catalog_col.Add(wx.StaticText(self.fonts_page, label="Available families"), 0, wx.BOTTOM, 5)
+        self.font_catalog_list = ThemedListBox(self.fonts_page); catalog_col.Add(self.font_catalog_list, 1, wx.EXPAND)
+        self.install_font_button = ThemedActionButton(self.fonts_page, "Choose faces and install…", self._install_font_faces)
+        catalog_col.Add(self.install_font_button, 0, wx.TOP, 8)
+        installed_col.Add(wx.StaticText(self.fonts_page, label="My installed faces"), 0, wx.BOTTOM, 5)
+        self.installed_font_list = ThemedListBox(self.fonts_page); installed_col.Add(self.installed_font_list, 1, wx.EXPAND)
+        installed_col.Add(ThemedActionButton(self.fonts_page, "Remove selected", self._remove_font_face), 0, wx.TOP, 8)
+        columns.Add(catalog_col, 1, wx.EXPAND | wx.RIGHT, 8); columns.Add(installed_col, 1, wx.EXPAND | wx.LEFT, 8)
+        root.Add(columns, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
+        self.font_status = wx.StaticText(self.fonts_page, label="Installed fonts remain available offline.")
+        root.Add(self.font_status, 0, wx.ALL, 14)
+        self._font_catalog = self.font_store.load_catalog(); self._visible_font_catalog = ()
+        self._refresh_font_catalog(); self._refresh_installed_fonts()
+
+    def _refresh_font_catalog(self):
+        query = self.font_search.GetValue().strip().casefold() if hasattr(self, "font_search") else ""
+        self._visible_font_catalog = tuple(item for item in self._font_catalog if query in str(item.get("family", "")).casefold())
+        self.font_catalog_list.Set(tuple("{}  ·  {}".format(item.get("family", "Unnamed"), item.get("category", "Google Fonts")) for item in self._visible_font_catalog))
+
+    def _refresh_installed_fonts(self):
+        self._installed_fonts = self.font_store.list()
+        self.installed_font_list.Set(tuple(item.display_name for item in self._installed_fonts))
+
+    def _refresh_font_catalog_online(self, event):
+        self.font_status.SetLabel("Refreshing Google Fonts catalog…")
+        def worker():
+            try: result, error = self.font_store.refresh_catalog(), None
+            except Exception as caught: result, error = (), caught
+            wx.CallAfter(self._font_catalog_finished, result, error)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _font_catalog_finished(self, result, error):
+        if error is not None:
+            self.font_status.SetLabel("Could not refresh; using the offline catalog: {}".format(error)); return
+        self._font_catalog = result; self._refresh_font_catalog()
+        self.font_status.SetLabel("Catalog refreshed: {} families.".format(len(result)))
+
+    def _install_font_faces(self, event):
+        selection = self.font_catalog_list.GetSelection()
+        if not 0 <= selection < len(self._visible_font_catalog): return
+        family = self._visible_font_catalog[selection]
+        face_keys = tuple(str(key) for key in (family.get("fonts") or {"400": {}}))
+        choices = tuple("{}{}".format(key.rstrip("i"), " Italic" if key.endswith("i") else " Regular") for key in face_keys)
+        chooser = wx.MultiChoiceDialog(self, "Choose one or more faces to install", str(family.get("family", "Google Font")), choices)
+        try:
+            if chooser.ShowModal() != wx.ID_OK or not chooser.GetSelections(): return
+            selected = tuple(face_keys[index] for index in chooser.GetSelections())
+        finally: chooser.Destroy()
+        self.install_font_button.Disable(); self.font_status.SetLabel("Downloading selected font faces…")
+        def worker():
+            installed, failures = [], []
+            for key in selected:
+                try: installed.append(self.font_store.download_google_face(str(family["family"]), int(key.rstrip("i")), "italic" if key.endswith("i") else "normal"))
+                except Exception as error: failures.append("{}: {}".format(key, error))
+            wx.CallAfter(self._font_install_finished, installed, failures)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _font_install_finished(self, installed, failures):
+        self.install_font_button.Enable(); self._refresh_installed_fonts()
+        self.restart_editor = self.restart_editor or bool(installed)
+        self.font_status.SetLabel("Installed {} face(s).{}".format(len(installed), " " + "; ".join(failures) if failures else ""))
+
+    def _remove_font_face(self, event):
+        selection = self.installed_font_list.GetSelection()
+        if not 0 <= selection < len(self._installed_fonts): return
+        face = self._installed_fonts[selection]
+        if wx.MessageBox("Remove {} from your font library?".format(face.display_name), "Remove font", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self) != wx.YES: return
+        try:
+            self.font_store.delete(face.face_id); self.restart_editor = True; self._refresh_installed_fonts()
+        except (OSError, LookupError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not remove font", wx.OK | wx.ICON_ERROR, self)
+
+    def _build_components_page(self):
+        root = wx.BoxSizer(wx.VERTICAL); self.components_page.SetSizer(root)
+        root.Add(self._heading(self.components_page, "Custom component dimensions"), 0, wx.ALL, 14)
+        row = wx.BoxSizer(wx.HORIZONTAL); row.Add(wx.StaticText(self.components_page, label="Scope"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 7)
+        scopes = ["My library"] + (["This project"] if self.project_component_store is not None else [])
+        self.component_scope = ThemedChoice(self.components_page, choices=scopes); self.component_scope.SetSelection(0)
+        self.component_scope.Bind(wx.EVT_CHOICE, lambda event: self._refresh_components())
+        row.Add(self.component_scope, 0); root.Add(row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        self.component_list = ThemedListBox(self.components_page); root.Add(self.component_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
+        actions = wx.BoxSizer(wx.HORIZONTAL)
+        for title, handler in (("Add preset…", self._add_component), ("Edit selected…", self._edit_component), ("Delete selected", self._delete_component)):
+            actions.Add(ThemedActionButton(self.components_page, title, handler), 0, wx.RIGHT, 6)
+        root.Add(actions, 0, wx.ALL, 14); self._refresh_components()
+
+    def _component_store(self):
+        return self.project_component_store if self.component_scope.GetStringSelection() == "This project" and self.project_component_store is not None else self.global_component_store
+
+    def _refresh_components(self):
+        self._components = self._component_store().list()
+        self.component_list.Set(tuple("{}  ·  {:.2f} × {:.2f} mm  ·  {}".format(item.name, item.width_mm, item.height_mm, item.scope) for item in self._components))
+
+    def _component_dialog(self, preset=None):
+        dialog = ComponentPresetDetailsDialog(self, preset)
+        try:
+            if dialog.ShowModal() != wx.ID_OK: return
+            saved = self._component_store().save(*dialog.values(), preset_id=preset.preset_id if preset else None)
+            self.restart_editor = True; self._refresh_components()
+            for index, item in enumerate(self._components):
+                if item.preset_id == saved.preset_id: self.component_list.SetSelection(index)
+        except (OSError, ValueError) as error: wx.MessageBox(str(error), "Could not save component preset", wx.OK | wx.ICON_ERROR, self)
+        finally: dialog.Destroy()
+
+    def _add_component(self, event): self._component_dialog()
+    def _edit_component(self, event):
+        index = self.component_list.GetSelection()
+        if 0 <= index < len(self._components): self._component_dialog(self._components[index])
+    def _delete_component(self, event):
+        index = self.component_list.GetSelection()
+        if not 0 <= index < len(self._components): return
+        item = self._components[index]
+        if wx.MessageBox("Delete component preset “{}”?".format(item.name), "Delete preset", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self) != wx.YES: return
+        try: self._component_store().delete(item.preset_id); self.restart_editor = True; self._refresh_components()
+        except (OSError, LookupError, ValueError) as error: wx.MessageBox(str(error), "Could not delete preset", wx.OK | wx.ICON_ERROR, self)
+
     def _build_upload_page(self):
         root = wx.BoxSizer(wx.VERTICAL)
         self.upload_page.SetSizer(root)
@@ -404,7 +617,7 @@ class SettingsDialog(wx.Dialog):
         self.scope_choice.Bind(wx.EVT_CHOICE, self._on_upload_filter_changed)
         filters.Add(self.scope_choice, 0, wx.RIGHT, 14)
         filters.Add(wx.StaticText(self.upload_page, label="Type"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-        namespace_choices = ("Symbols", "Graphics")
+        namespace_choices = ("Icons", "Graphics")
         self.namespace_choice = ThemedChoice(self.upload_page, choices=namespace_choices)
         self.namespace_choice.SetSelection(0)
         self.namespace_choice.Bind(wx.EVT_CHOICE, self._on_upload_filter_changed)
@@ -415,9 +628,11 @@ class SettingsDialog(wx.Dialog):
         root.Add(self.upload_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
         actions = wx.BoxSizer(wx.HORIZONTAL)
         upload = ThemedActionButton(self.upload_page, "Upload SVG…", lambda: self._upload_svg(None))
+        self.upload_png_button = ThemedActionButton(self.upload_page, "Convert PNG…", lambda: self._upload_png(None))
         self.add_variant_button = ThemedActionButton(self.upload_page, "Add variant…", lambda: self._upload_variant(None))
         delete = ThemedActionButton(self.upload_page, "Delete selected", lambda: self._delete_upload(None))
         actions.Add(upload, 0, wx.RIGHT, 6)
+        actions.Add(self.upload_png_button, 0, wx.RIGHT, 6)
         actions.Add(self.add_variant_button, 0, wx.RIGHT, 6)
         actions.Add(delete, 0)
         root.Add(actions, 0, wx.ALL, 14)
@@ -565,7 +780,7 @@ class SettingsDialog(wx.Dialog):
         root = wx.BoxSizer(wx.VERTICAL)
         self.library_backup_page.SetSizer(root)
         root.Add(self._heading(self.library_backup_page, "Kobee Studio data"), 0, wx.ALL, 14)
-        info = wx.StaticText(self.library_backup_page, label="Your personal SVGs, quick labels, profiles, preferences, and hidden-item choices are stored outside the installed package at:\n{}".format(self.preferences_store.root))
+        info = wx.StaticText(self.library_backup_page, label="Your fonts, SVGs, component presets, quick labels, profiles, preferences, and hidden-item choices are stored outside the installed package at:\n{}".format(self.preferences_store.root))
         info.Wrap(620)
         root.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         note = wx.StaticText(self.library_backup_page, label="Create a data backup to move your complete setup to another machine. Restoring a backup replaces the current Kobee Studio data after confirmation, so it is an exact restore rather than a merge.")
@@ -579,7 +794,7 @@ class SettingsDialog(wx.Dialog):
         root.Add(actions, 0, wx.LEFT | wx.RIGHT, 14)
         root.AddStretchSpacer(1)
         root.Add(wx.StaticLine(self.library_backup_page), 0, wx.EXPAND | wx.ALL, 14)
-        warning = wx.StaticText(self.library_backup_page, label="Resetting removes every custom SVG, quick label, profile, preference, and hidden-item choice. Shipped defaults remain. This cannot be undone.")
+        warning = wx.StaticText(self.library_backup_page, label="Resetting removes every installed font, custom SVG, component preset, quick label, profile, preference, and hidden-item choice. Shipped defaults remain. This cannot be undone.")
         warning.Wrap(620)
         root.Add(warning, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         root.Add(ThemedActionButton(self.library_backup_page, "Reset data to shipped defaults…", lambda: self._reset_library(None)), 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
@@ -661,7 +876,7 @@ class SettingsDialog(wx.Dialog):
             if dialog.ShowModal() != wx.ID_OK:
                 return
             if wx.MessageBox(
-                "Restore this backup? It replaces your current Kobee Studio data, including preferences, custom SVGs, quick labels, profiles, and hidden-item choices. This cannot be undone.",
+                "Restore this backup? It replaces your current Kobee Studio data, including fonts, preferences, custom SVGs, component presets, quick labels, profiles, and hidden-item choices. This cannot be undone.",
                 "Replace Kobee Studio data",
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
                 self,
@@ -710,7 +925,7 @@ class SettingsDialog(wx.Dialog):
         return self.global_asset_store
 
     def _asset_namespace(self) -> str:
-        return "symbols" if self.namespace_choice.GetStringSelection() == "Symbols" else "graphics"
+        return "symbols" if self.namespace_choice.GetStringSelection() == "Icons" else "graphics"
 
     def _on_upload_filter_changed(self, event):
         self._refresh_uploads()
@@ -725,6 +940,8 @@ class SettingsDialog(wx.Dialog):
         )
         if hasattr(self, "add_variant_button"):
             self.add_variant_button.Enable(self._asset_namespace() == "symbols")
+        if hasattr(self, "upload_png_button"):
+            self.upload_png_button.Enable(self._asset_namespace() == "graphics")
 
     def _upload_svg(self, event):
         picker = wx.FileDialog(
@@ -766,6 +983,27 @@ class SettingsDialog(wx.Dialog):
             wx.MessageBox(str(error), "Could not upload SVG", wx.OK | wx.ICON_ERROR, self)
         finally:
             name_prompt.Destroy()
+
+    def _upload_png(self, event):
+        picker = wx.FileDialog(self, "Choose a PNG to convert", wildcard="PNG files (*.png)|*.png", style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        try:
+            if picker.ShowModal() != wx.ID_OK: return
+            source = Path(picker.GetPath())
+        finally: picker.Destroy()
+        converter = PngTraceDialog(self, source)
+        try:
+            if converter.ShowModal() != wx.ID_OK or converter.result is None: return
+            result = converter.result
+        finally: converter.Destroy()
+        name_prompt = wx.TextEntryDialog(self, "Display name", "Save converted graphic", source.stem.replace("_", " ").title())
+        try:
+            if name_prompt.ShowModal() != wx.ID_OK: return
+            from dataclasses import asdict
+            self._asset_store().upload_traced_png(source, result.svg, name_prompt.GetValue(), asdict(result.settings))
+            self._refresh_uploads(); self.restart_editor = True
+        except (OSError, RuntimeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not convert PNG", wx.OK | wx.ICON_ERROR, self)
+        finally: name_prompt.Destroy()
 
     def _upload_variant(self, event):
         selection = self.upload_list.GetSelection()

@@ -11,6 +11,7 @@ from .composition import (
     CompositionDocument,
     DocumentStyle,
     GroupObject,
+    GraphicObject,
     GuideObject,
     IconObject,
     Point,
@@ -32,6 +33,7 @@ from .shape_geometry import (
     shape_contour,
 )
 from .transforms import SUPPORTED_OUTPUT_LAYERS, is_bottom
+from .svg_symbols import svg_polygons_from_root, validate_svg_bytes
 
 
 @dataclass(frozen=True)
@@ -1395,6 +1397,38 @@ def render_header_artwork(vectorizer: TextVectorizer, spec: PinHeaderSpec) -> St
         document=layout.to_composition_document(),
         header=spec,
     )
+
+
+def render_graphic_artwork(graphic: GraphicObject, output_layer: str) -> StudioArtwork:
+    """Render one imported graphic using its embedded, portable SVG fallback."""
+    if output_layer not in SUPPORTED_OUTPUT_LAYERS:
+        raise ValueError("Unsupported Kobee Studio output layer: {}".format(output_layer))
+    data = graphic.geometry_svg.encode("utf-8")
+    root = validate_svg_bytes(data, require_renderable=True, allow_strokes=True)
+    polygons = svg_polygons_from_root(root, allow_strokes=True)
+    minimum, maximum = polygon_bounds(polygons)
+    natural_width, natural_height = maximum.x - minimum.x, maximum.y - minimum.y
+    if natural_width <= 0 or natural_height <= 0:
+        raise ValueError("Imported graphic has no measurable size")
+    centre = Point((minimum.x + maximum.x) / 2.0, (minimum.y + maximum.y) / 2.0)
+    sx = graphic.size.width / natural_width
+    sy = graphic.size.height / natural_height
+    if graphic.mirror_horizontal: sx *= -1
+    if graphic.mirror_vertical: sy *= -1
+    angle = math.radians(graphic.rotation_deg)
+    cosine, sine = math.cos(angle), math.sin(angle)
+    transformed = []
+    for polygon in polygons:
+        points = []
+        for point in polygon:
+            x, y = (point.x - centre.x) * sx, (point.y - centre.y) * sy
+            points.append(Point(x * cosine - y * sine + graphic.position.x,
+                                x * sine + y * cosine + graphic.position.y))
+        if len(points) >= 3:
+            transformed.append(tuple(points))
+    document = CompositionDocument(objects=(graphic,), output_layer=output_layer,
+                                   size=graphic.size, rotation_deg=graphic.rotation_deg)
+    return StudioArtwork(tuple(transformed), (), (), document)
 
 
 def _mirror_polygon(polygon: Polygon) -> Polygon:

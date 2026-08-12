@@ -312,3 +312,33 @@ class IpcArtworkPlacement:
             # Selection is convenience only; placement has already succeeded.
             pass
         self.session.board.interactive_move(placed.id)
+
+    def place_designators(self, records: Sequence[Tuple[Any, StudioArtwork, Mapping[str, Any], str, Optional[Any]]]):
+        """Create/update linked designator artwork and hide native fields atomically."""
+        try:
+            from kipy.geometry import Angle
+        except ImportError as error:
+            raise IpcUnavailableError("The installed kicad-python package is incomplete") from error
+        creates, updates, sources = [], [], []
+        for source, artwork, payload, output_layer, existing in records:
+            footprint = self.build_footprint(artwork, payload, output_layer)
+            footprint.position = source.reference_field.text.position
+            footprint.orientation = Angle.from_degrees(float(source.reference_field.text.attributes.angle))
+            if existing is not None:
+                footprint.proto.id.CopyFrom(existing.id)
+                try: footprint.definition.proto.id.CopyFrom(existing.definition.proto.id)
+                except Exception: pass
+                updates.append(footprint)
+            else:
+                creates.append(footprint)
+            source.reference_field.visible = False
+            sources.append(source)
+        transaction = self.session.begin_commit()
+        try:
+            if creates: self.session.board.create_items(creates)
+            if updates: self.session.board.update_items(updates)
+            if sources: self.session.board.update_items(sources)
+            self.session.commit(transaction, "Add Kobee Studio designators")
+        except Exception:
+            self.session.discard(transaction); raise
+        return len(creates), len(updates)

@@ -203,7 +203,9 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("class BrandedHeader(wx.Panel):", source)
         self.assertIn("icon=family", source)
         self.assertIn('("labels", "Standard", "Label")', source)
-        self.assertIn('("labels", "Header Overlay", "2.54 mm Pin Header")', source)
+        self.assertIn('("labels", "Connector Overlay", "2.54 mm Pin Header")', source)
+        self.assertIn('("graphics", "Imported Graphic", "Imported Graphic")', source)
+        self.assertIn('("board_tools", "Cleanup", "Board Tools")', source)
         self.assertIn('("labels", "Component Callout", "Component Callout")', source)
         self.assertIn('("labels", "Component Array", "Component Array")', source)
         self.assertIn('("codes", "QR Code", "QR / Barcode")', source)
@@ -298,6 +300,10 @@ class IpcMigrationTests(unittest.TestCase):
         expected_icons = ["kobee-toolbar-24.png", "kobee-toolbar-48.png"]
         self.assertEqual(expected_icons, action["icons-light"])
         self.assertEqual(expected_icons, action["icons-dark"])
+        action_names = {item["identifier"]: item for item in manifest["actions"]}
+        self.assertEqual("kobeestudio_add_designator.py", action_names["add-designator"]["entrypoint"])
+        self.assertEqual("kobeestudio_remove_designators.py", action_names["remove-designators"]["entrypoint"])
+        self.assertEqual("kobeestudio_remove_silkscreen.py", action_names["remove-silkscreen"]["entrypoint"])
         for icon_name, expected_size in zip(expected_icons, (24, 48)):
             icon_path = ROOT / "ipc_plugin" / icon_name
             icon_data = icon_path.read_bytes()

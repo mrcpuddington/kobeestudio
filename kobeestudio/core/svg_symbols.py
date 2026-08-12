@@ -39,7 +39,7 @@ _SAFE_TAGS = frozenset(
         "title", "desc", "defs", "clipPath", "mask", "linearGradient", "radialGradient", "stop",
     )
 )
-_RENDERABLE_TAGS = frozenset(("svg", "g", "path", "polygon", "polyline", "rect", "circle", "ellipse", "title", "desc", "defs"))
+_RENDERABLE_TAGS = frozenset(("svg", "g", "path", "polygon", "polyline", "line", "rect", "circle", "ellipse", "title", "desc", "defs"))
 _FORBIDDEN_ATTRIBUTE_PREFIXES = ("on",)
 _URL_ATTRIBUTES = frozenset(("href", "xlink:href", "src"))
 
@@ -71,7 +71,7 @@ def _read_svg(path: Path) -> bytes:
     return path.read_bytes()
 
 
-def validate_svg_bytes(data: bytes, require_renderable: bool = False) -> ET.Element:
+def validate_svg_bytes(data: bytes, require_renderable: bool = False, allow_strokes: bool = False) -> ET.Element:
     """Reject active/external content and optionally unsupported symbol geometry."""
     if not isinstance(data, bytes) or not data or len(data) > MAX_SVG_BYTES:
         raise ValueError("SVG asset must be between 1 byte and 2 MiB")
@@ -101,7 +101,7 @@ def validate_svg_bytes(data: bytes, require_renderable: bool = False) -> ET.Elem
             if lower_name in _URL_ATTRIBUTES or "url(" in value or value.startswith(("http:", "https:", "data:", "file:")):
                 raise ValueError("SVG assets cannot reference external or embedded resources")
     if require_renderable:
-        svg_polygons_from_root(root)
+        svg_polygons_from_root(root, allow_strokes=allow_strokes)
     return root
 
 
@@ -363,6 +363,9 @@ def _element_polygons(element: ET.Element) -> List[List[Tuple[float, float]]]:
         if len(values) < 6 or len(values) % 2:
             raise ValueError("SVG polygon points are invalid")
         return [[(values[index], values[index + 1]) for index in range(0, len(values), 2)]]
+    if tag == "line":
+        return [[(float(element.get("x1", "0")), float(element.get("y1", "0"))),
+                 (float(element.get("x2", "0")), float(element.get("y2", "0")))]]
     if tag == "rect":
         x, y = float(element.get("x", "0")), float(element.get("y", "0"))
         width, height = float(element.get("width", "0")), float(element.get("height", "0"))
@@ -399,7 +402,7 @@ def _element_polygons(element: ET.Element) -> List[List[Tuple[float, float]]]:
     return []
 
 
-def svg_polygons_from_root(root: ET.Element) -> Tuple[Polygon, ...]:
+def svg_polygons_from_root(root: ET.Element, allow_strokes: bool = False) -> Tuple[Polygon, ...]:
     polygons: List[Polygon] = []
     point_count = 0
 
@@ -413,14 +416,20 @@ def svg_polygons_from_root(root: ET.Element) -> Tuple[Polygon, ...]:
             return
         matrix = _multiply(parent_matrix, _transform(element.get("transform")))
         fill = _style_value(element, "fill", inherited_fill)
-        if tag in ("path", "polygon", "polyline", "rect", "circle", "ellipse"):
+        if tag in ("path", "polygon", "polyline", "line", "rect", "circle", "ellipse"):
+            stroke = (_style_value(element, "stroke") or "none").strip().lower()
+            stroke_width = float(_style_value(element, "stroke-width", "1") or "1")
             if fill is not None and fill.strip().lower() == "none":
-                if (_style_value(element, "stroke") or "none").strip().lower() != "none":
+                if stroke != "none" and not allow_strokes:
                     raise ValueError("Stroked SVG symbols must be converted to filled paths")
-                return
+                if stroke == "none": return
             raw_polygons = _element_polygons(element)
-            fill_rule = _style_value(element, "fill-rule", None)
-            for polygon in _filled_svg_contours(raw_polygons, matrix, fill_rule):
+            rendered = []
+            if fill is None or fill.strip().lower() != "none":
+                rendered.extend(_filled_svg_contours(raw_polygons, matrix, _style_value(element, "fill-rule", None)))
+            if stroke != "none" and allow_strokes:
+                rendered.extend(_stroke_svg_contours(raw_polygons, matrix, stroke_width, close=tag not in ("line", "polyline")))
+            for polygon in rendered:
                 point_count += len(polygon)
                 if point_count > MAX_SVG_POINTS:
                     raise ValueError("SVG symbol contains too many polygon points")
@@ -437,12 +446,30 @@ def svg_polygons_from_root(root: ET.Element) -> Tuple[Polygon, ...]:
     return tuple(polygons)
 
 
+def _stroke_svg_contours(raw_contours, matrix: Matrix, width: float, close: bool = True) -> Tuple[Polygon, ...]:
+    if not math.isfinite(width) or width <= 0: raise ValueError("SVG stroke width must be positive")
+    # Approximate transformed stroke width using the matrix's average axis scale.
+    scale = (math.hypot(matrix[0], matrix[1]) + math.hypot(matrix[2], matrix[3])) / 2.0
+    half = width * max(scale, 0.000001) / 2.0; result = []
+    for raw in raw_contours:
+        points = [_apply(point, matrix) for point in raw]
+        pairs = list(zip(points, points[1:] + ([points[0]] if close and len(points) > 2 else [])))
+        for first, second in pairs:
+            dx, dy = second.x-first.x, second.y-first.y; length = math.hypot(dx,dy)
+            if length <= 0: continue
+            nx, ny = -dy/length*half, dx/length*half
+            result.append((Point(first.x+nx,first.y+ny),Point(second.x+nx,second.y+ny),Point(second.x-nx,second.y-ny),Point(first.x-nx,first.y-ny)))
+        for centre in points:
+            result.append(tuple(Point(centre.x+half*math.cos(2*math.pi*i/16),centre.y+half*math.sin(2*math.pi*i/16)) for i in range(16)))
+    return tuple(result)
+
+
 @lru_cache(maxsize=128)
-def _svg_geometry(path_text: str, modified_ns: int, byte_size: int):
+def _svg_geometry(path_text: str, modified_ns: int, byte_size: int, allow_strokes: bool = False):
     """Cache immutable geometry while still invalidating replaced SVG files."""
     path = Path(path_text)
-    root = validate_svg_bytes(_read_svg(path), require_renderable=True)
-    polygons = svg_polygons_from_root(root)
+    root = validate_svg_bytes(_read_svg(path), require_renderable=True, allow_strokes=allow_strokes)
+    polygons = svg_polygons_from_root(root, allow_strokes=allow_strokes)
     view_box = _numbers(root.get("viewBox"))
     if view_box:
         if len(view_box) != 4 or view_box[2] <= 0 or view_box[3] <= 0:
@@ -454,7 +481,7 @@ def _svg_geometry(path_text: str, modified_ns: int, byte_size: int):
     return polygons, minimum, maximum
 
 
-def render_svg(path: Path, height_mm: float) -> Tuple[Tuple[Polygon, ...], Size]:
+def render_svg(path: Path, height_mm: float, allow_strokes: bool = False) -> Tuple[Tuple[Polygon, ...], Size]:
     if not math.isfinite(float(height_mm)) or float(height_mm) <= 0:
         raise ValueError("Symbol height must be greater than zero")
     path = Path(path)
@@ -462,7 +489,7 @@ def render_svg(path: Path, height_mm: float) -> Tuple[Tuple[Polygon, ...], Size]
         raise ValueError("SVG asset must be a regular file")
     stat = path.stat()
     polygons, minimum, maximum = _svg_geometry(
-        str(path.resolve()), stat.st_mtime_ns, stat.st_size
+        str(path.resolve()), stat.st_mtime_ns, stat.st_size, bool(allow_strokes)
     )
     natural_height = maximum.y - minimum.y
     if natural_height <= 0:
@@ -706,7 +733,7 @@ class SvgAssetStore:
         category = _display_name(category)
         source = Path(source)
         data = _read_svg(source)
-        validate_svg_bytes(data, require_renderable=namespace == "symbols")
+        validate_svg_bytes(data, require_renderable=namespace in ("symbols", "graphics"), allow_strokes=namespace == "graphics")
         content_sha256 = hashlib.sha256(data).hexdigest()
         if asset_id is None:
             asset_id = "custom.{}".format(uuid.uuid4())
@@ -763,7 +790,7 @@ class SvgAssetStore:
                 payload = json.loads(metadata_path.read_text(encoding="utf-8"))
                 if payload.get("schema_version") != ASSET_SCHEMA_VERSION or payload.get("namespace") != namespace or payload.get("scope") != self.scope:
                     continue
-                validate_svg_bytes(_read_svg(asset_path), require_renderable=namespace == "symbols")
+                validate_svg_bytes(_read_svg(asset_path), require_renderable=namespace in ("symbols", "graphics"), allow_strokes=namespace == "graphics")
                 expected_hash = payload.get("content_sha256")
                 if expected_hash and hashlib.sha256(asset_path.read_bytes()).hexdigest() != expected_hash:
                     continue
@@ -782,6 +809,36 @@ class SvgAssetStore:
             except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
                 continue
         return tuple(items)
+
+    def upload_traced_png(self, source_png: Path, svg: bytes, name: str,
+                          trace_settings: Mapping[str, Any]) -> SymbolAsset:
+        """Store derived PCB geometry plus its editable raster source."""
+        source_png = Path(source_png)
+        if source_png.is_symlink() or not source_png.is_file():
+            raise ValueError("PNG source must be a regular file")
+        if len(svg) > MAX_SVG_BYTES:
+            raise ValueError("Converted SVG is too large")
+        validate_svg_bytes(svg, require_renderable=True, allow_strokes=True)
+        temporary_root = Path(tempfile.mkdtemp(prefix=".trace-"))
+        try:
+            svg_path = temporary_root / "graphic.svg"
+            svg_path.write_bytes(svg)
+            saved = self.upload(svg_path, "graphics", name)
+            destination = saved.path.parent
+            png_temporary = destination / ".source.png.tmp"
+            settings_temporary = destination / ".trace.json.tmp"
+            shutil.copyfile(str(source_png), str(png_temporary))
+            _atomic_json(settings_temporary, {"schema_version": 1, "settings": dict(trace_settings)})
+            os.replace(str(png_temporary), str(destination / "source.png"))
+            os.replace(str(settings_temporary), str(destination / "trace.json"))
+            return saved
+        except Exception:
+            if 'saved' in locals():
+                try: self.delete("graphics", saved.asset_id)
+                except Exception: pass
+            raise
+        finally:
+            shutil.rmtree(str(temporary_root), ignore_errors=True)
 
     def delete(self, namespace: str, asset_id: str, variant: Optional[str] = None) -> int:
         namespace = _slug(namespace, "asset namespace")

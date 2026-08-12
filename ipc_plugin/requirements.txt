@@ -1,2 +1,5 @@
 # KiCad creates an isolated environment for IPC plugins and installs this file.
 kicad-python>=0.7,<0.8
+Pillow>=10,<13
+Brotli>=1,<2
+certifi>=2025.8

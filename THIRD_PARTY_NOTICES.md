@@ -37,6 +37,12 @@ assume a separate system Python environment:
   [`kobeestudio/vendor/licenses/qrcode-LICENSE`](kobeestudio/vendor/licenses/qrcode-LICENSE).
 - **python-barcode 0.16.1**, under the MIT License — see
   [`kobeestudio/vendor/licenses/python-barcode-LICENSE`](kobeestudio/vendor/licenses/python-barcode-LICENSE).
+- **Pillow**, under the HPND License, installed by the IPC runtime for bounded
+  PNG decoding and monochrome tracing.
+- **Brotli**, under the MIT License, installed by the IPC runtime so FontTools
+  can decode Google Fonts WOFF2 responses into static OpenType files.
+- **certifi**, under the Mozilla Public License 2.0, installed by the IPC
+  runtime to provide a verified CA bundle to KiCad's embedded Python.
 
 The included FreddySpark, Ubuntu Mono, and M+ typefaces remain credited to
 their respective creators in the project history and are retained solely for

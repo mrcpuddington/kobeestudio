@@ -55,7 +55,7 @@ def _trace(message: str) -> None:
         print("Kobee startup: {}".format(message), file=sys.stderr, flush=True)
 
 
-def main() -> int:
+def main(startup_action=None) -> int:
     """Open the existing editor and place its artwork through KiCad IPC."""
     configure_process_identity()
     app = wx.App(False)
@@ -74,7 +74,7 @@ def main() -> int:
             nonlocal pending_move
             feature = None
             if dialog.artwork.header is not None:
-                feature = {"kind": "pin_header_2_54", "data": dialog.artwork.header.to_dict()}
+                feature = {"kind": "connector_overlay", "data": dialog.artwork.header.to_dict()}
             elif dialog.artwork.component_callout is not None:
                 feature = {
                     "kind": (
@@ -84,6 +84,8 @@ def main() -> int:
                     ),
                     "data": dialog.artwork.component_callout.to_dict(),
                 }
+            elif any(getattr(item, "kind", "") == "graphic" for item in dialog.artwork.document.objects):
+                feature = {"kind": "imported_graphic", "data": dialog.artwork.document.to_dict()}
             payload = build_footprint_payload(
                 dialog.CurrentSettings(),
                 document=dialog.artwork.document,
@@ -117,6 +119,12 @@ def main() -> int:
             app.SetTopWindow(dialog)
             _trace("showing editor")
             try:
+                if startup_action == "add-designator":
+                    dialog._select_tool("Designators")
+                    wx.CallAfter(dialog.run_add_designators, "single")
+                elif startup_action in ("remove-designators", "remove-silkscreen"):
+                    dialog._select_tool("Cleanup")
+                    wx.CallAfter(dialog.run_board_cleanup, "designators" if startup_action == "remove-designators" else "silkscreen", "selected")
                 dialog.ShowModal()
                 restart_requested = bool(getattr(dialog, "restart_requested", False))
             finally:

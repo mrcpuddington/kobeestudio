@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "families": [
+    {"family": "Roboto", "category": "Sans Serif"},
+    {"family": "Open Sans", "category": "Sans Serif"},
+    {"family": "Lato", "category": "Sans Serif"},
+    {"family": "Montserrat", "category": "Sans Serif"},
+    {"family": "Noto Sans", "category": "Sans Serif"},
+    {"family": "Noto Serif", "category": "Serif"},
+    {"family": "Source Sans 3", "category": "Sans Serif"},
+    {"family": "Source Code Pro", "category": "Monospace"}
+  ]
+}

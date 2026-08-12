@@ -25,6 +25,30 @@
         "kobee-toolbar-24.png",
         "kobee-toolbar-48.png"
       ]
+    },
+    {
+      "identifier": "add-designator",
+      "name": "Add Kobee Designator to Selected Footprint",
+      "description": "Create a styled Kobee Studio label from the selected footprint reference",
+      "show-button": false,
+      "scopes": ["pcb"],
+      "entrypoint": "kobeestudio_add_designator.py"
+    },
+    {
+      "identifier": "remove-designators",
+      "name": "Remove Designators from Selected Footprints",
+      "description": "Hide semantic reference fields and remove linked Kobee designators",
+      "show-button": false,
+      "scopes": ["pcb"],
+      "entrypoint": "kobeestudio_remove_designators.py"
+    },
+    {
+      "identifier": "remove-silkscreen",
+      "name": "Remove Silkscreen from Selected Footprints",
+      "description": "Safely remove front and back silkscreen graphics and free text",
+      "show-button": false,
+      "scopes": ["pcb"],
+      "entrypoint": "kobeestudio_remove_silkscreen.py"
     }
   ]
 }

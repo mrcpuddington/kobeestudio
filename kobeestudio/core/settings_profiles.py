@@ -24,6 +24,8 @@ PROFILE_MODULE_BY_MODE = {
     "Component Callout": "component_callouts",
     "Component Array": "component_arrays",
     "QR / Barcode": "machine_codes",
+    "Imported Graphic": "graphics",
+    "Board Tools": "board_tools",
 }
 
 

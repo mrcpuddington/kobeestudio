@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Added a searchable Google Fonts library with selectable faces, offline installed fonts, verified downloads, and missing-face recovery.
+- Added global/project graphics and component preset libraries, safe broad SVG import, live PNG tracing, and transformable imported-graphic artwork.
+- Generalized connector overlays across common pitches and custom pitch values while preserving existing 2.54 mm artwork.
+- Added transactional KiCad Board Tools and External Plugin actions for designator generation/removal and safe two-sided footprint silkscreen cleanup.
+- Fixed responsive editor resizing and prevented mouse-wheel scrolling from changing numeric inputs on macOS and Windows.
+
 ## 1.4.1 - 2026-08-09
 
 - Hardened the KiCad 10 IPC editor on Windows by removing re-entrant control events and silencing renderer output that could block KiCad's captured process stream.
