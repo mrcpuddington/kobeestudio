@@ -31,3 +31,17 @@ For a command-line export after saving `acceptance.kicad_pcb`:
 ```
 
 Record KiCad version, operating-system version, generated Gerbers, and screenshots in the release evidence. This test is deliberately manual because correct 3D and Gerber viewing orientation is a visual acceptance criterion.
+
+## Feature-expansion acceptance pass
+
+Run every item once on macOS and once on Windows with KiCad 10.
+
+1. Resize Kobee Studio from its minimum size to a maximized window on every Labels, Graphics, Codes, Board Tools, and Settings page. Confirm cards reflow without duplicated native controls. Scroll with the pointer over every numeric field; the page or preview may scroll/zoom, but the number must never change.
+2. In Settings → Fonts, search the bundled offline catalog, install Regular and Italic faces, close KiCad, disconnect the network, and reopen Kobee Studio. Generate text with both installed faces. Remove one font file manually, confirm Settings marks it missing, then use **Redownload missing** and verify saved artwork still uses the same face. Check that `LICENSE.txt` exists beside the restored font.
+3. Upload representative Illustrator and Inkscape SVGs containing paths, shapes, nested transforms, fills, strokes, and both even-odd and nonzero holes. Confirm scripts, external images, filters, masks, SVG text, and embedded raster data are rejected with an actionable message.
+4. Convert a transparent PNG. Exercise threshold, inversion, alpha cutoff, crop, smoothing, despeckle, and width. Save it, choose **Edit PNG trace…**, change the settings, and confirm the same library asset updates rather than creating a duplicate.
+5. Place an imported graphic and use all four resize handles, the rotation handle, and body dragging. Repeat after rotating and mirroring it and on B.SilkS. Reopen the generated footprint, modify it, and confirm its UUID and board position are retained.
+6. Create global and project component presets, edit and delete them, then use each in Component Callout and Component Array. Reopen placed artwork and confirm the embedded dimensions survive after deleting the source preset.
+7. Generate Connector Overlays at every standard pitch and at custom 0.50 mm and 20.00 mm boundaries. Confirm the displayed maximum label height updates while typing a custom pitch and that switching between millimetres and mils preserves the physical pitch.
+8. Select ordinary, locked, and Kobee-generated footprints. Run each External Plugin cleanup action and each Board Tools selected/whole-board action. Confirm counts, both-side silkscreen removal, preservation of pads/copper/mask/fabrication/courtyard/3D data and semantic field values, and exactly one KiCad undo step.
+9. Run **Add Kobee Designator to Selected Footprint**. Confirm the focused editor keeps reference text read-only while layout, font, symbol, shape, appearance, border, radius, and four padding values remain editable. Test front and bottom references with rotated native fields. Run it twice and confirm the existing Kobee designator updates without duplication. Repeat in bulk mode, then undo once.

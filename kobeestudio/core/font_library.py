@@ -81,6 +81,7 @@ class FontFace:
     source_url: str
     licence_url: str = ""
     content_sha256: str = ""
+    missing: bool = False
 
     @property
     def display_name(self) -> str:
@@ -96,6 +97,10 @@ class FontLibraryStore:
         self.catalog_path = self.root / "catalog.json"
 
     def list(self) -> Tuple[FontFace, ...]:
+        return tuple(item for item in self.records() if not item.missing)
+
+    def records(self) -> Tuple[FontFace, ...]:
+        """Return valid metadata records, including repairable missing files."""
         result = []
         if not self.root.exists():
             return ()
@@ -113,18 +118,24 @@ class FontLibraryStore:
                 if Path(filename).name != filename:
                     continue
                 font_path = directory / filename
-                if font_path.is_symlink() or not font_path.is_file():
-                    continue
-                digest = hashlib.sha256(font_path.read_bytes()).hexdigest()
-                if digest != payload.get("content_sha256"):
-                    continue
-                _font_names(font_path)
+                missing = font_path.is_symlink() or not font_path.is_file()
+                digest = ""
+                if not missing:
+                    digest = hashlib.sha256(font_path.read_bytes()).hexdigest()
+                    if digest != payload.get("content_sha256"):
+                        missing = True
+                    else:
+                        try:
+                            _font_names(font_path)
+                        except ValueError:
+                            missing = True
                 result.append(FontFace(
                     face_id=str(payload["face_id"]), family=str(payload["family"]),
                     style=str(payload.get("style", "normal")), weight=int(payload.get("weight", 400)),
                     renderer_name=str(payload["renderer_name"]), path=font_path,
                     source_url=str(payload.get("source_url", "")),
-                    licence_url=str(payload.get("licence_url", "")), content_sha256=digest,
+                    licence_url=str(payload.get("licence_url", "")),
+                    content_sha256=str(payload.get("content_sha256", digest)), missing=missing,
                 ))
             except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
                 continue
@@ -190,6 +201,14 @@ class FontLibraryStore:
         return self.install_bytes(data, **face)
 
     def download_google_face(self, family: str, weight: int = 400, style: str = "normal") -> FontFace:
+        data, source_url = self._google_face_bytes(family, weight, style)
+        licence_text, licence_url = self._google_licence(family)
+        return self.install_bytes(
+            data, family=family, weight=weight, style=style, source_url=source_url,
+            licence_url=licence_url, licence_text=licence_text,
+        )
+
+    def _google_face_bytes(self, family: str, weight: int = 400, style: str = "normal"):
         family, weight, style = str(family).strip(), int(weight), str(style).lower()
         if not family or not 1 <= weight <= 1000 or style not in ("normal", "italic"):
             raise ValueError("Invalid Google Font face")
@@ -208,13 +227,68 @@ class FontLibraryStore:
         request = urllib.request.Request(source_url, headers={"User-Agent": "Kobee-Studio"})
         with _urlopen(request, timeout=30) as response:
             data = response.read(MAX_FONT_BYTES + 1)
-        return self.install_bytes(
-            data, family=family, weight=weight, style=style, source_url=source_url,
-            licence_url="https://github.com/google/fonts/tree/main/ofl",
+        if len(data) > MAX_FONT_BYTES:
+            raise ValueError("Google Font exceeds the 32 MiB safety limit")
+        return data, source_url
+
+    @staticmethod
+    def _google_licence(family: str) -> Tuple[str, str]:
+        slug = re.sub(r"[^a-z0-9]", "", str(family).lower())
+        candidates = (
+            ("ofl", "OFL.txt"), ("apache", "LICENSE.txt"), ("ufl", "UFL.txt"),
         )
+        for directory, filename in candidates:
+            url = "https://raw.githubusercontent.com/google/fonts/main/{}/{}/{}".format(directory, slug, filename)
+            try:
+                request = urllib.request.Request(url, headers={"User-Agent": "Kobee-Studio"})
+                with _urlopen(request, timeout=15) as response:
+                    raw = response.read(256 * 1024 + 1)
+                if raw and len(raw) <= 256 * 1024:
+                    return raw.decode("utf-8", "replace"), url
+            except Exception:
+                continue
+        raise ValueError("Could not retrieve the upstream Google Fonts licence; the face was not installed")
+
+    def repair(self, face_id: str) -> FontFace:
+        """Redownload a missing face without changing its renderer identity."""
+        record = next((item for item in self.records() if item.face_id == face_id), None)
+        if record is None:
+            raise LookupError("Font face was not found")
+        if not record.missing:
+            return record
+        data, source_url = self._google_face_bytes(record.family, record.weight, record.style)
+        licence_text, licence_url = self._google_licence(record.family)
+        temporary = self.install_bytes(
+            data, family=record.family, weight=record.weight, style=record.style,
+            source_url=source_url, licence_url=licence_url, licence_text=licence_text,
+        )
+        destination = record.path.parent
+        staging = Path(tempfile.mkdtemp(prefix=".repair-", dir=str(self.root)))
+        tombstone = destination.with_name(".repair-old-{}".format(uuid.uuid4()))
+        try:
+            font_bytes = temporary.path.read_bytes()
+            (staging / "font.ttf").write_bytes(font_bytes)
+            metadata = json.loads((destination / "metadata.json").read_text(encoding="utf-8"))
+            metadata.update({"source_url": source_url, "licence_url": licence_url,
+                             "content_sha256": hashlib.sha256(font_bytes).hexdigest()})
+            metadata_path = staging / "metadata.json"
+            _atomic_json(metadata_path, metadata)
+            if licence_text:
+                (staging / "LICENSE.txt").write_text(licence_text, encoding="utf-8")
+            os.replace(str(destination), str(tombstone))
+            try:
+                os.replace(str(staging), str(destination))
+            except Exception:
+                os.replace(str(tombstone), str(destination))
+                raise
+            shutil.rmtree(str(tombstone), ignore_errors=True)
+        finally:
+            shutil.rmtree(str(staging), ignore_errors=True)
+            shutil.rmtree(str(temporary.path.parent), ignore_errors=True)
+        return next(item for item in self.list() if item.face_id == face_id)
 
     def delete(self, face_id: str) -> None:
-        match = next((item for item in self.list() if item.face_id == face_id), None)
+        match = next((item for item in self.records() if item.face_id == face_id), None)
         if match is None:
             raise LookupError("Font face was not found")
         directory = match.path.parent

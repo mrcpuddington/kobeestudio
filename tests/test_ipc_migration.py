@@ -335,6 +335,9 @@ class IpcMigrationTests(unittest.TestCase):
     def test_ipc_requirements_use_kicad_bundled_wxpython(self):
         requirements = (ROOT / "ipc_plugin/requirements.txt").read_text()
         self.assertIn("kicad-python", requirements)
+        self.assertIn("Pillow", requirements)
+        self.assertIn("Brotli", requirements)
+        self.assertIn("certifi", requirements)
         self.assertNotIn("wxPython", requirements)
 
     def test_pcm_builder_places_ipc_manifest_in_plugin_subdirectory(self):
@@ -357,6 +360,21 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("settings_content.SetSizer(legacy_root)", source)
         self.assertIn("scroller_sizer.Add(settings_content", source)
         self.assertNotIn("scroller.SetSizer(legacy_root)", source)
+
+    def test_new_numeric_dialogs_and_custom_pitch_keep_wheel_and_unit_guards(self):
+        editor = (ROOT / "kobeestudio/ui/editor_v2.py").read_text()
+        settings = (ROOT / "kobeestudio/ui/settings_dialog.py").read_text()
+        self.assertIn('"HeaderCustomPitchCtrl",', editor)
+        self.assertIn("custom_pitch.Bind(wx.EVT_TEXT, self._on_header_custom_pitch_changed)", editor)
+        self.assertIn("Maximum label height at", editor)
+        self.assertNotIn("wx.SpinCtrlDouble(self, min=0.1, max=1000", settings)
+        self.assertIn("ThemedSpinCtrlDouble(self, min=0.1, max=1000", settings)
+
+    def test_designator_action_opens_the_focused_style_editor(self):
+        source = (ROOT / "kobeestudio/ui/editor_v2.py").read_text()
+        self.assertIn("class DesignatorStyleDialog(wx.Dialog):", source)
+        self.assertIn("Reference text (locked)", source)
+        self.assertIn("settings.update(editor.settings())", source)
 
     def test_ipc_session_uses_the_connection_details_from_kicad(self):
         session = IpcSession.connect(
@@ -511,6 +529,47 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual([], session.board.moved)
         placement.start_interactive_move(placed)
         self.assertEqual(["placed-footprint-id"], session.board.moved)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_designator_batch_uses_exact_anchor_updates_existing_and_is_one_commit(self):
+        class Attributes: angle = 32.5
+        class Text:
+            position = "native-reference-position"
+            attributes = Attributes()
+        class Field:
+            text = Text(); visible = True
+        class Source:
+            reference_field = Field()
+        artwork = StudioArtwork(
+            filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),), strokes=(), guides=(),
+            document=CompositionDocument(objects=()),
+        )
+        session = IpcSession.connect(
+            environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"}, client_factory=_Client,
+        )
+        existing = _PlacedFootprint("existing-designator", "existing-definition")
+        created, updated = _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",existing),))
+        placed = session.board.updated[0][0]
+        self.assertEqual((0,1),(created,updated))
+        self.assertEqual("native-reference-position",placed.position)
+        self.assertAlmostEqual(32.5,placed.orientation.degrees)
+        self.assertEqual("existing-designator",placed.id.value)
+        self.assertFalse(Source.reference_field.visible)
+        pushes=[item for item in session.board.messages if item[0]=="push"]
+        self.assertEqual(1,len(pushes))
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_partial_designator_creation_discards_transaction(self):
+        class Attributes: angle = 0
+        class Text: position = "position"; attributes = Attributes()
+        class Field: text = Text(); visible = True
+        class Source: reference_field = Field()
+        artwork=StudioArtwork(filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),),strokes=(),guides=(),document=CompositionDocument(objects=()))
+        session=IpcSession.connect(environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"},client_factory=_Client)
+        session.board.create_items=lambda items: []
+        with self.assertRaisesRegex(RuntimeError,"rolled back"):
+            _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",None),))
+        self.assertTrue(any(item[0]=="drop" for item in session.board.messages))
 
     def test_metadata_round_trip_reopens_selected_artwork(self):
         payload = {

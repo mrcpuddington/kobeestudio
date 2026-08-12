@@ -22,16 +22,28 @@ def _allowed(relative: str) -> bool:
 def export_library(source_root: Path, destination: Path) -> int:
     """Write custom assets, labels, profiles, and preferences to a portable zip."""
     source_root, destination = Path(source_root), Path(destination)
-    count = 0
-    with zipfile.ZipFile(str(destination), "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(source_root.rglob("*")) if source_root.exists() else ():
-            if path.is_symlink() or not path.is_file():
-                continue
-            relative = path.relative_to(source_root).as_posix()
-            if _allowed(relative):
+    files = []
+    for path in sorted(source_root.rglob("*")) if source_root.exists() else ():
+        if path.is_symlink() or not path.is_file() or path.resolve() == destination.resolve():
+            continue
+        relative = path.relative_to(source_root).as_posix()
+        if _allowed(relative):
+            files.append((path, relative))
+    if len(files) > _MAX_FILES or sum(path.stat().st_size for path, _relative in files) > _MAX_UNCOMPRESSED_BYTES:
+        raise ValueError("Kobee Studio data is too large to back up safely")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".library-export-", suffix=".zip", dir=str(destination.parent))
+    os.close(descriptor)
+    try:
+        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path, relative in files:
                 archive.write(str(path), relative)
-                count += 1
-    return count
+        os.replace(temporary, str(destination))
+    except Exception:
+        try: os.unlink(temporary)
+        except OSError: pass
+        raise
+    return len(files)
 
 
 def import_library(source: Path, destination_root: Path) -> int:

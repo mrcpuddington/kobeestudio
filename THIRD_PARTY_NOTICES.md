@@ -44,6 +44,12 @@ assume a separate system Python environment:
 - **certifi**, under the Mozilla Public License 2.0, installed by the IPC
   runtime to provide a verified CA bundle to KiCad's embedded Python.
 
+The offline Google Fonts family/face catalog is generated from the official
+[`google/fonts`](https://github.com/google/fonts) metadata. Font binaries are
+downloaded only when a user selects a face; Kobee Studio retains that family's
+upstream licence text beside the installed font and embeds only vectorized PCB
+geometry in generated artwork.
+
 The included FreddySpark, Ubuntu Mono, and M+ typefaces remain credited to
 their respective creators in the project history and are retained solely for
 the same bundled-font functionality provided by the original plugin.

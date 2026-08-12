@@ -88,6 +88,16 @@ class SvgSafetyTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_svg_bytes(unsafe)
 
+    def test_text_raster_and_filters_have_actionable_import_errors(self):
+        cases = (
+            (b'<svg xmlns="http://www.w3.org/2000/svg"><text>LOGO</text></svg>', "converted to paths"),
+            (b'<svg xmlns="http://www.w3.org/2000/svg"><image href="logo.png"/></svg>', "import the PNG"),
+            (b'<svg xmlns="http://www.w3.org/2000/svg"><filter id="blur"/></svg>', "static paths"),
+        )
+        for svg, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                validate_svg_bytes(svg, require_renderable=True, allow_strokes=True)
+
     def test_stroke_only_symbol_explains_that_outlines_are_required(self):
         stroked = b'<svg xmlns="http://www.w3.org/2000/svg"><path fill="none" stroke="black" d="M0 0 L1 1"/></svg>'
         with self.assertRaisesRegex(ValueError, "converted to filled paths"):
@@ -97,8 +107,10 @@ class SvgSafetyTests(unittest.TestCase):
         donut = b'''<svg xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="
             M0 0 L10 0 L10 10 L0 10 Z M2 2 L2 8 L8 8 L8 2 Z"/></svg>'''
         self.assertIsNotNone(validate_svg_bytes(donut, require_renderable=True))
-        with self.assertRaisesRegex(ValueError, "evenodd"):
-            validate_svg_bytes(donut.replace(b' fill-rule="evenodd"', b""), require_renderable=True)
+        # The default nonzero rule is valid too: opposite contour winding
+        # describes the same hole and should normalize without forcing users
+        # to rewrite Illustrator/Inkscape output.
+        validate_svg_bytes(donut.replace(b' fill-rule="evenodd"', b""), require_renderable=True)
 
     def test_inkscape_defs_and_rounded_rectangles_are_safe_geometry(self):
         svg = b'''<svg xmlns="http://www.w3.org/2000/svg"><defs id="metadata"/>

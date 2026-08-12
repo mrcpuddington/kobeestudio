@@ -91,6 +91,12 @@ def validate_svg_bytes(data: bytes, require_renderable: bool = False, allow_stro
     for element in elements:
         tag = _local_name(element.tag)
         if tag not in allowed:
+            if tag == "text":
+                raise ValueError("SVG text must be converted to paths before upload")
+            if tag == "image":
+                raise ValueError("Embedded or linked raster images are not supported; import the PNG directly instead")
+            if tag in ("filter", "foreignObject", "use"):
+                raise ValueError("Unsupported SVG feature: {}; expand it to static paths first".format(tag))
             raise ValueError("Unsupported or unsafe SVG element: {}".format(tag))
         for raw_name, raw_value in element.attrib.items():
             name = _local_name(raw_name)
@@ -279,6 +285,13 @@ def _raw_area(polygon: Sequence[Tuple[float, float]]) -> float:
     ) / 2.0
 
 
+def _parent_chain(index: int, parents: Sequence[Optional[int]]):
+    parent = parents[index]
+    while parent is not None:
+        yield parent
+        parent = parents[parent]
+
+
 def _filled_svg_contours(
     raw_contours: Sequence[Sequence[Tuple[float, float]]], matrix: Matrix, fill_rule: Optional[str]
 ) -> Tuple[Polygon, ...]:
@@ -293,8 +306,6 @@ def _filled_svg_contours(
             and _raw_point_in_polygon(contour[0], other)
         ]
         parents.append(min(containers, key=lambda candidate: abs(_raw_area(raw_contours[candidate]))) if containers else None)
-    if any(parent is not None for parent in parents) and (fill_rule or "nonzero").strip().lower() != "evenodd":
-        raise ValueError("SVG cut-outs must use the evenodd fill rule")
     depth = []
     for index in range(len(raw_contours)):
         value, parent = 0, parents[index]
@@ -304,6 +315,25 @@ def _filled_svg_contours(
         depth.append(value)
     transformed = tuple(tuple(_apply(point, matrix) for point in contour) for contour in raw_contours)
     polygons = []
+    rule = (fill_rule or "nonzero").strip().lower()
+    if rule not in ("evenodd", "nonzero"):
+        raise ValueError("Unsupported SVG fill rule: {}".format(rule))
+    signs = tuple(1 if _raw_area(contour) >= 0 else -1 for contour in raw_contours)
+    outer_boundary, hole_boundary = set(), set()
+    for index in range(len(raw_contours)):
+        if rule == "evenodd":
+            (hole_boundary if depth[index] % 2 else outer_boundary).add(index)
+            continue
+        ancestors = []
+        parent = parents[index]
+        while parent is not None:
+            ancestors.append(parent); parent = parents[parent]
+        winding_before = sum(signs[item] for item in reversed(ancestors))
+        winding_after = winding_before + signs[index]
+        if winding_before == 0 and winding_after != 0:
+            outer_boundary.add(index)
+        elif winding_before != 0 and winding_after == 0:
+            hole_boundary.add(index)
 
     def overlap_join(polygon: Polygon) -> Polygon:
         """Slightly overlap touching SVG pieces to prevent canvas seam cracks.
@@ -331,11 +361,11 @@ def _filled_svg_contours(
     from .studio_artwork import _knockout_tiles
 
     for index, contour in enumerate(transformed):
-        if depth[index] % 2:
+        if index not in outer_boundary:
             continue
         holes = tuple(
-            transformed[child] for child, parent in enumerate(parents)
-            if parent == index and depth[child] == depth[index] + 1
+            transformed[child] for child in hole_boundary
+            if next((ancestor for ancestor in _parent_chain(child, parents) if ancestor in outer_boundary), None) == index
         )
         if holes:
             polygons.extend(overlap_join(tile) for tile in _knockout_tiles(contour, holes))
@@ -839,6 +869,54 @@ class SvgAssetStore:
             raise
         finally:
             shutil.rmtree(str(temporary_root), ignore_errors=True)
+
+    def traced_png_details(self, asset: SymbolAsset) -> Optional[Tuple[Path, Mapping[str, Any]]]:
+        """Return the retained PNG and validated trace settings for an asset."""
+        if asset.scope != self.scope or asset.path.parent.parent != self.root / "graphics":
+            return None
+        source, settings_path = asset.path.parent / "source.png", asset.path.parent / "trace.json"
+        if source.is_symlink() or settings_path.is_symlink() or not source.is_file() or not settings_path.is_file():
+            return None
+        try:
+            payload = json.loads(settings_path.read_text(encoding="utf-8"))
+            settings = payload.get("settings") if payload.get("schema_version") == 1 else None
+            if not isinstance(settings, Mapping):
+                return None
+            return source, dict(settings)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    def update_traced_png(self, asset: SymbolAsset, svg: bytes,
+                          trace_settings: Mapping[str, Any]) -> SymbolAsset:
+        """Atomically replace a traced asset while retaining its stable ID."""
+        details = self.traced_png_details(asset)
+        if details is None:
+            raise ValueError("The selected graphic is not an editable PNG trace")
+        if not svg or len(svg) > MAX_SVG_BYTES:
+            raise ValueError("Converted SVG is too large")
+        validate_svg_bytes(svg, require_renderable=True, allow_strokes=True)
+        directory = asset.path.parent
+        staging = Path(tempfile.mkdtemp(prefix=".retrace-", dir=str(directory.parent)))
+        tombstone = directory.with_name(".replace-{}".format(uuid.uuid4()))
+        try:
+            shutil.copytree(str(directory), str(staging), dirs_exist_ok=True)
+            (staging / "asset.svg").write_bytes(svg)
+            metadata_path = staging / "metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["content_sha256"] = hashlib.sha256(svg).hexdigest()
+            _atomic_json(metadata_path, metadata)
+            _atomic_json(staging / "trace.json", {"schema_version": 1, "settings": dict(trace_settings)})
+            os.replace(str(directory), str(tombstone))
+            try:
+                os.replace(str(staging), str(directory))
+            except Exception:
+                os.replace(str(tombstone), str(directory))
+                raise
+            shutil.rmtree(str(tombstone), ignore_errors=True)
+        except Exception:
+            shutil.rmtree(str(staging), ignore_errors=True)
+            raise
+        return next(item for item in self.list("graphics") if item.asset_id == asset.asset_id)
 
     def delete(self, namespace: str, asset_id: str, variant: Optional[str] = None) -> int:
         namespace = _slug(namespace, "asset namespace")

@@ -1428,7 +1428,14 @@ def render_graphic_artwork(graphic: GraphicObject, output_layer: str) -> StudioA
             transformed.append(tuple(points))
     document = CompositionDocument(objects=(graphic,), output_layer=output_layer,
                                    size=graphic.size, rotation_deg=graphic.rotation_deg)
-    return StudioArtwork(tuple(transformed), (), (), document)
+    # Keep the board origin visible while positioning. These tiny crosshair
+    # guides are preview-only and are never emitted to the KiCad footprint.
+    guide_size = max(1.0, min(5.0, max(graphic.size.width, graphic.size.height) * 0.2))
+    guides = (
+        (Point(-guide_size, -0.01), Point(guide_size, -0.01), Point(guide_size, 0.01), Point(-guide_size, 0.01)),
+        (Point(-0.01, -guide_size), Point(0.01, -guide_size), Point(0.01, guide_size), Point(-0.01, guide_size)),
+    )
+    return StudioArtwork(tuple(transformed), (), guides, document)
 
 
 def _mirror_polygon(polygon: Polygon) -> Polygon:

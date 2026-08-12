@@ -40,6 +40,16 @@ def _metadata(footprint: Any) -> Mapping[str, Any]:
     return {}
 
 
+def _require_updated(result: Sequence[Any], requested: Sequence[Any], operation: str) -> None:
+    """Refuse to commit a transaction if KiCad applied only part of it."""
+    if len(result or ()) != len(requested):
+        raise RuntimeError(
+            "KiCad only applied {} of {} {} update(s); the operation was rolled back".format(
+                len(result or ()), len(requested), operation
+            )
+        )
+
+
 class BoardToolsService:
     def __init__(self, session) -> None:
         self.session = session; self.board = session.board
@@ -67,7 +77,8 @@ class BoardToolsService:
             footprint.reference_field.visible = False
         transaction = self.session.begin_commit()
         try:
-            self.board.update_items(footprints)
+            updated = self.board.update_items(footprints)
+            _require_updated(updated, footprints, "footprint")
             if generated: self.board.remove_items(generated)
             self.session.commit(transaction, "Remove footprint designators")
         except Exception:
@@ -79,7 +90,13 @@ class BoardToolsService:
         if not footprints: return BoardToolResult(0, skipped)
         front, back = self._silk_layers(); silk_layers = {front, back, "F.SilkS", "B.SilkS"}; removed = 0
         for footprint in footprints:
-            for field in (footprint.reference_field, footprint.value_field):
+            semantic_fields = tuple(
+                field for field in (
+                    getattr(footprint, "reference_field", None), getattr(footprint, "value_field", None),
+                    getattr(footprint, "datasheet_field", None), getattr(footprint, "description_field", None),
+                ) if field is not None
+            )
+            for field in semantic_fields:
                 if getattr(field, "layer", None) in silk_layers: field.visible = False
             retained = []
             for item in footprint.definition.items:
@@ -93,7 +110,8 @@ class BoardToolsService:
             footprint.definition.items = retained
         transaction = self.session.begin_commit()
         try:
-            self.board.update_items(footprints)
+            updated = self.board.update_items(footprints)
+            _require_updated(updated, footprints, "footprint")
             self.session.commit(transaction, "Remove footprint silkscreen")
         except Exception:
             self.session.discard(transaction); raise

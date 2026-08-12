@@ -93,6 +93,8 @@ class PinHeaderSpec:
         if len(self.pin_labels) != self.pin_count:
             raise ValueError("pin label count must match pin_count")
         _positive("pitch_mm", self.pitch_mm)
+        if not 0.50 <= float(self.pitch_mm) <= 20.00:
+            raise ValueError("pitch_mm must be between 0.50 and 20.00 mm")
         _positive("pad_clearance_mm", self.pad_clearance_mm)
         for name in (
             "leading_padding_mm",

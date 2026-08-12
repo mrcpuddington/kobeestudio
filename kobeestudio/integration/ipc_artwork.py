@@ -335,9 +335,18 @@ class IpcArtworkPlacement:
             sources.append(source)
         transaction = self.session.begin_commit()
         try:
-            if creates: self.session.board.create_items(creates)
-            if updates: self.session.board.update_items(updates)
-            if sources: self.session.board.update_items(sources)
+            if creates:
+                created_result = self.session.board.create_items(creates)
+                if len(created_result or ()) != len(creates):
+                    raise RuntimeError("KiCad did not create every designator; the operation was rolled back")
+            if updates:
+                updated_result = self.session.board.update_items(updates)
+                if len(updated_result or ()) != len(updates):
+                    raise RuntimeError("KiCad did not update every designator; the operation was rolled back")
+            if sources:
+                source_result = self.session.board.update_items(sources)
+                if len(source_result or ()) != len(sources):
+                    raise RuntimeError("KiCad did not update every source footprint; the operation was rolled back")
             self.session.commit(transaction, "Add Kobee Studio designators")
         except Exception:
             self.session.discard(transaction); raise

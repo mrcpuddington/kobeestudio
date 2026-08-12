@@ -166,6 +166,7 @@ MEASUREMENT_SETTING_KEYS = frozenset(
         "PaddingTopCtrl", "SubtitleGapCtrl", "SubtitleHeightCtrl", "UnderlineGapCtrl",
         "UnderlineThicknessCtrl", "WidthCtrl",
         "GraphicWidthCtrl", "GraphicHeightCtrl", "GraphicOffsetXCtrl", "GraphicOffsetYCtrl",
+        "HeaderCustomPitchCtrl",
     )
 )
 
@@ -797,10 +798,14 @@ class PreviewCanvas(wx.Panel):
         self._pan = wx.Point(0, 0)
         self._drag_anchor = None
         self._transform_handler = None
-        self._transform_size_mm = None
+        self._transform_graphic = None
         self._transform_mode = None
         self._transform_start = None
         self._transform_bounds = None
+        self._transform_corners = ()
+        self._rotation_handle = None
+        self._preview_scale = 1.0
+        self._preview_centre = (0.0, 0.0)
         self._cache = ((), (), ())
         self._size_timer = wx.Timer(self)
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -822,11 +827,34 @@ class PreviewCanvas(wx.Panel):
         self._rebuild_cache()
         self.Refresh(False)
 
-    def set_transform_handler(self, size_mm=None, callback=None):
-        self._transform_size_mm = size_mm
+    def set_transform_handler(self, graphic=None, callback=None):
+        self._transform_graphic = graphic
         self._transform_handler = callback
-        self._transform_mode = None
+        if callback is None:
+            self._transform_mode = None
+            self._transform_start = None
+        self._update_transform_geometry()
         self.Refresh(False)
+
+    def _world_to_device(self, point):
+        x = -point.x if is_bottom(self._layer) else point.x
+        centre_x, centre_y = self._preview_centre
+        return wx.Point2D((x - centre_x) * self._preview_scale, (point.y - centre_y) * self._preview_scale)
+
+    def _update_transform_geometry(self):
+        graphic = self._transform_graphic
+        if graphic is None or self._transform_handler is None:
+            self._transform_corners = (); self._rotation_handle = None; return
+        half_width, half_height = graphic.size.width / 2.0, graphic.size.height / 2.0
+        angle = math.radians(graphic.rotation_deg); cosine, sine = math.cos(angle), math.sin(angle)
+        corners = []
+        for x, y in ((-half_width,-half_height),(half_width,-half_height),(half_width,half_height),(-half_width,half_height)):
+            corners.append(self._world_to_device(Point(x*cosine-y*sine+graphic.position.x, x*sine+y*cosine+graphic.position.y)))
+        self._transform_corners = tuple(corners)
+        top_x = (corners[0].x + corners[1].x) / 2.0; top_y = (corners[0].y + corners[1].y) / 2.0
+        centre = self._world_to_device(graphic.position)
+        dx, dy = top_x-centre.x, top_y-centre.y; length=max(0.001,math.hypot(dx,dy))
+        self._rotation_handle = wx.Point2D(top_x+dx/length*24, top_y+dy/length*24)
 
     def _local_mouse(self, position):
         size = self.GetClientSize()
@@ -857,14 +885,16 @@ class PreviewCanvas(wx.Panel):
         self.zoom(1.12 if event.GetWheelRotation() > 0 else 1.0 / 1.12)
 
     def _on_left_down(self, event):
-        if self._transform_handler is not None and self._transform_bounds is not None:
-            point = self._local_mouse(event.GetPosition()); bounds = self._transform_bounds
-            rotate = wx.Point2D(bounds.GetX() + bounds.GetWidth()/2, bounds.GetY() - 24)
-            if abs(point.x-rotate.x) <= 10 and abs(point.y-rotate.y) <= 10:
+        if self._transform_handler is not None and self._transform_corners:
+            point = self._local_mouse(event.GetPosition())
+            rotate = self._rotation_handle
+            if rotate is not None and math.hypot(point.x-rotate.x, point.y-rotate.y) <= 10:
                 self._transform_mode = "rotate"
-            elif abs(point.x-bounds.GetRight()) <= 12 and abs(point.y-bounds.GetBottom()) <= 12:
-                self._transform_mode = "resize"
-            elif bounds.Contains(point):
+            else:
+                corner = next((index for index, value in enumerate(self._transform_corners) if math.hypot(point.x-value.x,point.y-value.y) <= 12), None)
+                if corner is not None:
+                    self._transform_mode = ("resize", corner)
+            if self._transform_mode is None and self._point_in_transform(point):
                 self._transform_mode = "move"
             if self._transform_mode:
                 self._transform_start = point
@@ -885,23 +915,36 @@ class PreviewCanvas(wx.Panel):
 
     def _on_motion(self, event):
         if self._transform_mode and self._transform_start is not None and event.Dragging() and event.LeftIsDown():
-            current = self._local_mouse(event.GetPosition()); bounds = self._transform_bounds
-            width_mm, height_mm = self._transform_size_mm
+            current = self._local_mouse(event.GetPosition()); graphic = self._transform_graphic
             dx, dy = current.x-self._transform_start.x, current.y-self._transform_start.y
+            board_dx = dx/max(0.000001,self._preview_scale) * (-1 if is_bottom(self._layer) else 1)
+            board_dy = dy/max(0.000001,self._preview_scale)
             if self._transform_mode == "move":
-                self._transform_handler("move", dx/max(1,bounds.GetWidth())*width_mm, dy/max(1,bounds.GetHeight())*height_mm)
+                self._transform_handler("move", board_dx, board_dy)
                 self._transform_start = current
-            elif self._transform_mode == "resize":
-                self._transform_handler("resize", max(0.1,width_mm*(1+dx/max(1,bounds.GetWidth()))), max(0.1,height_mm*(1+dy/max(1,bounds.GetHeight()))))
+            elif isinstance(self._transform_mode, tuple):
+                corner = self._transform_mode[1]; sign_x = -1 if corner in (0,3) else 1; sign_y = -1 if corner in (0,1) else 1
+                angle=math.radians(graphic.rotation_deg); local_dx=board_dx*math.cos(angle)+board_dy*math.sin(angle); local_dy=-board_dx*math.sin(angle)+board_dy*math.cos(angle)
+                self._transform_handler("resize", max(0.1,graphic.size.width+sign_x*2*local_dx), max(0.1,graphic.size.height+sign_y*2*local_dy))
                 self._transform_start = current
             else:
-                centre_x, centre_y = bounds.GetX()+bounds.GetWidth()/2, bounds.GetY()+bounds.GetHeight()/2
-                self._transform_handler("rotate", math.degrees(math.atan2(current.y-centre_y,current.x-centre_x))+90, 0)
+                centre = self._world_to_device(graphic.position)
+                screen_angle = math.degrees(math.atan2(current.y-centre.y,current.x-centre.x))+90
+                self._transform_handler("rotate", -screen_angle if is_bottom(self._layer) else screen_angle, 0)
             return
         if self._drag_anchor is None or not event.Dragging() or not event.LeftIsDown():
             return
         self._pan = event.GetPosition() - self._drag_anchor
         self.Refresh(False)
+
+    def _point_in_transform(self, point):
+        inside = False; corners = self._transform_corners
+        for index, first in enumerate(corners):
+            second = corners[(index + 1) % len(corners)]
+            if (first.y > point.y) == (second.y > point.y): continue
+            crossing = first.x + (point.y-first.y)*(second.x-first.x)/(second.y-first.y)
+            if crossing > point.x: inside = not inside
+        return inside
 
     @staticmethod
     def _device_points(polygons):
@@ -923,6 +966,14 @@ class PreviewCanvas(wx.Panel):
             width, height = self.GetClientSize()
             sources = self._filled + self._strokes + self._guides
             converted = preview_polygons(sources, self._layer)
+            raw_points = [point for polygon in converted for point in polygon]
+            if raw_points:
+                min_x=min(point[0] for point in raw_points); max_x=max(point[0] for point in raw_points)
+                min_y=min(point[1] for point in raw_points); max_y=max(point[1] for point in raw_points)
+                geometry_width=max_x-min_x; geometry_height=max_y-min_y
+                usable_width=width*0.76; usable_height=height*0.76
+                self._preview_scale=min(usable_width/max(0.000001,geometry_width),usable_height/max(0.000001,geometry_height))
+                self._preview_centre=((min_x+max_x)/2.0,(min_y+max_y)/2.0)
             fitted = fit_preview_polygons(converted, width, height, margin=0.12)
             device = self._device_points(fitted)
             filled_end = len(self._filled)
@@ -938,6 +989,7 @@ class PreviewCanvas(wx.Panel):
                 minimum_y=min(point.y for point in artwork_points); maximum_y=max(point.y for point in artwork_points)
                 self._transform_bounds=wx.Rect2D(minimum_x,minimum_y,max(1,maximum_x-minimum_x),max(1,maximum_y-minimum_y))
             else: self._transform_bounds=None
+            self._update_transform_geometry()
         except Exception:
             # Resize and mouse events are native wx callbacks. Keep malformed
             # or temporarily incomplete geometry from escaping through them.
@@ -992,13 +1044,14 @@ class PreviewCanvas(wx.Panel):
                     colour = ACCENT if index == 0 else wx.Colour(145, 145, 145)
                     dc.SetPen(wx.Pen(colour, 1, wx.PENSTYLE_SHORT_DASH))
                     dc.DrawLines(points + [points[0]])
-            if self._transform_handler is not None and self._transform_bounds is not None:
-                bounds=self._transform_bounds; dc.SetPen(wx.Pen(ACCENT,1,wx.PENSTYLE_SHORT_DASH)); dc.SetBrush(wx.TRANSPARENT_BRUSH)
-                dc.DrawRectangle(int(bounds.GetX()),int(bounds.GetY()),int(bounds.GetWidth()),int(bounds.GetHeight()))
-                for x,y in ((bounds.GetX(),bounds.GetY()),(bounds.GetRight(),bounds.GetY()),(bounds.GetX(),bounds.GetBottom()),(bounds.GetRight(),bounds.GetBottom())):
-                    dc.SetBrush(wx.Brush(ACCENT)); dc.DrawRectangle(int(x-4),int(y-4),8,8)
-                centre_x=bounds.GetX()+bounds.GetWidth()/2; rotate_y=bounds.GetY()-24
-                dc.DrawLine(int(centre_x),int(bounds.GetY()),int(centre_x),int(rotate_y)); dc.DrawCircle(int(centre_x),int(rotate_y),5)
+            if self._transform_handler is not None and self._transform_corners:
+                dc.SetPen(wx.Pen(ACCENT,1,wx.PENSTYLE_SHORT_DASH)); dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                points=[wx.Point(round(item.x),round(item.y)) for item in self._transform_corners]
+                dc.DrawLines(points+[points[0]])
+                for point in points:
+                    dc.SetBrush(wx.Brush(ACCENT)); dc.DrawRectangle(point.x-4,point.y-4,8,8)
+                top=wx.Point(round((points[0].x+points[1].x)/2),round((points[0].y+points[1].y)/2)); rotate=self._rotation_handle
+                dc.DrawLine(top.x,top.y,round(rotate.x),round(rotate.y)); dc.DrawCircle(round(rotate.x),round(rotate.y),5)
         except Exception:
             # Never unwind through wx's native paint callback. A paint-time
             # Python exception can invalidate the native DC and crash KiCad.
@@ -1663,11 +1716,31 @@ class ToolPage(wx.Panel):
         installed = tuple(face.renderer_name for face in self.dialog.font_store.list())
         return bundled + installed
 
+    def _font_labels(self):
+        font_dir = Path(__file__).resolve().parents[1] / "fonts"
+        bundled = tuple(sorted(path.stem for path in font_dir.iterdir() if path.suffix.lower() in (".ttf", ".otf")))
+        faces = self.dialog.font_store.list()
+        self._font_renderer_by_label = dict(
+            [("Built-in · {}".format(name), name) for name in bundled]
+            + [("My Google Fonts · {}".format(face.display_name), face.renderer_name) for face in faces]
+        )
+        self._font_label_by_renderer = {renderer: label for label, renderer in self._font_renderer_by_label.items()}
+        return tuple(self._font_renderer_by_label)
+
+    def _font_label(self, renderer):
+        self._font_labels()
+        return self._font_label_by_renderer.get(str(renderer), str(renderer))
+
+    def _font_renderer(self, label):
+        self._font_labels()
+        return self._font_renderer_by_label.get(str(label), str(label))
+
     def _build_typography(self, *, padding=True, subtitle=False, width=False):
         box = self._card("Typography & spacing")
         grid = self._grid(box)
         defaults = MODE_DEFAULTS[self.mode]
-        self._add(grid, "FontComboBox", "Typeface", self.choice(self._font_names(), defaults.get("FontComboBox", "FreddySpark-Regular")))
+        font_labels = self._font_labels()
+        self._add(grid, "FontComboBox", "Typeface", self.choice(font_labels, self._font_label(defaults.get("FontComboBox", "FreddySpark-Regular"))))
         max_height = maximum_pin_label_height() if self.mode == "2.54 mm Pin Header" else 128
         self._add(grid, "HeightCtrl", "Text height (mm)", self.spin(0.1, max_height, defaults.get("HeightCtrl", 1.2), 0.1))
         self._add(grid, "AlignmentChoice", "Alignment", self.choice(("Left", "Center", "Right"), defaults.get("AlignmentChoice", "Center")))
@@ -1675,7 +1748,7 @@ class ToolPage(wx.Panel):
         if width:
             self._add(grid, "WidthCtrl", "Minimum width (mm)", self.spin(0, 200, 0, 0.1))
         if subtitle:
-            self._add(grid, "SubtitleFontChoice", "Subtitle typeface", self.choice((MATCH_MAIN_TYPEFACE,) + self._font_names(), MATCH_MAIN_TYPEFACE))
+            self._add(grid, "SubtitleFontChoice", "Subtitle typeface", self.choice((MATCH_MAIN_TYPEFACE,) + font_labels, MATCH_MAIN_TYPEFACE))
             self._add(grid, "SubtitleHeightCtrl", "Subtitle height (mm)", self.spin(0.1, 128, 0.8, 0.1))
             self._add(grid, "SubtitleLineSpacingCtrl", "Subtitle line spacing", self.spin(0.1, 10, 1.2, 0.1))
             self._add(grid, "SubtitleGapCtrl", "Title/subtitle gap (mm)", self.spin(0, 20, 0.25, 0.05))
@@ -1736,7 +1809,9 @@ class ToolPage(wx.Panel):
             self._build_content(content, multiline=True)
             grid = self._grid(content)
             pitch_choice = self._add(grid, "HeaderPitchChoice", "Pitch", self.choice(("1.00 mm","1.25 mm","1.27 mm","1.50 mm","2.00 mm","2.50 mm","2.54 mm","3.50 mm","3.81 mm","5.00 mm","5.08 mm","Custom"), "2.54 mm"))
-            self._add(grid, "HeaderCustomPitchCtrl", "Custom pitch (mm)", self.spin(0.5, 20, 2.54, 0.01))
+            custom_pitch = self._add(grid, "HeaderCustomPitchCtrl", "Custom pitch (mm)", self.spin(0.5, 20, 2.54, 0.01))
+            self.header_pitch_limit = wx.StaticText(self._active_parent, label="")
+            content.Add(self.header_pitch_limit, 0, wx.EXPAND | wx.TOP, 7)
             pin_count = self._add(grid, "HeaderPinCountCtrl", "Pins", self.integer_spin(1, 40, 4))
             orientation = self._add(grid, "HeaderOrientationChoice", "Orientation", self.choice(("Vertical", "Horizontal"), "Vertical"))
             self._add(grid, "HeaderPinSideChoice", "Pins on", self.choice(("Left", "Right"), "Left"))
@@ -1760,6 +1835,8 @@ class ToolPage(wx.Panel):
             pin_count.Bind(wx.EVT_TEXT, self._on_header_pin_count_changed)
             orientation.Bind(wx.EVT_CHOICE, self._on_header_orientation_changed)
             pitch_choice.Bind(wx.EVT_CHOICE, self._on_header_pitch_changed)
+            custom_pitch.Bind(wx.EVT_TEXT, self._on_header_custom_pitch_changed)
+            custom_pitch.Bind(wx.EVT_SPINCTRLDOUBLE, self._on_header_custom_pitch_changed)
             self.controls["HeaderOpeningChoice"].Bind(
                 wx.EVT_CHOICE, self._on_header_opening_changed
             )
@@ -1813,14 +1890,17 @@ class ToolPage(wx.Panel):
                 item for store in (self.dialog.global_asset_store, self.dialog.project_asset_store)
                 if store is not None for item in store.list("graphics")
             )
+            self._graphic_visible_assets = self._graphic_assets
             self._graphic_fallback_svg = ""; self._graphic_fallback_id = ""; self._graphic_missing = False
-            choices = tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_assets) or ("No graphics installed — add one in Settings",)
+            search = self._add(grid, "GraphicSearchCtrl", "Search", wx.SearchCtrl(self._active_parent, style=wx.TE_PROCESS_ENTER))
+            search.SetDescriptiveText("Name, category, or scope")
+            choices = tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_visible_assets) or ("No graphics installed — add one in Settings",)
             asset_choice = self._add(grid, "GraphicAssetChoice", "Graphic", self.choice(choices, choices[0]))
             transform = self._card("Transform")
             grid = self._grid(transform)
-            self._add(grid, "GraphicWidthCtrl", "Width (mm)", self.spin(0.1, 1000, 20, 0.1))
-            self._add(grid, "GraphicHeightCtrl", "Height (mm)", self.spin(0.1, 1000, 20, 0.1))
-            self._add(grid, "GraphicAspectLock", "Aspect ratio", self.checkbox("Lock aspect ratio", True))
+            graphic_width = self._add(grid, "GraphicWidthCtrl", "Width (mm)", self.spin(0.1, 1000, 20, 0.1))
+            graphic_height = self._add(grid, "GraphicHeightCtrl", "Height (mm)", self.spin(0.1, 1000, 20, 0.1))
+            aspect_lock = self._add(grid, "GraphicAspectLock", "Aspect ratio", self.checkbox("Lock aspect ratio", True))
             self._add(grid, "GraphicOffsetXCtrl", "Anchor X (mm)", self.spin(-1000, 1000, 0, 0.1))
             self._add(grid, "GraphicOffsetYCtrl", "Anchor Y (mm)", self.spin(-1000, 1000, 0, 0.1))
             self._add(grid, "GraphicRotationCtrl", "Rotation (degrees)", self.spin(-360, 360, 0, 1))
@@ -1828,7 +1908,13 @@ class ToolPage(wx.Panel):
             self._add(grid, "GraphicMirrorVertical", "Mirror", self.checkbox("Vertical", False))
             note = wx.StaticText(self._active_parent, label="Upload SVG artwork or convert a PNG in Settings → Asset library.")
             transform.Add(note, 0, wx.EXPAND | wx.TOP, 12)
+            search.Bind(wx.EVT_TEXT, self._on_graphic_search_changed)
             asset_choice.Bind(wx.EVT_CHOICE, self._on_graphic_asset_changed)
+            for event_type in (wx.EVT_TEXT, wx.EVT_SPINCTRLDOUBLE):
+                graphic_width.Bind(event_type, self._on_graphic_dimension_changed)
+                graphic_height.Bind(event_type, self._on_graphic_dimension_changed)
+            aspect_lock.Bind(wx.EVT_CHECKBOX, self._on_graphic_aspect_lock)
+            self._graphic_aspect_ratio = 1.0; self._updating_graphic_size = False
             self._on_graphic_asset_changed(None)
         elif self.family == "board_tools":
             box = self._card("Board cleanup" if self.label == "Cleanup" else "Designator automation")
@@ -1931,9 +2017,19 @@ class ToolPage(wx.Panel):
             if event is not None and self._measurement_mm("HeightCtrl") > maximum_mm:
                 self._set_measurement_mm("HeightCtrl", maximum_mm)
             height.SetToolTip("Maximum text height for this pitch: {:.2f} mm".format(maximum_mm))
+            if hasattr(self, "header_pitch_limit"):
+                self.header_pitch_limit.SetLabel(
+                    "Maximum label height at {:.2f} mm pitch: {:.2f} mm".format(pitch, maximum_mm)
+                )
         self._schedule_layout()
         if event is not None:
             self.dialog.request_preview(); event.Skip()
+
+    def _on_header_custom_pitch_changed(self, event):
+        if self.controls["HeaderPitchChoice"].GetStringSelection() == "Custom":
+            self._on_header_pitch_changed(event)
+        else:
+            event.Skip()
 
     def _on_component_preset_changed(self, event):
         preset = self.dialog.component_preset(self.controls["ComponentPresetChoice"].GetStringSelection())
@@ -1962,20 +2058,57 @@ class ToolPage(wx.Panel):
         event.Skip()
 
     def _on_graphic_asset_changed(self, event):
-        if not getattr(self, "_graphic_assets", ()): return
+        if not getattr(self, "_graphic_visible_assets", ()): return
         index = self.controls["GraphicAssetChoice"].GetSelection()
-        if 0 <= index < len(self._graphic_assets):
+        if 0 <= index < len(self._graphic_visible_assets):
             try:
+                asset = self._graphic_visible_assets[index]
                 if event is not None:
                     self._graphic_missing = False
-                    self._graphic_fallback_id = self._graphic_assets[index].asset_id
-                    self._graphic_fallback_svg = self._graphic_assets[index].path.read_text(encoding="utf-8")
-                _, natural = render_svg(self._graphic_assets[index].path, 10.0, allow_strokes=True)
+                    self._graphic_fallback_id = asset.asset_id
+                    self._graphic_fallback_svg = asset.path.read_text(encoding="utf-8")
+                _, natural = render_svg(asset.path, 10.0, allow_strokes=True)
+                self._graphic_aspect_ratio = natural.width / natural.height
                 width = self._measurement_mm("GraphicWidthCtrl")
                 self._set_measurement_mm("GraphicHeightCtrl", width * natural.height / natural.width)
             except (OSError, ValueError): pass
         if event is not None:
             self.dialog.request_preview(); event.Skip()
+
+    def _on_graphic_aspect_lock(self, event):
+        if self.controls["GraphicAspectLock"].GetValue():
+            self._graphic_aspect_ratio = self._measurement_mm("GraphicWidthCtrl") / max(0.1, self._measurement_mm("GraphicHeightCtrl"))
+        self.dialog.request_preview(); event.Skip()
+
+    def _on_graphic_dimension_changed(self, event):
+        if self.dialog._loading or self._updating_graphic_size or not self.controls["GraphicAspectLock"].GetValue():
+            event.Skip(); return
+        self._updating_graphic_size = True
+        try:
+            if event.GetEventObject() is self.controls["GraphicWidthCtrl"]:
+                self._set_measurement_mm("GraphicHeightCtrl", self._measurement_mm("GraphicWidthCtrl") / max(0.0001, self._graphic_aspect_ratio))
+            else:
+                self._set_measurement_mm("GraphicWidthCtrl", self._measurement_mm("GraphicHeightCtrl") * self._graphic_aspect_ratio)
+        finally:
+            self._updating_graphic_size = False
+        self.dialog.request_preview(); event.Skip()
+
+    def _on_graphic_search_changed(self, event):
+        query = self.controls["GraphicSearchCtrl"].GetValue().strip().casefold()
+        current_id = self._graphic_fallback_id
+        self._graphic_visible_assets = tuple(
+            item for item in self._graphic_assets
+            if query in "{} {} {}".format(item.name, item.category, item.scope).casefold()
+        )
+        choices = tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_visible_assets)
+        self.controls["GraphicAssetChoice"].SetItems(choices or ("No matching graphics",))
+        selected = next((index for index, item in enumerate(self._graphic_visible_assets) if item.asset_id == current_id), None)
+        if selected is not None:
+            self.controls["GraphicAssetChoice"].SetSelection(selected)
+        elif self._graphic_visible_assets:
+            self.controls["GraphicAssetChoice"].SetSelection(0)
+            self._on_graphic_asset_changed(None)
+        event.Skip()
 
     def _on_component_array_count_changed(self, event):
         self._resize_lines(
@@ -2068,6 +2201,11 @@ class ToolPage(wx.Panel):
 
     def settings(self):
         settings = {key: _control_value(control) for key, control in self.controls.items()}
+        settings.pop("GraphicSearchCtrl", None)
+        if "FontComboBox" in settings:
+            settings["FontComboBox"] = self._font_renderer(settings["FontComboBox"])
+        if "SubtitleFontChoice" in settings and settings["SubtitleFontChoice"] != MATCH_MAIN_TYPEFACE:
+            settings["SubtitleFontChoice"] = self._font_renderer(settings["SubtitleFontChoice"])
         for key in MEASUREMENT_SETTING_KEYS:
             if key in settings:
                 settings[key] = self._measurement_mm(key)
@@ -2083,8 +2221,8 @@ class ToolPage(wx.Panel):
                 settings["IconChoice"] = "No icon"
         if "GraphicAssetChoice" in self.controls:
             selection = self.controls["GraphicAssetChoice"].GetSelection()
-            if not self._graphic_missing and 0 <= selection < len(self._graphic_assets):
-                asset = self._graphic_assets[selection]
+            if not self._graphic_missing and 0 <= selection < len(self._graphic_visible_assets):
+                asset = self._graphic_visible_assets[selection]
                 settings["GraphicAssetId"] = asset.asset_id
                 settings["GraphicGeometrySvg"] = asset.path.read_text(encoding="utf-8")
             else:
@@ -2114,6 +2252,8 @@ class ToolPage(wx.Panel):
                 continue
             if key in settings:
                 raw_value = settings[key]
+                if key in ("FontComboBox", "SubtitleFontChoice") and raw_value != MATCH_MAIN_TYPEFACE:
+                    raw_value = self._font_label(raw_value)
                 if key in ("StartCapChoice", "EndCapChoice"):
                     raw_value = {
                         "Skew /": "Skew left",
@@ -2151,7 +2291,11 @@ class ToolPage(wx.Panel):
             self._graphic_missing = bool(asset_id)
             for index, asset in enumerate(self._graphic_assets):
                 if asset.asset_id == asset_id:
+                    self.controls["GraphicSearchCtrl"].ChangeValue("")
+                    self._graphic_visible_assets = self._graphic_assets
+                    self.controls["GraphicAssetChoice"].SetItems(tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_assets))
                     self.controls["GraphicAssetChoice"].SetSelection(index); self._graphic_missing = False; break
+            self._graphic_aspect_ratio = self._measurement_mm("GraphicWidthCtrl") / max(0.1, self._measurement_mm("GraphicHeightCtrl"))
         if "ContentModeChoice" in self.controls:
             saved_mode = settings.get("ContentModeChoice")
             if not saved_mode:
@@ -2171,6 +2315,93 @@ class ToolPage(wx.Panel):
         self._update_machine_code_ui()
         if "HeaderPitchChoice" in self.controls:
             self._on_header_pitch_changed(None)
+
+
+class DesignatorStyleDialog(wx.Dialog):
+    """Focused editor for one style applied to locked footprint references."""
+
+    def __init__(self, parent, reference, profiles, settings, page, symbol_catalog):
+        super().__init__(parent, title="Kobee designator style", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self._profiles = tuple(profiles); self._page = page; self._catalog = symbol_catalog
+        self._symbol_refs = ("",) + tuple(format_symbol_reference(item.asset_id, item.variant) for item in symbol_catalog.symbols)
+        self._symbol_labels = ("No symbol",) + tuple(
+            "{} · {}{}".format(item.category, item.name, " — " + item.variant.replace("_", " ").title() if item.variant != "default" else "")
+            for item in symbol_catalog.symbols
+        )
+        root=wx.BoxSizer(wx.VERTICAL); body=wx.ScrolledWindow(self,style=wx.VSCROLL|wx.TAB_TRAVERSAL|wx.BORDER_NONE); body.SetScrollRate(0,12)
+        content=wx.BoxSizer(wx.VERTICAL); body.SetSizer(content); form=wx.FlexGridSizer(0,2,8,10); form.AddGrowableCol(1)
+        content.Add(form,1,wx.EXPAND|wx.ALL,14); root.Add(body,1,wx.EXPAND)
+        self.profile=ThemedChoice(body,choices=("Standard label defaults",)+tuple(item.name for item in self._profiles))
+        self.reference=wx.TextCtrl(body,value=reference,style=wx.TE_READONLY)
+        self.layout=ThemedChoice(body,choices=("Label","Label + symbol"))
+        self.font=ThemedChoice(body,choices=page._font_labels())
+        self.height=ThemedSpinCtrlDouble(body,min=0.1,max=20,initial=1.2,inc=0.1)
+        self.shape=ThemedChoice(body,choices=tuple(LABEL_SHAPE_LABELS))
+        self.variant=ThemedChoice(body,choices=("Outline","Inverted fill"))
+        self.border=ThemedSpinCtrlDouble(body,min=0.01,max=5,initial=0.2,inc=0.05)
+        self.radius=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.2,inc=0.05)
+        self.padding_top=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.5,inc=0.1)
+        self.padding_right=ThemedSpinCtrlDouble(body,min=0,max=20,initial=1.2,inc=0.1)
+        self.padding_bottom=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.5,inc=0.1)
+        self.padding_left=ThemedSpinCtrlDouble(body,min=0,max=20,initial=1.2,inc=0.1)
+        self.symbol=ThemedChoice(body,choices=self._symbol_labels)
+        self.icon_position=ThemedChoice(body,choices=tuple(ICON_POSITION_LABELS))
+        rows=(("Saved style",self.profile),("Reference text (locked)",self.reference),("Layout",self.layout),("Typeface",self.font),("Text height (mm)",self.height),("Container",self.shape),("Appearance",self.variant),("Border (mm)",self.border),("Corner radius (mm)",self.radius),("Top padding (mm)",self.padding_top),("Right padding (mm)",self.padding_right),("Bottom padding (mm)",self.padding_bottom),("Left padding (mm)",self.padding_left),("Symbol",self.symbol),("Symbol position",self.icon_position))
+        for label,control in rows:
+            form.Add(wx.StaticText(body,label=label),0,wx.ALIGN_CENTER_VERTICAL); form.Add(control,1,wx.EXPAND)
+        note=wx.StaticText(body,label="The semantic KiCad reference stays unchanged. Kobee only replaces its visible silkscreen artwork.")
+        note.Wrap(520); content.Add(note,0,wx.LEFT|wx.RIGHT|wx.BOTTOM,14); body.FitInside()
+        root.Add(self.CreateStdDialogButtonSizer(wx.OK|wx.CANCEL),0,wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,14)
+        self.SetSizer(root); self.SetMinSize(wx.Size(620,480)); self.SetSize(wx.Size(680,680))
+        self.profile.Bind(wx.EVT_CHOICE,self._profile_changed); self.layout.Bind(wx.EVT_CHOICE,self._layout_changed)
+        self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
+        self._apply(settings); self._layout_changed(None)
+
+    def _apply(self, settings):
+        def choose(control,key,default):
+            value=settings.get(key,default); control.SetStringSelection(str(value))
+        choose(self.layout,"ContentModeChoice","Label")
+        self.font.SetStringSelection(self._page._font_label(settings.get("FontComboBox","FreddySpark-Regular")))
+        self.height.SetValue(float(settings.get("HeightCtrl",1.2))); choose(self.shape,"ShapeChoice","Rounded rectangle")
+        choose(self.variant,"ShapeVariantChoice","Outline"); self.border.SetValue(float(settings.get("BorderThicknessCtrl",0.2)))
+        self.radius.SetValue(float(settings.get("CornerRadiusCtrl",0.2)))
+        for control,key,default in ((self.padding_top,"PaddingTopCtrl",0.5),(self.padding_right,"PaddingRightCtrl",1.2),(self.padding_bottom,"PaddingBottomCtrl",0.5),(self.padding_left,"PaddingLeftCtrl",1.2)):
+            control.SetValue(float(settings.get(key,default)))
+        reference=str(settings.get("SymbolAssetId","") or ICON_LABELS.get(settings.get("IconChoice","No icon"),""))
+        variant=str(settings.get("SymbolVariant","default")); formatted=format_symbol_reference(reference,variant) if reference else ""
+        self.symbol.SetSelection(self._symbol_refs.index(formatted) if formatted in self._symbol_refs else 0)
+        choose(self.icon_position,"IconPositionChoice","Left of text")
+
+    def _profile_changed(self,event):
+        index=self.profile.GetSelection()
+        if index>0: self._apply(self._profiles[index-1].settings); self._layout_changed(None)
+        event.Skip()
+
+    def _layout_changed(self,event):
+        enabled=self.layout.GetStringSelection()=="Label + symbol"
+        self.symbol.Enable(enabled); self.icon_position.Enable(enabled)
+        if event is not None: event.Skip()
+
+    def _on_ok(self, event):
+        if self.layout.GetStringSelection() == "Label + symbol" and self.symbol.GetSelection() <= 0:
+            wx.MessageBox("Choose a symbol or switch the layout to Label.", "Designator style", wx.OK | wx.ICON_INFORMATION, self)
+            return
+        self.EndModal(wx.ID_OK)
+
+    def settings(self):
+        result={
+            "ContentModeChoice":self.layout.GetStringSelection(), "FontComboBox":self._page._font_renderer(self.font.GetStringSelection()),
+            "HeightCtrl":self.height.GetValue(), "ShapeChoice":self.shape.GetStringSelection(), "ShapeVariantChoice":self.variant.GetStringSelection(),
+            "BorderThicknessCtrl":self.border.GetValue(), "CornerRadiusCtrl":self.radius.GetValue(), "PaddingTopCtrl":self.padding_top.GetValue(),
+            "PaddingRightCtrl":self.padding_right.GetValue(), "PaddingBottomCtrl":self.padding_bottom.GetValue(), "PaddingLeftCtrl":self.padding_left.GetValue(),
+            "IconPositionChoice":self.icon_position.GetStringSelection(),
+        }
+        selection=self.symbol.GetSelection(); reference=self._symbol_refs[selection] if 0<=selection<len(self._symbol_refs) else ""
+        if reference:
+            result["SymbolAssetId"],result["SymbolVariant"]=parse_symbol_reference(reference)
+        else:
+            result["SymbolAssetId"],result["SymbolVariant"]="","default"
+        return result
 
 
 class StudioEditorDialog(wx.Dialog):
@@ -2781,24 +3012,49 @@ class StudioEditorDialog(wx.Dialog):
         identifier = getattr(footprint, "id", "")
         return str(getattr(identifier, "value", identifier))
 
+    def _build_designator_record(self, source, settings, existing, api):
+        reference = str(source.reference_field.text.value).strip(); source_id = self._footprint_id_text(source)
+        reference_layer = source.reference_field.layer
+        if reference_layer == api["BoardLayer"].BL_B_SilkS:
+            back = True
+        elif reference_layer == api["BoardLayer"].BL_F_SilkS:
+            back = False
+        else:
+            back = source.layer == api["BoardLayer"].BL_B_Cu
+        layer = BOTTOM_SILKSCREEN if back else FRONT_SILKSCREEN
+        local = dict(settings, MultiLineText=reference, LayerComboBox=layer, StudioModeChoice="Label")
+        style = self._document_style(local)
+        icon_id = str(local.get("SymbolAssetId", "") or ICON_LABELS.get(local.get("IconChoice", "No icon"), "")) if local.get("ContentModeChoice") == "Label + symbol" else ""
+        variant = str(local.get("SymbolVariant", "default"))
+        artwork = render_label_artwork(
+            self._text_vectorizer, reference, style, layer,
+            shape=LABEL_SHAPE_LABELS.get(local.get("ShapeChoice")), minimum_width_mm=float(local.get("WidthCtrl", 0)),
+            icon_id=icon_id, icon_position=ICON_POSITION_LABELS.get(local.get("IconPositionChoice", "Left of text"), "left"),
+            icon_height_mm=float(local.get("IconHeightCtrl", 0)), icon_gap_mm=float(local.get("IconGapCtrl", 0.3)), icon_variant=variant,
+            icon_renderer=(lambda asset_id, height_mm, selected_variant=variant: render_symbol(asset_id,height_mm,selected_variant,catalog=self.symbol_catalog)),
+        )
+        feature = {"kind":"designator_label", "source_footprint_id":source_id, "reference":reference}
+        payload = build_footprint_payload(local, document=artwork.document, feature=feature)
+        return source, artwork, payload, layer, existing.get(source_id)
+
     def run_add_designators(self, scope):
         if self.editor_session is None: return
         service = self.editor_session.board_tools(); requested_scope = "selected" if scope == "single" else scope
         footprints, skipped = service.eligible(requested_scope)
         if scope == "single" and len(service.footprints("selected")) != 1:
             wx.MessageBox("Select exactly one ordinary footprint before running this action.", "Add designator", wx.OK | wx.ICON_INFORMATION, self); return
-        footprints = tuple(item for item in footprints if str(getattr(item.reference_field.text, "value", "")).strip())
+        with_references = tuple(item for item in footprints if str(getattr(item.reference_field.text, "value", "")).strip())
+        skipped += len(footprints) - len(with_references); footprints = with_references
         if not footprints:
             wx.MessageBox("No eligible footprints with references were found.", "Add designators", wx.OK | wx.ICON_INFORMATION, self); return
         profiles = self.profile_store.list("labels")
-        chooser = wx.SingleChoiceDialog(self, "Choose the label style to apply. The footprint reference text and board side remain automatic.", "Designator style", ("Standard label defaults",) + tuple(profile.name for profile in profiles))
-        try:
-            if chooser.ShowModal() != wx.ID_OK: return
-            index = chooser.GetSelection()
-        finally: chooser.Destroy()
         settings = mode_defaults("Label"); settings.update(DEFAULT_LABEL_DIMENSIONS)
-        if index > 0: settings.update(profiles[index - 1].settings)
-        settings["ContentModeChoice"] = "Label" if settings.get("ContentModeChoice") == "Symbol only" else settings.get("ContentModeChoice", "Label")
+        sample = str(footprints[0].reference_field.text.value).strip() if len(footprints) == 1 else "Multiple references (text is taken from each footprint)"
+        editor = DesignatorStyleDialog(self, sample, profiles, settings, self.page_by_tool["Standard"], self.symbol_catalog)
+        try:
+            if editor.ShowModal() != wx.ID_OK: return
+            settings.update(editor.settings())
+        finally: editor.Destroy()
         if wx.MessageBox("Create or update styled designators for {} footprint(s)?\n\nThe native reference fields will be hidden after successful placement.".format(len(footprints)), "Confirm designator creation", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION, self) != wx.YES: return
         try:
             existing = {}
@@ -2810,24 +3066,15 @@ class StudioEditorDialog(wx.Dialog):
                     feature = payload.get("feature", {})
                     if isinstance(feature, dict) and feature.get("kind") == "designator_label": existing[str(feature.get("source_footprint_id", ""))] = generated
             api = IpcArtworkPlacement._api(); records = []
+            failures = []
             for source in footprints:
-                reference = str(source.reference_field.text.value).strip(); source_id = self._footprint_id_text(source)
-                back = source.reference_field.layer == api["BoardLayer"].BL_B_SilkS or source.layer == api["BoardLayer"].BL_B_Cu
-                layer = BOTTOM_SILKSCREEN if back else FRONT_SILKSCREEN
-                local = dict(settings, MultiLineText=reference, LayerComboBox=layer, StudioModeChoice="Label")
-                style = self._document_style(local)
-                icon_id = str(local.get("SymbolAssetId", "") or ICON_LABELS.get(local.get("IconChoice", "No icon"), "")) if local.get("ContentModeChoice") == "Label + symbol" else ""
-                variant = str(local.get("SymbolVariant", "default"))
-                artwork = render_label_artwork(
-                    self._text_vectorizer, reference, style, layer,
-                    shape=LABEL_SHAPE_LABELS.get(local.get("ShapeChoice")), minimum_width_mm=float(local.get("WidthCtrl", 0)),
-                    icon_id=icon_id, icon_position=ICON_POSITION_LABELS.get(local.get("IconPositionChoice", "Left of text"), "left"),
-                    icon_height_mm=float(local.get("IconHeightCtrl", 0)), icon_gap_mm=float(local.get("IconGapCtrl", 0.3)), icon_variant=variant,
-                    icon_renderer=(lambda asset_id, height_mm, selected_variant=variant: render_symbol(asset_id,height_mm,selected_variant,catalog=self.symbol_catalog)),
-                )
-                feature = {"kind":"designator_label", "source_footprint_id":source_id, "reference":reference}
-                payload = build_footprint_payload(local, document=artwork.document, feature=feature)
-                records.append((source, artwork, payload, layer, existing.get(source_id)))
+                try:
+                    records.append(self._build_designator_record(source, settings, existing, api))
+                except Exception as error:
+                    failures.append("{}: {}".format(getattr(source.reference_field.text,"value","Unknown"), error))
+            if failures:
+                wx.MessageBox("No board changes were made because these designators could not be generated:\n\n{}".format("\n".join(failures)), "Could not add designators", wx.OK | wx.ICON_ERROR, self)
+                return
             created, updated = IpcArtworkPlacement(self.editor_session).place_designators(records)
             wx.MessageBox("Created {} and updated {} designator label(s); skipped {} footprint(s).".format(created, updated, skipped), "Designators complete", wx.OK | wx.ICON_INFORMATION, self)
         except Exception as error:
@@ -2929,7 +3176,7 @@ class StudioEditorDialog(wx.Dialog):
         requested_font = str(settings.get("FontComboBox", ""))
         font_control = self.page_by_tool[tool].controls.get("FontComboBox")
         if requested_font and font_control is not None and requested_font not in self.page_by_tool[tool]._font_names():
-            font_control.SetItems((requested_font,) + self.page_by_tool[tool]._font_names())
+            font_control.SetItems((requested_font,) + self.page_by_tool[tool]._font_labels())
             metadata = settings.get("FontFaceMetadata")
             self._missing_font_metadata = dict(metadata) if isinstance(metadata, dict) else {"renderer_name":requested_font}
         self.page_by_tool[tool].apply(settings)
@@ -3019,7 +3266,7 @@ class StudioEditorDialog(wx.Dialog):
         self.buzzard.register_font(face.renderer_name, face.path)
         page=self.active_page; choice=page.controls.get("FontComboBox")
         if choice is not None:
-            choice.SetItems(page._font_names()); choice.SetStringSelection(face.renderer_name)
+            choice.SetItems(page._font_labels()); choice.SetStringSelection(page._font_label(face.renderer_name))
         self._missing_font_metadata=None; self._preview_fingerprint=None; self.request_preview(immediate=True)
 
     def on_control_changed(self, event):
@@ -3273,7 +3520,7 @@ class StudioEditorDialog(wx.Dialog):
             self._last_valid = (self.artwork, tuple(self.polys), tuple(self.stroke_polys), tuple(self.guide_polys))
             self.preview.set_artwork(self.polys, self.stroke_polys, self.guide_polys, self.output_layer)
             graphic = next((item for item in self.artwork.document.objects if isinstance(item, GraphicObject)), None)
-            self.preview.set_transform_handler((graphic.size.width, graphic.size.height), self._on_graphic_transform) if graphic is not None else self.preview.set_transform_handler()
+            self.preview.set_transform_handler(graphic, self._on_graphic_transform) if graphic is not None else self.preview.set_transform_handler()
             self.preview_error.SetLabel("")
         except ValueError as error:
             self._show_preview_error(error)

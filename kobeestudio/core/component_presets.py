@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -29,13 +30,13 @@ class CustomComponentPreset:
     scope: str = "global"
 
     def __post_init__(self) -> None:
-        if not self.preset_id or not self.name.strip() or len(self.name.strip()) > 100:
+        if not self.preset_id or not self.name.strip() or len(self.name.strip()) > 100 or any(ord(character) < 32 for character in self.name):
             raise ValueError("Component preset needs an id and a 1–100 character name")
         if self.scope not in ("global", "project"):
             raise ValueError("Component preset scope must be global or project")
         if self.cutout_shape not in CUTOUT_SHAPES:
             raise ValueError("Unsupported component cutout shape")
-        if self.width_mm <= 0 or self.height_mm <= 0 or self.cutout_radius_mm < 0:
+        if not all(math.isfinite(value) for value in (self.width_mm, self.height_mm, self.cutout_radius_mm)) or self.width_mm <= 0 or self.height_mm <= 0 or self.cutout_radius_mm < 0:
             raise ValueError("Component dimensions must be positive and radius non-negative")
 
 

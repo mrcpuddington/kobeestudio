@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable, Dict, Optional
+import io
 import zipfile
 import threading
 
@@ -20,7 +21,13 @@ from ..core.component_presets import ComponentPresetStore
 from ..core.raster_trace import RasterTraceSettings, trace_png_file
 from ..version import __version__
 from .theme import apply_native_theme, is_dark_mode
-from .themed_controls import ThemedActionButton, ThemedChoice, ThemedListBox
+from .themed_controls import (
+    ThemedActionButton,
+    ThemedChoice,
+    ThemedListBox,
+    ThemedSpinCtrl,
+    ThemedSpinCtrlDouble,
+)
 
 
 MODULE_LABELS = {
@@ -124,12 +131,12 @@ class ComponentPresetDetailsDialog(wx.Dialog):
             "radius": preset.cutout_radius_mm if preset else 0.2,
         }
         self.name = wx.TextCtrl(self, value=values["name"])
-        self.width = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=values["width"], inc=0.1)
-        self.height = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=values["height"], inc=0.1)
+        self.width = ThemedSpinCtrlDouble(self, min=0.1, max=1000, initial=values["width"], inc=0.1)
+        self.height = ThemedSpinCtrlDouble(self, min=0.1, max=1000, initial=values["height"], inc=0.1)
         self.shape = ThemedChoice(self, choices=("Rectangle", "Rounded rectangle", "Pill", "Tactile switch"))
         shape_id = preset.cutout_shape if preset else "rounded_rectangle"
         self.shape.SetStringSelection({"rectangle":"Rectangle", "rounded_rectangle":"Rounded rectangle", "pill":"Pill", "tactile_switch":"Tactile switch"}[shape_id])
-        self.radius = wx.SpinCtrlDouble(self, min=0, max=1000, initial=values["radius"], inc=0.05)
+        self.radius = ThemedSpinCtrlDouble(self, min=0, max=1000, initial=values["radius"], inc=0.05)
         for label, control in (("Name", self.name), ("Width (mm)", self.width), ("Height (mm)", self.height), ("Cutout", self.shape), ("Radius (mm)", self.radius)):
             grid.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL); grid.Add(control, 1, wx.EXPAND)
         root.Add(self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
@@ -142,18 +149,19 @@ class ComponentPresetDetailsDialog(wx.Dialog):
 
 class PngTraceDialog(wx.Dialog):
     """Interactive, bounded PNG trace controls with a live monochrome preview."""
-    def __init__(self, parent, source: Path):
+    def __init__(self, parent, source: Path, settings: RasterTraceSettings = None):
         super().__init__(parent, title="Convert PNG to PCB graphic", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        self.source = Path(source); self.result = None
+        self.source = Path(source); self.result = None; settings = settings or RasterTraceSettings()
         root = wx.BoxSizer(wx.HORIZONTAL); controls = wx.BoxSizer(wx.VERTICAL)
         grid = wx.FlexGridSizer(0, 2, 8, 9); grid.AddGrowableCol(1); controls.Add(grid, 0, wx.EXPAND)
-        self.threshold = wx.Slider(self, minValue=0, maxValue=255, value=128)
-        self.alpha = wx.Slider(self, minValue=0, maxValue=255, value=16)
-        self.smoothing = wx.SpinCtrl(self, min=0, max=3, initial=0)
-        self.despeckle = wx.SpinCtrl(self, min=0, max=10000, initial=0)
-        self.width = wx.SpinCtrlDouble(self, min=0.1, max=1000, initial=20, inc=0.1)
+        self.threshold = wx.Slider(self, minValue=0, maxValue=255, value=settings.threshold)
+        self.alpha = wx.Slider(self, minValue=0, maxValue=255, value=settings.alpha_cutoff)
+        self.smoothing = ThemedSpinCtrl(self, min=0, max=3, initial=settings.smoothing)
+        self.despeckle = ThemedSpinCtrl(self, min=0, max=10000, initial=settings.despeckle_pixels)
+        self.width = ThemedSpinCtrlDouble(self, min=0.1, max=1000, initial=settings.width_mm, inc=0.1)
         self.invert = wx.CheckBox(self, label="Invert black and white")
-        self.crop = wx.CheckBox(self, label="Crop transparent/empty edges"); self.crop.SetValue(True)
+        self.invert.SetValue(settings.invert)
+        self.crop = wx.CheckBox(self, label="Crop transparent/empty edges"); self.crop.SetValue(settings.auto_crop)
         for label, control in (("Threshold",self.threshold),("Alpha cutoff",self.alpha),("Smoothing",self.smoothing),("Despeckle pixels",self.despeckle),("Output width (mm)",self.width)):
             grid.Add(wx.StaticText(self,label=label),0,wx.ALIGN_CENTER_VERTICAL); grid.Add(control,1,wx.EXPAND)
         controls.Add(self.invert,0,wx.TOP,10); controls.Add(self.crop,0,wx.TOP,7)
@@ -162,22 +170,54 @@ class PngTraceDialog(wx.Dialog):
         self.preview = wx.StaticBitmap(self); self.preview.SetMinSize(wx.Size(380,380))
         root.Add(controls,0,wx.EXPAND|wx.ALL,14); root.Add(self.preview,1,wx.EXPAND|wx.TOP|wx.RIGHT|wx.BOTTOM,14)
         self.SetSizer(root); self.SetMinSize(wx.Size(760,470)); self.SetSize(wx.Size(840,540))
+        self._preview_generation = 0; self._preview_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._start_preview, self._preview_timer)
         for control in (self.threshold,self.alpha,self.smoothing,self.despeckle,self.width,self.invert,self.crop):
-            control.Bind(wx.EVT_SLIDER if isinstance(control,wx.Slider) else wx.EVT_CHECKBOX if isinstance(control,wx.CheckBox) else wx.EVT_SPINCTRL, self._changed)
-        self._update_preview()
+            event_types = (
+                (wx.EVT_SLIDER,) if isinstance(control, wx.Slider)
+                else (wx.EVT_CHECKBOX,) if isinstance(control, wx.CheckBox)
+                else (wx.EVT_TEXT, wx.EVT_SPINCTRL, wx.EVT_SPINCTRLDOUBLE)
+            )
+            for event_type in event_types:
+                control.Bind(event_type, self._changed)
+        self._queue_preview()
 
     def settings(self):
         return RasterTraceSettings(self.threshold.GetValue(), self.invert.GetValue(), self.alpha.GetValue(), self.crop.GetValue(), self.smoothing.GetValue(), self.despeckle.GetValue(), self.width.GetValue())
 
-    def _changed(self,event): self._update_preview(); event.Skip()
-    def _update_preview(self):
+    def _changed(self,event): self._queue_preview(); event.Skip()
+    def _queue_preview(self):
+        self._preview_generation += 1; self.result = None
+        button = self.FindWindow(wx.ID_OK)
+        if button is not None: button.Disable()
+        self.status.SetLabel("Tracing preview…")
+        self._preview_timer.StartOnce(120)
+
+    def _start_preview(self, event=None):
+        generation=self._preview_generation; settings=self.settings(); source=self.source
+        def worker():
+            try: result,error=trace_png_file(source,settings),None
+            except Exception as caught: result,error=None,caught
+            wx.CallAfter(self._finish_preview,generation,result,error)
+        threading.Thread(target=worker,daemon=True).start()
+
+    def _finish_preview(self, generation, result, error):
+        if generation != self._preview_generation or self.IsBeingDeleted(): return
+        button = self.FindWindow(wx.ID_OK)
+        if error is not None:
+            self.result=None; self.status.SetLabel(str(error))
+            if button is not None: button.Disable()
+            return
+        self.result=result
         try:
-            self.result = trace_png_file(self.source,self.settings())
-            stream = wx.MemoryInputStream(self.result.preview_png,len(self.result.preview_png)); image = wx.Image(stream,wx.BITMAP_TYPE_PNG)
+            image = wx.Image(io.BytesIO(self.result.preview_png), wx.BITMAP_TYPE_PNG)
             target = self.preview.GetClientSize(); scale=min(max(1,target.width)/image.GetWidth(),max(1,target.height)/image.GetHeight())
             image=image.Scale(max(1,int(image.GetWidth()*scale)),max(1,int(image.GetHeight()*scale)),wx.IMAGE_QUALITY_HIGH)
             self.preview.SetBitmap(wx.Bitmap(image)); self.status.SetLabel("{} × {} traced pixels".format(*self.result.pixel_size))
-        except Exception as error: self.result=None; self.status.SetLabel(str(error))
+            if button is not None: button.Enable()
+        except Exception as caught:
+            self.result=None; self.status.SetLabel(str(caught))
+            if button is not None: button.Disable()
 
 
 class SettingsDialog(wx.Dialog):
@@ -395,7 +435,7 @@ class SettingsDialog(wx.Dialog):
 
         self.profile_list = ThemedListBox(self.profile_page)
         root.Add(self.profile_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
-        actions = wx.BoxSizer(wx.HORIZONTAL)
+        actions = wx.WrapSizer(wx.HORIZONTAL)
         for label, handler in (
             ("Set default", self._set_default_profile),
             ("Clear default", self._clear_default_profile),
@@ -492,7 +532,12 @@ class SettingsDialog(wx.Dialog):
         catalog_col.Add(self.install_font_button, 0, wx.TOP, 8)
         installed_col.Add(wx.StaticText(self.fonts_page, label="My installed faces"), 0, wx.BOTTOM, 5)
         self.installed_font_list = ThemedListBox(self.fonts_page); installed_col.Add(self.installed_font_list, 1, wx.EXPAND)
-        installed_col.Add(ThemedActionButton(self.fonts_page, "Remove selected", self._remove_font_face), 0, wx.TOP, 8)
+        font_actions = wx.BoxSizer(wx.HORIZONTAL)
+        self.repair_font_button = ThemedActionButton(self.fonts_page, "Redownload missing", self._repair_font_face)
+        font_actions.Add(self.repair_font_button, 0, wx.RIGHT, 6)
+        font_actions.Add(ThemedActionButton(self.fonts_page, "Remove selected", self._remove_font_face), 0)
+        installed_col.Add(font_actions, 0, wx.TOP, 8)
+        self.installed_font_list.Bind(wx.EVT_LISTBOX, self._on_font_selection)
         columns.Add(catalog_col, 1, wx.EXPAND | wx.RIGHT, 8); columns.Add(installed_col, 1, wx.EXPAND | wx.LEFT, 8)
         root.Add(columns, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
         self.font_status = wx.StaticText(self.fonts_page, label="Installed fonts remain available offline.")
@@ -506,8 +551,35 @@ class SettingsDialog(wx.Dialog):
         self.font_catalog_list.Set(tuple("{}  ·  {}".format(item.get("family", "Unnamed"), item.get("category", "Google Fonts")) for item in self._visible_font_catalog))
 
     def _refresh_installed_fonts(self):
-        self._installed_fonts = self.font_store.list()
-        self.installed_font_list.Set(tuple(item.display_name for item in self._installed_fonts))
+        self._installed_fonts = self.font_store.records()
+        self.installed_font_list.Set(tuple("{}{}".format(item.display_name, " — Missing file" if item.missing else "") for item in self._installed_fonts))
+        self._update_font_actions()
+
+    def _on_font_selection(self, event):
+        self._update_font_actions(); event.Skip()
+
+    def _update_font_actions(self):
+        if not hasattr(self, "repair_font_button"): return
+        selection = self.installed_font_list.GetSelection()
+        self.repair_font_button.Enable(0 <= selection < len(self._installed_fonts) and self._installed_fonts[selection].missing)
+
+    def _repair_font_face(self, event):
+        selection = self.installed_font_list.GetSelection()
+        if not 0 <= selection < len(self._installed_fonts) or not self._installed_fonts[selection].missing: return
+        face = self._installed_fonts[selection]
+        self.repair_font_button.Disable(); self.font_status.SetLabel("Redownloading {}…".format(face.display_name))
+        def worker():
+            try: repaired, error = self.font_store.repair(face.face_id), None
+            except Exception as caught: repaired, error = None, caught
+            wx.CallAfter(self._font_repair_finished, repaired, error)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _font_repair_finished(self, repaired, error):
+        self._refresh_installed_fonts()
+        if error is not None:
+            self.font_status.SetLabel("Could not redownload font: {}".format(error)); return
+        self.restart_editor = True
+        self.font_status.SetLabel("Restored {} and retained its saved font identity.".format(repaired.display_name))
 
     def _refresh_font_catalog_online(self, event):
         self.font_status.SetLabel("Refreshing Google Fonts catalog…")
@@ -625,14 +697,17 @@ class SettingsDialog(wx.Dialog):
         root.Add(filters, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
 
         self.upload_list = ThemedListBox(self.upload_page)
+        self.upload_list.Bind(wx.EVT_LISTBOX, self._on_upload_selection)
         root.Add(self.upload_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
-        actions = wx.BoxSizer(wx.HORIZONTAL)
+        actions = wx.WrapSizer(wx.HORIZONTAL)
         upload = ThemedActionButton(self.upload_page, "Upload SVG…", lambda: self._upload_svg(None))
         self.upload_png_button = ThemedActionButton(self.upload_page, "Convert PNG…", lambda: self._upload_png(None))
+        self.edit_png_button = ThemedActionButton(self.upload_page, "Edit PNG trace…", lambda: self._edit_png_trace(None))
         self.add_variant_button = ThemedActionButton(self.upload_page, "Add variant…", lambda: self._upload_variant(None))
         delete = ThemedActionButton(self.upload_page, "Delete selected", lambda: self._delete_upload(None))
         actions.Add(upload, 0, wx.RIGHT, 6)
         actions.Add(self.upload_png_button, 0, wx.RIGHT, 6)
+        actions.Add(self.edit_png_button, 0, wx.RIGHT, 6)
         actions.Add(self.add_variant_button, 0, wx.RIGHT, 6)
         actions.Add(delete, 0)
         root.Add(actions, 0, wx.ALL, 14)
@@ -942,6 +1017,21 @@ class SettingsDialog(wx.Dialog):
             self.add_variant_button.Enable(self._asset_namespace() == "symbols")
         if hasattr(self, "upload_png_button"):
             self.upload_png_button.Enable(self._asset_namespace() == "graphics")
+        self._update_upload_actions()
+
+    def _on_upload_selection(self, event):
+        self._update_upload_actions()
+        event.Skip()
+
+    def _update_upload_actions(self):
+        if not hasattr(self, "edit_png_button"):
+            return
+        index = self.upload_list.GetSelection()
+        asset = self._upload_items[index] if 0 <= index < len(self._upload_items) else None
+        self.edit_png_button.Enable(
+            asset is not None and self._asset_namespace() == "graphics"
+            and self._asset_store().traced_png_details(asset) is not None
+        )
 
     def _upload_svg(self, event):
         picker = wx.FileDialog(
@@ -1004,6 +1094,39 @@ class SettingsDialog(wx.Dialog):
         except (OSError, RuntimeError, ValueError) as error:
             wx.MessageBox(str(error), "Could not convert PNG", wx.OK | wx.ICON_ERROR, self)
         finally: name_prompt.Destroy()
+
+    def _edit_png_trace(self, event):
+        index = self.upload_list.GetSelection()
+        if not 0 <= index < len(self._upload_items):
+            return
+        asset = self._upload_items[index]
+        details = self._asset_store().traced_png_details(asset)
+        if details is None:
+            wx.MessageBox("The selected graphic was not created from a retained PNG.", "PNG trace", wx.OK | wx.ICON_INFORMATION, self)
+            return
+        source, raw_settings = details
+        try:
+            settings = RasterTraceSettings(**dict(raw_settings))
+        except (TypeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not reopen PNG trace", wx.OK | wx.ICON_ERROR, self)
+            return
+        converter = PngTraceDialog(self, source, settings)
+        try:
+            if converter.ShowModal() != wx.ID_OK or converter.result is None:
+                return
+            from dataclasses import asdict
+            self._asset_store().update_traced_png(asset, converter.result.svg, asdict(converter.result.settings))
+            self._refresh_uploads()
+            for row, item in enumerate(self._upload_items):
+                if item.asset_id == asset.asset_id:
+                    self.upload_list.SetSelection(row)
+                    break
+            self.restart_editor = True
+            self._update_upload_actions()
+        except (OSError, RuntimeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not update PNG trace", wx.OK | wx.ICON_ERROR, self)
+        finally:
+            converter.Destroy()
 
     def _upload_variant(self, event):
         selection = self.upload_list.GetSelection()

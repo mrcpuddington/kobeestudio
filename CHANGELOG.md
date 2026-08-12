@@ -6,6 +6,10 @@
 - Added global/project graphics and component preset libraries, safe broad SVG import, live PNG tracing, and transformable imported-graphic artwork.
 - Generalized connector overlays across common pitches and custom pitch values while preserving existing 2.54 mm artwork.
 - Added transactional KiCad Board Tools and External Plugin actions for designator generation/removal and safe two-sided footprint silkscreen cleanup.
+- Added a focused designator-style editor, partial-IPC rollback checks, all-semantic-field cleanup, and idempotent exact-anchor updates.
+- Bundled the complete Google Fonts catalog, retained actual family licence files, and added repair of missing faces without changing saved renderer identities.
+- Added searchable graphics, four-corner rotated transforms, synchronized aspect-locked dimensions, and reopenable asynchronous PNG tracing.
+- Added live custom-pitch limits with correct millimetre/mil conversion and extended numeric wheel guards to every new dialog.
 - Fixed responsive editor resizing and prevented mouse-wheel scrolling from changing numeric inputs on macOS and Windows.
 
 ## 1.4.1 - 2026-08-09

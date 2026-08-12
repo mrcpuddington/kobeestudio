@@ -52,11 +52,14 @@ def trace_png_bytes(data: bytes, settings: RasterTraceSettings = RasterTraceSett
         raise ValueError("PNG must be between 1 byte and 20 MiB")
     Image, ImageFilter = _pillow()
     try:
-        image = Image.open(io.BytesIO(data)); image.load(); image = image.convert("RGBA")
+        image = Image.open(io.BytesIO(data))
+        if image.width * image.height > MAX_PNG_PIXELS:
+            raise ValueError("PNG exceeds the 20 megapixel safety limit")
+        image.load(); image = image.convert("RGBA")
     except Exception as error:
+        if isinstance(error, ValueError) and "20 megapixel" in str(error):
+            raise
         raise ValueError("Could not read PNG: {}".format(error)) from error
-    if image.width * image.height > MAX_PNG_PIXELS:
-        raise ValueError("PNG exceeds the 20 megapixel safety limit")
     luminance = image.convert("L")
     if settings.smoothing:
         luminance = luminance.filter(ImageFilter.MedianFilter(settings.smoothing * 2 + 1))
@@ -117,4 +120,6 @@ def trace_png_file(path: Path, settings: RasterTraceSettings = RasterTraceSettin
     path = Path(path)
     if path.is_symlink() or not path.is_file():
         raise ValueError("PNG must be a regular file")
+    if path.stat().st_size <= 0 or path.stat().st_size > MAX_PNG_BYTES:
+        raise ValueError("PNG must be between 1 byte and 20 MiB")
     return trace_png_bytes(path.read_bytes(), settings)
