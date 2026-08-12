@@ -382,7 +382,7 @@ class SettingsCard(wx.Panel):
     """Soft neutral settings card matching the approved mockup."""
 
     def __init__(self, parent, title):
-        super().__init__(parent, style=wx.BORDER_NONE)
+        super().__init__(parent, style=wx.BORDER_NONE | wx.CLIP_CHILDREN)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         palette = _palette()
         self.SetBackgroundColour(palette["card"])
@@ -951,7 +951,10 @@ class ToolPage(wx.Panel):
     """One independently-owned tool page with fixed navigation and scrolling content."""
 
     def __init__(self, parent, dialog, family, label, mode):
-        super().__init__(parent, style=wx.TAB_TRAVERSAL | wx.BORDER_NONE)
+        super().__init__(
+            parent,
+            style=wx.TAB_TRAVERSAL | wx.BORDER_NONE | wx.CLIP_CHILDREN,
+        )
         self.dialog = dialog
         self.family = family
         self.label = label
@@ -988,18 +991,26 @@ class ToolPage(wx.Panel):
         if hasattr(self.content, "ShowScrollbars"):
             never = getattr(wx, "SHOW_SB_NEVER", 0)
             self.content.ShowScrollbars(never, never)
+        # Native controls must live on an ordinary panel rather than directly
+        # on wx.ScrolledWindow. On both MSW and Cocoa, direct children can keep
+        # stale native positions while a resize is updating the virtual area,
+        # which leaves repeated controls and card borders painted behind them.
+        self.content_panel = wx.Panel(
+            self.content,
+            style=wx.TAB_TRAVERSAL | wx.BORDER_NONE | wx.CLIP_CHILDREN,
+        )
+        self.content_panel.SetBackgroundColour(_palette()["controls"])
         columns = wx.BoxSizer(wx.HORIZONTAL)
         self.columns_sizer = columns
         self.card_columns = (wx.BoxSizer(wx.VERTICAL), wx.BoxSizer(wx.VERTICAL))
         columns.Add(self.card_columns[0], 1, wx.EXPAND | wx.RIGHT, 6)
         columns.Add(self.card_columns[1], 1, wx.EXPAND | wx.LEFT, 6)
-        self.content.SetSizer(columns)
+        self.content_panel.SetSizer(columns)
         self.root.Add(self.content, 1, wx.EXPAND | wx.ALL, 14)
         self._build()
         self._build_section_nav()
         self._update_card_layout(force=True)
         self._show_section(self.sections[0])
-        self.content.FitInside()
         self.Bind(wx.EVT_SIZE, self._on_size)
 
     def _schedule_layout(self, *, scroll_to_top=False):
@@ -1017,13 +1028,25 @@ class ToolPage(wx.Panel):
         scroll_to_top = self._scroll_to_top
         self._scroll_to_top = False
         self.Layout()
-        self.content.Layout()
-        self.content.FitInside()
+        # Keep the inner panel at its active card's natural height. Without an
+        # explicit vertical minimum, wx can compress the native children to
+        # the viewport while retaining a taller virtual size, leaving controls
+        # clipped or overlapping instead of making them scrollable.
+        viewport = self.content.GetClientSize()
+        content_height = max(1, self.columns_sizer.CalcMin().height)
+        content_size = wx.Size(
+            max(1, viewport.width),
+            max(max(1, viewport.height), content_height),
+        )
+        self.content_panel.SetSize(content_size)
+        self.content_panel.Layout()
+        self.content.SetVirtualSize(content_size)
+        self.content.Refresh(False)
         if scroll_to_top:
             self.content.Scroll(0, 0)
 
     def _card(self, title):
-        card = SettingsCard(self.content, title)
+        card = SettingsCard(self.content_panel, title)
         section = self._section_for_card(title)
         if section not in self.sections:
             self.sections.append(section)
@@ -1061,6 +1084,7 @@ class ToolPage(wx.Panel):
 
     def _on_size(self, event):
         self._update_card_layout()
+        self._schedule_layout()
         event.Skip()
 
     def _section_for_card(self, title):
@@ -2259,7 +2283,10 @@ class StudioEditorDialog(wx.Dialog):
             self.pages.AddPage(page, label)
             self.page_by_tool[label] = page
             self.page_index_by_tool[label] = self.pages.GetPageCount() - 1
-        self.pages.SetMinSize(wx.Size(500, 440))
+        # These minima fit together at the dialog's compact 760 px width. The
+        # old 500 + 390 px pair forced sizers past the viewport on smaller
+        # displays and during window resizing.
+        self.pages.SetMinSize(wx.Size(450, 360))
         workspace.Add(self.pages, 1, wx.EXPAND | wx.RIGHT, 10)
 
         preview_panel = wx.Panel(self, style=wx.BORDER_NONE)
@@ -2275,24 +2302,29 @@ class StudioEditorDialog(wx.Dialog):
         preview_title.SetForegroundColour(palette["text"])
         preview_heading.Add(preview_title, 0, wx.ALIGN_CENTER_VERTICAL)
         toolbar.Add(preview_heading, 0, wx.EXPAND | wx.BOTTOM, 6)
-        preview_controls = wx.BoxSizer(wx.HORIZONTAL)
-        preview_controls.Add(wx.StaticText(preview_panel, label="Preview layer"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        preview_controls = wx.BoxSizer(wx.VERTICAL)
+        preview_layer_row = wx.BoxSizer(wx.HORIZONTAL)
+        preview_layer_row.Add(wx.StaticText(preview_panel, label="Preview layer"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         self.layer_choice = ThemedChoice(preview_panel, choices=tuple(PREVIEW_LAYER_LABELS[layer] for layer in self._output_layers))
         self.layer_choice.SetMinSize(wx.Size(140, 30))
         self.layer_choice.SetStringSelection(PREVIEW_LAYER_LABELS[FRONT_SILKSCREEN])
         self.layer_choice.Bind(wx.EVT_CHOICE, self.on_control_changed)
-        preview_controls.Add(self.layer_choice, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 7)
+        preview_layer_row.Add(self.layer_choice, 1, wx.ALIGN_CENTER_VERTICAL)
+        preview_controls.Add(preview_layer_row, 0, wx.EXPAND | wx.BOTTOM, 6)
+        preview_zoom_row = wx.BoxSizer(wx.HORIZONTAL)
+        preview_zoom_row.AddStretchSpacer(1)
         for label, handler in (
             ("Fit", lambda: self.preview.fit()),
             ("−", lambda: self.preview.zoom(1 / 1.2)),
             ("+", lambda: self.preview.zoom(1.2)),
         ):
             button = KobeeAction(preview_panel, label, handler)
-            preview_controls.Add(button, 0, wx.RIGHT, 4)
+            preview_zoom_row.Add(button, 0, wx.RIGHT, 4)
+        preview_controls.Add(preview_zoom_row, 0, wx.EXPAND)
         toolbar.Add(preview_controls, 0, wx.EXPAND)
         preview_root.Add(toolbar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.preview = PreviewCanvas(preview_panel)
-        self.preview.SetMinSize(wx.Size(300, 410))
+        self.preview.SetMinSize(wx.Size(220, 300))
         preview_root.Add(self.preview, 1, wx.EXPAND | wx.TOP, 8)
         self.preview_status = wx.StaticText(preview_panel, label="Front side · Front Silkscreen")
         preview_root.Add(self.preview_status, 0, wx.TOP, 7)
@@ -2300,7 +2332,7 @@ class StudioEditorDialog(wx.Dialog):
         self.preview_error.SetForegroundColour(wx.Colour(190, 55, 45))
         self.preview_error.SetMinSize(wx.Size(-1, 34))
         preview_root.Add(self.preview_error, 0, wx.EXPAND | wx.TOP, 4)
-        preview_panel.SetMinSize(wx.Size(390, -1))
+        preview_panel.SetMinSize(wx.Size(250, -1))
         workspace.Add(preview_panel, 1, wx.EXPAND)
         root.Add(workspace, 1, wx.EXPAND)
 
@@ -2322,7 +2354,9 @@ class StudioEditorDialog(wx.Dialog):
 
         self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
         display = wx.GetClientDisplayRect()
-        self.SetMinSize(wx.Size(min(980, display.width - 30), min(620, display.height - 30)))
+        minimum_width = min(760, max(560, display.width - 40))
+        minimum_height = min(600, max(480, display.height - 40))
+        self.SetMinSize(wx.Size(minimum_width, minimum_height))
         self.SetSize(wx.Size(min(1220, display.width - 50), min(780, display.height - 50)))
 
     def _profile_module(self):

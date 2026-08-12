@@ -29,6 +29,44 @@ def _colours():
     return {name: wx.Colour(*value) for name, value in values.items()}
 
 
+def _scroll_ancestor_for(window):
+    """Return the nearest scrolling viewport that owns ``window``."""
+    parent = window.GetParent()
+    while parent is not None:
+        if isinstance(parent, wx.ScrolledWindow):
+            return parent
+        parent = parent.GetParent()
+    return None
+
+
+def _redirect_numeric_mousewheel(control, event):
+    """Scroll the containing page without changing a numeric field value."""
+    scroller = _scroll_ancestor_for(control)
+    rotation = event.GetWheelRotation()
+    if scroller is None or not rotation:
+        # Intentionally consume the event. A wheel gesture must never alter a
+        # numeric setting, even when the control is used outside a scroller.
+        return
+    horizontal_axis = getattr(wx, "MOUSE_WHEEL_HORIZONTAL", None)
+    if horizontal_axis is not None and event.GetWheelAxis() == horizontal_axis:
+        return
+    delta = max(1, abs(event.GetWheelDelta()))
+    notches = max(1, abs(rotation) // delta)
+    lines = max(1, event.GetLinesPerAction())
+    scroller.ScrollLines((-1 if rotation > 0 else 1) * notches * lines)
+
+
+def bind_numeric_mousewheel_guard(control):
+    """Prevent a spin control and its native editor from handling the wheel."""
+    handler = lambda event: _redirect_numeric_mousewheel(control, event)
+    # Keep a Python reference for older wx builds whose bound callable proxy
+    # can otherwise be released before the native control is destroyed.
+    control._kobee_mousewheel_guard = handler
+    control.Bind(wx.EVT_MOUSEWHEEL, handler)
+    for child in control.GetChildren():
+        child.Bind(wx.EVT_MOUSEWHEEL, handler)
+
+
 class ThemedChoice(wx.Control):
     """A dark-safe closed choice that uses a normal menu for its popup."""
 
@@ -172,6 +210,7 @@ class ThemedSpinCtrlDouble(wx.Control):
         self.Bind(wx.EVT_LEFT_UP, self._on_click)
         self.editor.Bind(wx.EVT_TEXT, self._on_text)
         self.editor.Bind(wx.EVT_TEXT_ENTER, self._on_text_enter)
+        bind_numeric_mousewheel_guard(self)
         self.SetValue(initial)
 
     def _apply_colours(self):

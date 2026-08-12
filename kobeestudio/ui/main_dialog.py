@@ -42,6 +42,7 @@ from ..core.transforms import (
 )
 from ..version import __version__
 from .asset_picker import AssetPickerDialog, icon_picker_items, label_picker_items
+from .themed_controls import bind_numeric_mousewheel_guard
 
 
 KOBEE_STUDIO_DOCS_URL = "https://kobee.com.au/tutorials/kobee-studio-docs"
@@ -408,6 +409,7 @@ class MainDialog(UpstreamDialog):
         self.m_PreviewPanel.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self._rebuild_studio_layout()
         self._bind_live_artwork_controls()
+        self._bind_numeric_mousewheel_guards()
         if self._editing_existing_artwork:
             self._update_mode_ui(refit=False)
         else:
@@ -418,6 +420,15 @@ class MainDialog(UpstreamDialog):
         # Reopening a placed icon is still an edit of its label. Keeping the
         # main field focused avoids jumping back into symbol selection.
         wx.CallAfter(self.m_MultiLineText.SetFocus)
+
+    def _bind_numeric_mousewheel_guards(self):
+        """Make wheel gestures scroll settings instead of editing numbers."""
+        pending = list(self.GetChildren())
+        while pending:
+            control = pending.pop()
+            pending.extend(control.GetChildren())
+            if isinstance(control, (wx.SpinCtrl, wx.SpinCtrlDouble)):
+                bind_numeric_mousewheel_guard(control)
 
     def _build_studio_controls(self):
         root_sizer = self.GetSizer()
