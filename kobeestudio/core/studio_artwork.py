@@ -522,7 +522,7 @@ def render_label_artwork(
     icon_variant: str = "default",
     icon_renderer=render_builtin_icon,
 ) -> StudioArtwork:
-    if icon_position not in ("left", "right", "only"):
+    if icon_position not in ("left", "right", "above", "below", "only"):
         raise ValueError("Unsupported icon position: {}".format(icon_position))
     if icon_height_mm < 0:
         raise ValueError("Icon height must be non-negative")
@@ -602,10 +602,16 @@ def render_label_artwork(
         else None
     )
     gap = icon_gap_mm if has_text and icon is not None else 0.0
-    content_size = Size(
-        text_stack_size.width + (icon.size.width if icon else 0.0) + gap,
-        max(text_stack_size.height, icon.size.height if icon else 0.0),
-    )
+    if has_text and icon is not None and icon_position in ("above", "below"):
+        content_size = Size(
+            max(text_stack_size.width, icon.size.width),
+            text_stack_size.height + icon.size.height + gap,
+        )
+    else:
+        content_size = Size(
+            text_stack_size.width + (icon.size.width if icon else 0.0) + gap,
+            max(text_stack_size.height, icon.size.height if icon else 0.0),
+        )
 
     text_stack_centre = Point()
     icon_centre = Point()
@@ -615,11 +621,17 @@ def render_label_artwork(
             text_stack_centre = Point(
                 content_size.width / 2.0 - text_stack_size.width / 2.0, 0.0
             )
-        else:
+        elif icon_position == "right":
             text_stack_centre = Point(
                 -content_size.width / 2.0 + text_stack_size.width / 2.0, 0.0
             )
             icon_centre = Point(content_size.width / 2.0 - icon.size.width / 2.0, 0.0)
+        elif icon_position == "above":
+            icon_centre = Point(0.0, -content_size.height / 2.0 + icon.size.height / 2.0)
+            text_stack_centre = Point(0.0, content_size.height / 2.0 - text_stack_size.height / 2.0)
+        else:
+            text_stack_centre = Point(0.0, -content_size.height / 2.0 + text_stack_size.height / 2.0)
+            icon_centre = Point(0.0, content_size.height / 2.0 - icon.size.height / 2.0)
 
     text_centre = Point(
         text_stack_centre.x + primary_in_stack.x,

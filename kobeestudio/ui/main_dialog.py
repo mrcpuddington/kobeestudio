@@ -180,6 +180,8 @@ COMPONENT_STYLE_DEFAULTS = {
 ICON_POSITION_LABELS = {
     "Left of text": "left",
     "Right of text": "right",
+    "Above text": "above",
+    "Below text": "below",
     "Icon only": "only",
 }
 STUDIO_DIMENSIONS_VERSION = 2

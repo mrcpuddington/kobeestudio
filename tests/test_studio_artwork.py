@@ -181,7 +181,7 @@ class StudioArtworkTests(unittest.TestCase):
         self.assertAlmostEqual(vectors.size.width + 1.2, artwork.document.size.width, places=6)
         self.assertAlmostEqual(3.0, artwork.document.size.height, places=6)
 
-    def test_icon_and_text_layout_supports_left_right_and_icon_only(self):
+    def test_icon_and_text_layout_supports_inline_stacked_and_icon_only(self):
         left = render_label_artwork(
             self.vectorizer,
             "GND",
@@ -211,6 +211,36 @@ class StudioArtworkTests(unittest.TestCase):
         self.assertLess(left_icon.position.x, left_text.position.x)
         self.assertGreater(right_icon.position.x, right_text.position.x)
         self.assertAlmostEqual(left.document.size.width, right.document.size.width)
+
+        above = render_label_artwork(
+            self.vectorizer,
+            "GND",
+            self.style(),
+            "F.SilkS",
+            "rounded_rectangle",
+            icon_id="builtin.ground",
+            icon_position="above",
+            icon_height_mm=0.8,
+            icon_gap_mm=0.25,
+        )
+        below = render_label_artwork(
+            self.vectorizer,
+            "GND",
+            self.style(),
+            "F.SilkS",
+            "rounded_rectangle",
+            icon_id="builtin.ground",
+            icon_position="below",
+            icon_height_mm=0.8,
+            icon_gap_mm=0.25,
+        )
+        above_text = next(item for item in above.document.objects if isinstance(item, TextObject))
+        above_icon = next(item for item in above.document.objects if isinstance(item, IconObject))
+        below_text = next(item for item in below.document.objects if isinstance(item, TextObject))
+        below_icon = next(item for item in below.document.objects if isinstance(item, IconObject))
+        self.assertLess(above_icon.position.y, above_text.position.y)
+        self.assertGreater(below_icon.position.y, below_text.position.y)
+        self.assertGreater(above.document.size.height, left.document.size.height)
 
         icon_only = render_label_artwork(
             self.vectorizer,

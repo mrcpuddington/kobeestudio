@@ -1518,7 +1518,7 @@ class ToolPage(wx.Panel):
             self.controls["ContentLayoutChoice"].Bind(wx.EVT_CHOICE, self._on_content_layout_changed)
         if icon:
             grid = self._grid(box)
-            self._add(grid, "IconPositionChoice", "Symbol position", self.choice(("Left of text", "Right of text"), "Left of text"))
+            self._add(grid, "IconPositionChoice", "Symbol position", self.choice(("Left of text", "Right of text", "Above text", "Below text"), "Left of text"))
             icon_height = self._add(grid, "IconHeightCtrl", "Symbol size (mm)", self.spin(0, 20, 0, 0.1))
             icon_height._kobee_auto_value_resolver = lambda: self.controls["HeightCtrl"].GetValue()
             self._add(grid, "IconGapCtrl", "Symbol gap (mm)", self.spin(0, 20, 0.3, 0.1))
@@ -2114,7 +2114,20 @@ class ToolPage(wx.Panel):
                 self.controls["IconChoice"] = symbol
                 self._content_widgets["symbol"] = (symbol_label, symbol)
                 grid = self._grid(content)
-                self._add(grid, "IconPositionChoice", "Symbol position", self.choice(("Left of text", "Right of text"), "Left of text"))
+                self._add(
+                    grid,
+                    "ContentLayoutChoice",
+                    "Reference layout",
+                    self.choice(CONTENT_LAYOUT_LABELS, "Single text"),
+                )
+                self._add(grid, "SubtitleCtrl", "Detail line", self.text(""))
+                self.controls["ContentLayoutChoice"].Bind(wx.EVT_CHOICE, self._on_content_layout_changed)
+                self._add(
+                    grid,
+                    "IconPositionChoice",
+                    "Symbol position",
+                    self.choice(("Left of text", "Right of text", "Above text", "Below text"), "Left of text"),
+                )
                 icon_height = self._add(grid, "IconHeightCtrl", "Symbol size (mm)", self.spin(0, 20, 0, 0.1))
                 icon_height._kobee_auto_value_resolver = lambda: self.controls["HeightCtrl"].GetValue()
                 self._add(grid, "IconGapCtrl", "Symbol gap (mm)", self.spin(0, 20, 0.3, 0.1))
@@ -2122,7 +2135,7 @@ class ToolPage(wx.Panel):
                 scope.Bind(wx.EVT_CHOICE, self.dialog.on_designator_scope_changed)
                 profile.Bind(wx.EVT_CHOICE, self._on_designator_profile_changed)
                 self._build_container(LABEL_SHAPE_LABELS)
-                self._build_typography(padding=True, width=True)
+                self._build_typography(padding=True, subtitle=True, width=True)
                 self._update_content_ui()
         else:
             barcode = self.label == "Barcode"
@@ -3375,6 +3388,13 @@ class StudioEditorDialog(wx.Dialog):
             shape=LABEL_SHAPE_LABELS.get(local.get("ShapeChoice")), minimum_width_mm=float(local.get("WidthCtrl", 0)),
             icon_id=icon_id, icon_position=ICON_POSITION_LABELS.get(local.get("IconPositionChoice", "Left of text"), "left"),
             icon_height_mm=float(local.get("IconHeightCtrl", 0)), icon_gap_mm=float(local.get("IconGapCtrl", 0.3)), icon_variant=variant,
+            subtitle_text=(
+                str(local.get("SubtitleCtrl", ""))
+                if local.get("ContentLayoutChoice") == "Title + subtitle"
+                else ""
+            ),
+            subtitle_typography=style.secondary_typography,
+            subtitle_gap_mm=float(local.get("SubtitleGapCtrl", 0.25)),
             icon_renderer=(lambda asset_id, height_mm, selected_variant=variant: render_symbol(asset_id,height_mm,selected_variant,catalog=self.symbol_catalog)),
         )
         feature = {"kind":"designator_label", "source_footprint_id":source_id, "reference":reference}
