@@ -1042,7 +1042,7 @@ class SettingsDialog(wx.Dialog):
         root = wx.BoxSizer(wx.VERTICAL)
         self.library_backup_page.SetSizer(root)
         root.Add(self._heading(self.library_backup_page, "Kobee Studio data"), 0, wx.ALL, 14)
-        info = wx.StaticText(self.library_backup_page, label="Your fonts, SVGs, component presets, quick labels, safe label templates, profiles, preferences, and hidden-item choices are stored outside the installed package at:\n{}".format(self.preferences_store.root))
+        info = wx.StaticText(self.library_backup_page, label="Your fonts, SVGs, component presets, quick labels, variable templates, profiles, preferences, and hidden-item choices are stored outside the installed package at:\n{}".format(self.preferences_store.root))
         info.Wrap(620)
         root.Add(info, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
         note = wx.StaticText(self.library_backup_page, label="Create a data backup to move your complete setup to another machine. Restoring a backup replaces the current Kobee Studio data after confirmation, so it is an exact restore rather than a merge.")
@@ -1056,7 +1056,7 @@ class SettingsDialog(wx.Dialog):
         root.Add(actions, 0, wx.LEFT | wx.RIGHT, 14)
         root.AddStretchSpacer(1)
         root.Add(wx.StaticLine(self.library_backup_page), 0, wx.EXPAND | wx.ALL, 14)
-        warning = wx.StaticText(self.library_backup_page, label="Resetting removes every installed font, custom SVG, component preset, quick label, safe label template, profile, preference, and hidden-item choice. Shipped defaults remain. This cannot be undone.")
+        warning = wx.StaticText(self.library_backup_page, label="Resetting removes every installed font, custom SVG, component preset, quick label, variable template, profile, preference, and hidden-item choice. Shipped defaults remain. This cannot be undone.")
         warning.Wrap(620)
         root.Add(warning, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         root.Add(ThemedActionButton(self.library_backup_page, "Reset data to shipped defaults…", lambda: self._reset_library(None)), 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
@@ -1138,7 +1138,7 @@ class SettingsDialog(wx.Dialog):
             if dialog.ShowModal() != wx.ID_OK:
                 return
             if wx.MessageBox(
-                "Restore this backup? It replaces your current Kobee Studio data, including fonts, preferences, custom SVGs, component presets, quick labels, safe label templates, profiles, and hidden-item choices. This cannot be undone.",
+                "Restore this backup? It replaces your current Kobee Studio data, including fonts, preferences, custom SVGs, component presets, quick labels, variable templates, profiles, and hidden-item choices. This cannot be undone.",
                 "Replace Kobee Studio data",
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
                 self,
@@ -1155,7 +1155,7 @@ class SettingsDialog(wx.Dialog):
 
     def _reset_library(self, event):
         if wx.MessageBox(
-            "This removes all custom SVGs, quick labels, safe label templates, profiles, display preferences, and hidden-item choices. Bundled defaults remain. Continue?",
+            "This removes all custom SVGs, quick labels, variable templates, profiles, display preferences, and hidden-item choices. Bundled defaults remain. Continue?",
             "Reset Kobee Studio data",
             wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
             self,

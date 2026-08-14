@@ -1,8 +1,8 @@
 {
     "$schema": "https://go.kicad.org/pcm/schemas/v2",
     "name": "Kobee Studio",
-    "description": "Create PCB labels, symbols, component callouts, header overlays, QR Codes, and barcodes inside KiCad",
-    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes parametric labels with optional underlines, PCB symbols, searchable presets, custom SVG uploads, icon and quick-label visibility controls, saved profiles, mm and mil display units, component callouts and arrays, configurable 2.54 mm header overlays, QR Codes, Code 128 barcodes, and optional readable text beneath machine codes. Kobee Studio evolved from KiBuzzard and now provides a modern KiCad 10 IPC workflow for creating consistent PCB graphics.",
+    "description": "Create PCB labels, variable text, graphics, connector overlays, QR Codes, and board tools inside KiCad",
+    "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes native KiCad project-variable templates, parametric labels, installed Google Fonts, PCB symbols, SVG/PNG graphics, component callouts and arrays, common and custom-pitch connector overlays, QR Codes, Code 128 barcodes, reusable libraries, and transactional designator and silkscreen board tools. Kobee Studio evolved from KiBuzzard and provides a modern KiCad 10 IPC workflow for creating consistent PCB graphics.",
     "identifier": "com.github.mrcpuddington.kobeestudio",
     "type": "plugin",
     "author": {

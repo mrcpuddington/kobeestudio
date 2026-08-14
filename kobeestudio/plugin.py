@@ -108,6 +108,11 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
 
     def _generate_and_place(self, dialog, buzzard):
         try:
+            if getattr(dialog, "_tool", "") == "Variables":
+                raise RuntimeError(
+                    "Variable labels require the KiCad 10 IPC plugin so ${NAME} "
+                    "expressions remain native KiCad text."
+                )
             if not dialog.polys:
                 dialog.EndModal(wx.ID_CANCEL)
                 return
@@ -129,13 +134,6 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                         else "component_callout"
                     ),
                     "data": dialog.artwork.component_callout.to_dict(),
-                }
-            elif getattr(dialog, "_tool", "") == "Safe Labels":
-                safe_settings = dialog.CurrentSettings()
-                feature = {
-                    "kind": "safe_label",
-                    "template": safe_settings.get("SafeLabelTemplateText", ""),
-                    "bindings": safe_settings.get("SafeLabelBindings", ()),
                 }
             payload = build_footprint_payload(
                 dialog.CurrentSettings(),

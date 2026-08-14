@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Added reusable global/project Safe Label templates with multi-line,
-  multi-designator placeholders and self-contained source bindings.
+- Added a final Labels → Variables tab for reusable global/project multi-line
+  templates that preview `.kicad_pro` values while retaining native `${NAME}`
+  expressions in KiCad footprint text for dynamic resolution.
 - Made the Designators editor track KiCad's selection automatically and keep
   Apply visible in every Designators section.
 - Gave bulk designator footprints unique identities and verify their committed

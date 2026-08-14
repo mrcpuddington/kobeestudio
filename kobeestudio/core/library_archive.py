@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 
-_ALLOWED_PREFIXES = ("assets/v1/", "profiles/v1/", "labels/v1/", "fonts/v1/", "component-presets/v1/", "reference-templates/v1/")
+_ALLOWED_PREFIXES = ("assets/v1/", "profiles/v1/", "labels/v1/", "fonts/v1/", "component-presets/v1/", "reference-templates/v1/", "variable-templates/v1/")
 _MAX_FILES = 10000
 _MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 
@@ -97,7 +97,7 @@ def restore_library(source: Path, destination_root: Path) -> int:
             safe.append((info, relative))
         staging = Path(tempfile.mkdtemp(prefix=".library-restore-", dir=str(destination_root.parent)))
         backup = destination_root.parent / ".library-backup-{}".format(uuid.uuid4())
-        roots = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "preferences.json")
+        roots = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "preferences.json")
         try:
             for info, relative in safe:
                 target = staging / relative
@@ -135,7 +135,7 @@ def reset_library(destination_root: Path) -> None:
     """Remove all mutable library data, leaving the bundled defaults intact."""
     destination_root = Path(destination_root)
     destination_root.mkdir(parents=True, exist_ok=True)
-    names = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "preferences.json")
+    names = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "preferences.json")
     tombstone = destination_root.parent / ".library-reset-{}".format(uuid.uuid4())
     try:
         tombstone.mkdir()

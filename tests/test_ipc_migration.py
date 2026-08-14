@@ -220,7 +220,12 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("class BrandedHeader(wx.Panel):", source)
         self.assertIn("icon=family", source)
         self.assertIn('("labels", "Standard", "Label")', source)
-        self.assertIn('("labels", "Safe Labels", "Label")', source)
+        self.assertIn('("labels", "Variables", "Label")', source)
+        labels = [
+            line for line in source.splitlines()
+            if line.strip().startswith('("labels",')
+        ]
+        self.assertEqual('    ("labels", "Variables", "Label"),', labels[-1])
         self.assertIn('("labels", "Connector Overlay", "2.54 mm Pin Header")', source)
         self.assertIn('("graphics", "Imported Graphic", "Imported Graphic")', source)
         self.assertIn('("board_tools", "Cleanup", "Board Tools")', source)
@@ -532,6 +537,36 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual("position", placed.position)
         self.assertEqual("orientation", placed.orientation)
 
+    def test_variable_text_update_is_atomic_and_keeps_footprint_identity(self):
+        session = IpcSession.connect(
+            environ={"KICAD_API_SOCKET": "/tmp/api.sock", "KICAD_API_TOKEN": "secret"},
+            client_factory=_Client,
+        )
+        old = _PlacedFootprint(
+            item_id="existing-variable-id",
+            definition_id="existing-variable-definition",
+            locked=True,
+        )
+        placement = _MinimalPlacement(session)
+        placement.build_variable_footprint = lambda *_args, **_kwargs: _PlacedFootprint()
+        placed = placement.place_variable_text(
+            {"VariableTemplateText": "${REVISION}"},
+            {"feature": {"kind": "variable_label"}},
+            "F.SilkS",
+            old_footprint=old,
+        )
+        self.assertEqual([], session.board.created)
+        self.assertEqual([placed], session.board.updated)
+        self.assertEqual("existing-variable-id", placed.id.value)
+        self.assertEqual("existing-variable-definition", placed.definition.proto.id.value)
+        self.assertEqual("position", placed.position)
+        self.assertEqual("orientation", placed.orientation)
+        self.assertTrue(placed.locked)
+        self.assertEqual(
+            "Update Kobee Studio variable label",
+            next(item[2] for item in session.board.messages if item[0] == "push"),
+        )
+
     def test_new_ipc_artwork_can_defer_move_until_modal_is_closed(self):
         artwork = StudioArtwork(
             filled_polygons=((Point(-1.0, -1.0), Point(1.0, -1.0), Point(0.0, 1.0)),),
@@ -687,6 +722,53 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual("OLD LABEL", loaded["MultiLineText"])
         self.assertTrue(loaded["_LoadedFootprintSettings"])
         self.assertIs(footprint, selected)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_variable_footprint_keeps_raw_native_kicad_text(self):
+        from kipy.board_types import BoardText
+        from kipy.proto.board.board_types_pb2 import BoardLayer
+        from kipy.proto.common import types as common_types
+        from kipy.util import to_mm
+
+        settings = {
+            "VariableTemplateText": "${BOARD_NAME}\nRev ${REVISION}",
+            "HeightCtrl": 1.4,
+            "NativeTextWidthCtrl": 1.1,
+            "NativeStrokeWidthCtrl": 0.2,
+            "LineSpacingCtrl": 1.25,
+            "AlignmentChoice": "Right",
+            "NativeBoldCheckbox": True,
+            "NativeUnderlineCheckbox": True,
+            "NativeKeepUprightCheckbox": True,
+        }
+        footprint = IpcArtworkPlacement(session=None).build_variable_footprint(
+            settings,
+            {
+                "format": "kobee-studio-composition",
+                "legacy_settings": settings,
+                "feature": {"kind": "variable_label"},
+            },
+            "F.SilkS",
+            output_layers=("F.SilkS", "B.SilkS"),
+        )
+        texts = [item for item in footprint.definition.items if isinstance(item, BoardText)]
+        self.assertEqual(2, len(texts))
+        self.assertTrue(all(item.value == "${BOARD_NAME}\nRev ${REVISION}" for item in texts))
+        self.assertTrue(all(item.attributes.multiline for item in texts))
+        self.assertEqual(BoardLayer.BL_F_SilkS, texts[0].layer)
+        self.assertFalse(texts[0].attributes.mirrored)
+        self.assertEqual(BoardLayer.BL_B_SilkS, texts[1].layer)
+        self.assertTrue(texts[1].attributes.mirrored)
+        self.assertAlmostEqual(1.4, to_mm(texts[0].attributes.size.y))
+        self.assertAlmostEqual(1.1, to_mm(texts[0].attributes.size.x))
+        self.assertAlmostEqual(0.2, to_mm(texts[0].attributes.stroke_width))
+        self.assertEqual(common_types.HorizontalAlignment.HA_RIGHT, texts[0].attributes.horizontal_alignment)
+        self.assertEqual(METADATA_FIELD_NAME, footprint.definition.items[-1].name)
+        self.assertEqual(
+            "variable_label",
+            decode_metadata(footprint.definition.items[-1].text.value)["feature"]["kind"],
+        )
+        self.assertGreater(footprint.proto.ByteSize(), 0)
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_real_kicad_python_wrappers_build_an_ipc_footprint(self):

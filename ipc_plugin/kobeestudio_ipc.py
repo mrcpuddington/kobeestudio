@@ -72,6 +72,30 @@ def main(startup_action=None) -> int:
 
         def place(dialog, _buzzard):
             nonlocal pending_move
+            settings = dialog.CurrentSettings()
+            is_new = dialog.updateFootprint is None
+            if getattr(dialog, "_tool", "") == "Variables":
+                feature = {
+                    "kind": "variable_label",
+                    "template": settings.get("VariableTemplateText", ""),
+                }
+                payload = build_footprint_payload(
+                    settings,
+                    document=dialog.artwork.document,
+                    feature=feature,
+                )
+                placed = placement.place_variable_text(
+                    settings,
+                    payload,
+                    dialog.output_layer,
+                    output_layers=dialog.output_layers,
+                    old_footprint=dialog.updateFootprint,
+                    start_interactive_move=False,
+                )
+                pending_move = placed if is_new else None
+                dialog.EndModal(wx.ID_OK)
+                return
+
             feature = None
             if dialog.artwork.header is not None:
                 feature = {"kind": "connector_overlay", "data": dialog.artwork.header.to_dict()}
@@ -86,19 +110,11 @@ def main(startup_action=None) -> int:
                 }
             elif any(getattr(item, "kind", "") == "graphic" for item in dialog.artwork.document.objects):
                 feature = {"kind": "imported_graphic", "data": dialog.artwork.document.to_dict()}
-            elif getattr(dialog, "_tool", "") == "Safe Labels":
-                safe_settings = dialog.CurrentSettings()
-                feature = {
-                    "kind": "safe_label",
-                    "template": safe_settings.get("SafeLabelTemplateText", ""),
-                    "bindings": safe_settings.get("SafeLabelBindings", ()),
-                }
             payload = build_footprint_payload(
-                dialog.CurrentSettings(),
+                settings,
                 document=dialog.artwork.document,
                 feature=feature,
             )
-            is_new = dialog.updateFootprint is None
             placed = placement.place(
                 dialog.artwork,
                 payload,

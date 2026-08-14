@@ -139,9 +139,10 @@ class IpcArtworkPlacement:
     @staticmethod
     def _api():
         try:
-            from kipy.board_types import BoardPolygon, Field, Footprint, FootprintInstance
+            from kipy.board_types import BoardPolygon, BoardText, Field, Footprint, FootprintInstance
             from kipy.geometry import PolyLineNode, PolygonWithHoles, Vector2
             from kipy.proto.board.board_types_pb2 import BoardLayer
+            from kipy.proto.common import types as common_types
             from kipy.util import from_mm
         except ImportError as error:
             raise IpcUnavailableError(
@@ -149,6 +150,7 @@ class IpcArtworkPlacement:
             ) from error
         return {
             "BoardPolygon": BoardPolygon,
+            "BoardText": BoardText,
             "Field": Field,
             "Footprint": Footprint,
             "FootprintInstance": FootprintInstance,
@@ -156,6 +158,7 @@ class IpcArtworkPlacement:
             "PolygonWithHoles": PolygonWithHoles,
             "Vector2": Vector2,
             "BoardLayer": BoardLayer,
+            "CommonTypes": common_types,
             "from_mm": from_mm,
         }
 
@@ -252,6 +255,135 @@ class IpcArtworkPlacement:
         footprint.value_field.text.value = "Kobee Studio"
         footprint.value_field.visible = False
         return footprint
+
+    def build_variable_footprint(
+        self,
+        settings: Mapping[str, Any],
+        payload: Mapping[str, Any],
+        output_layer: str,
+        output_layers: Optional[Sequence[str]] = None,
+    ):
+        """Build a footprint containing native KiCad ``${VARIABLE}`` text.
+
+        The polygon renderer is used only for the editor preview.  Keeping the
+        original expression in BoardText is what lets KiCad resolve project
+        values now and after an external source updates the ``.kicad_pro``.
+        """
+        layers = tuple(dict.fromkeys(output_layers or (output_layer,)))
+        if not layers or any(layer not in SUPPORTED_OUTPUT_LAYERS for layer in layers):
+            raise ValueError("Kobee Studio requires one or more supported output layers")
+        if output_layer not in layers:
+            output_layer = layers[0]
+        raw_text = str(settings.get("VariableTemplateText", ""))
+        if not raw_text.strip():
+            raise ValueError("Variable template text cannot be empty")
+
+        api = self._api()
+        name = "kobee-variable-{}".format(uuid.uuid4().hex[:12])
+        footprint = api["FootprintInstance"]()
+        definition = footprint.definition
+        definition.id.name = name
+        common_types = api["CommonTypes"]
+        alignment = {
+            "Left": common_types.HorizontalAlignment.HA_LEFT,
+            "Center": common_types.HorizontalAlignment.HA_CENTER,
+            "Right": common_types.HorizontalAlignment.HA_RIGHT,
+        }.get(str(settings.get("AlignmentChoice", "Center")), common_types.HorizontalAlignment.HA_CENTER)
+        height_mm = max(0.1, float(settings.get("HeightCtrl", 1.2)))
+        width_mm = max(0.1, float(settings.get("NativeTextWidthCtrl", height_mm)))
+        stroke_mm = max(0.01, float(settings.get("NativeStrokeWidthCtrl", 0.18)))
+
+        for layer in layers:
+            text = api["BoardText"]()
+            text.value = raw_text
+            text.layer = self._layer(api, layer)
+            text.position = api["Vector2"].from_xy_mm(0.0, 0.0)
+            attributes = text.attributes
+            attributes.font_name = ""
+            attributes.size = api["Vector2"].from_xy_mm(width_mm, height_mm)
+            attributes.stroke_width = api["from_mm"](stroke_mm)
+            attributes.angle = 0.0
+            attributes.line_spacing = max(0.1, float(settings.get("LineSpacingCtrl", 1.5)))
+            attributes.horizontal_alignment = alignment
+            attributes.vertical_alignment = common_types.VerticalAlignment.VA_CENTER
+            attributes.bold = bool(settings.get("NativeBoldCheckbox", False))
+            attributes.italic = bool(settings.get("NativeItalicCheckbox", False))
+            attributes.underlined = bool(settings.get("NativeUnderlineCheckbox", False))
+            attributes.mirrored = is_bottom(layer)
+            attributes.multiline = "\n" in raw_text
+            attributes.keep_upright = bool(settings.get("NativeKeepUprightCheckbox", True))
+            definition.add_item(text)
+
+        metadata = api["Field"]()
+        metadata.name = METADATA_FIELD_NAME
+        metadata.layer = self._layer(api, output_layer)
+        metadata.text.value = encode_metadata(payload)
+        metadata.visible = False
+        definition.add_item(metadata)
+
+        owner_target = next((layer for layer in layers if not is_bottom(layer)), layers[0])
+        footprint.layer = self._owner_layer(api, owner_target)
+        footprint.attributes.not_in_schematic = True
+        footprint.attributes.exclude_from_bill_of_materials = True
+        footprint.attributes.exclude_from_position_files = True
+        footprint.reference_field.name = "Reference"
+        footprint.reference_field.text.value = name
+        footprint.reference_field.visible = False
+        footprint.value_field.name = "Value"
+        footprint.value_field.text.value = "Kobee Studio variable label"
+        footprint.value_field.visible = False
+        return footprint
+
+    def place_variable_text(
+        self,
+        settings: Mapping[str, Any],
+        payload: Mapping[str, Any],
+        output_layer: str,
+        output_layers: Optional[Sequence[str]] = None,
+        old_footprint: Optional[Any] = None,
+        start_interactive_move: bool = True,
+    ):
+        footprint = self.build_variable_footprint(
+            settings, payload, output_layer, output_layers=output_layers
+        )
+        if old_footprint is not None:
+            try:
+                footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
+            except Exception:
+                pass
+            footprint.position = old_footprint.position
+            footprint.orientation = old_footprint.orientation
+            footprint.proto.id.CopyFrom(old_footprint.id)
+            try:
+                footprint.locked = old_footprint.locked
+            except Exception:
+                pass
+
+        transaction = self.session.begin_commit()
+        try:
+            if old_footprint is not None:
+                created = self.session.board.update_items(footprint)
+            else:
+                created = self.session.board.create_items(footprint)
+            self.session.commit(
+                transaction,
+                "Update Kobee Studio variable label"
+                if old_footprint is not None else
+                "Place Kobee Studio variable label",
+            )
+        except Exception:
+            self.session.discard(transaction)
+            raise
+
+        placed = created[0] if created else None
+        if placed is not None and old_footprint is not None:
+            try:
+                self.session.board.add_to_selection(placed)
+            except Exception:
+                pass
+        if placed is not None and old_footprint is None and start_interactive_move:
+            self.start_interactive_move(placed)
+        return placed
 
     def place(
         self,
