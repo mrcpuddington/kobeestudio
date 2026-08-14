@@ -12,6 +12,7 @@ from kobeestudio.core.composition import CompositionDocument
 from kobeestudio.core.shape_geometry import Point
 from kobeestudio.core.studio_artwork import StudioArtwork, StrokePath
 from kobeestudio.integration.ipc_artwork import (
+    DESIGNATOR_METADATA_FIELD_NAME,
     METADATA_FIELD_NAME,
     artwork_polygons,
     decode_metadata,
@@ -110,7 +111,36 @@ class _FakeProto:
 class _FakeDefinition:
     def __init__(self, definition_id="definition-id"):
         self.proto = _FakeProto(definition_id)
-        self.items = [object()]
+        self.items = [_FakeGraphic()]
+
+
+class _FakeGraphic:
+    def __init__(self, item_id="graphic-id", layer="F.SilkS"):
+        self.id = _FakeId(item_id)
+        self.layer = layer
+
+
+class _FakeText:
+    def __init__(self):
+        self.id = _FakeId("")
+        self.value = ""
+
+
+class _FakeField:
+    def __init__(self):
+        self.name = ""
+        self.layer = "F.SilkS"
+        self.text = _FakeText()
+        self.visible = True
+
+
+class _FakeBoardLayer:
+    BL_F_Cu = "F.Cu"
+    BL_B_Cu = "B.Cu"
+    BL_F_SilkS = "F.SilkS"
+    BL_B_SilkS = "B.SilkS"
+    BL_F_Mask = "F.Mask"
+    BL_B_Mask = "B.Mask"
 
 
 class _PlacedFootprint:
@@ -133,7 +163,7 @@ class _PlacedFootprint:
 
 class _MinimalPlacement(IpcArtworkPlacement):
     def _api(self):
-        return {}
+        return {"Field": _FakeField, "BoardLayer": _FakeBoardLayer}
 
     def build_footprint(self, artwork, payload, output_layer, output_layers=None):
         return _PlacedFootprint()
@@ -597,7 +627,7 @@ class IpcMigrationTests(unittest.TestCase):
         class Field:
             text = Text(); visible = True
         class Source:
-            reference_field = Field()
+            reference_field = Field(); definition = _FakeDefinition("source-definition")
         artwork = StudioArtwork(
             filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),), strokes=(), guides=(),
             document=CompositionDocument(objects=()),
@@ -609,20 +639,22 @@ class IpcMigrationTests(unittest.TestCase):
         created, updated = _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",existing),))
         placed = session.board.updated[0][0]
         self.assertEqual((0,1),(created,updated))
-        self.assertEqual("native-reference-position",placed.position)
-        self.assertAlmostEqual(32.5,placed.orientation.degrees)
-        self.assertEqual("existing-designator",placed.id.value)
+        metadata = next(item for item in placed.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME)
+        feature = decode_metadata(metadata.text.value)["feature"]
+        generated_ids = set(feature["embedded_item_ids"])
+        self.assertTrue(generated_ids)
+        self.assertTrue(generated_ids.issubset({getattr(getattr(item,"id",None),"value","") for item in placed.definition.items}))
         self.assertFalse(Source.reference_field.visible)
         pushes=[item for item in session.board.messages if item[0]=="push"]
-        self.assertEqual(2,len(pushes))
-        self.assertEqual("Create Kobee Studio designators", pushes[0][2])
-        self.assertEqual("Hide native footprint references", pushes[1][2])
+        self.assertEqual(1,len(pushes))
+        self.assertEqual("Create or update Kobee Studio designators", pushes[0][2])
+        self.assertIn(("remove", [existing]), session.board.messages)
 
     def test_designator_verification_failure_never_hides_native_reference(self):
         class Attributes: angle = 0
         class Text: position = "position"; attributes = Attributes()
         class Field: text = Text(); visible = True
-        class Source: reference_field = Field()
+        class Source: reference_field = Field(); definition = _FakeDefinition("source-definition")
         artwork = StudioArtwork(
             filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),),
             strokes=(), guides=(), document=CompositionDocument(objects=()),
@@ -635,7 +667,7 @@ class IpcMigrationTests(unittest.TestCase):
         empty = placement.build_footprint(None, None, None)
         empty.definition.items = []
         placement.build_footprint = lambda *_args, **_kwargs: empty
-        with self.assertRaisesRegex(RuntimeError, "Native references were left visible"):
+        with self.assertRaisesRegex(RuntimeError, "no visible geometry"):
             placement.place_designators(((Source(), artwork, {}, "F.SilkS", None),))
         self.assertTrue(Source.reference_field.visible)
 
@@ -654,7 +686,7 @@ class IpcMigrationTests(unittest.TestCase):
         source.reference_field.visible = True
         source.layer = BoardLayer.BL_F_Cu
         artwork = StudioArtwork(
-            filled_polygons=((Point(-1,-0.5),Point(1,-0.5),Point(0,0.5)),),
+            filled_polygons=((Point(-1,-0.5),Point(1,-0.5),Point(1,0.5),Point(-1,0.5)),),
             strokes=(), guides=(), document=CompositionDocument(objects=()),
         )
         session = IpcSession.connect(
@@ -663,23 +695,37 @@ class IpcMigrationTests(unittest.TestCase):
         created, updated = IpcArtworkPlacement(session).place_designators(
             ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", None),)
         )
-        generated = session.board.created[0][0]
+        generated = session.board.updated[0][0]
         self.assertEqual((1, 0), (created, updated))
-        self.assertAlmostEqual(42.0, to_mm(generated.position.x))
-        self.assertAlmostEqual(27.5, to_mm(generated.position.y))
-        self.assertAlmostEqual(37.0, generated.orientation.degrees)
-        self.assertTrue(generated.definition.shapes)
+        shapes = generated.definition.shapes
+        self.assertTrue(shapes)
+        points = shapes[0].polygons[0].outline
+        self.assertAlmostEqual(42.0, to_mm(sum(node.point.x for node in points) / len(points)), places=1)
+        self.assertAlmostEqual(27.5, to_mm(sum(node.point.y for node in points) / len(points)), places=1)
+        metadata = next(item for item in generated.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME)
+        first_ids = set(decode_metadata(metadata.text.value)["feature"]["embedded_item_ids"])
         self.assertFalse(source.reference_field.visible)
+
+        created, updated = IpcArtworkPlacement(session).place_designators(
+            ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", None),)
+        )
+        self.assertEqual((0, 1), (created, updated))
+        metadata_items = [item for item in source.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME]
+        self.assertEqual(1, len(metadata_items))
+        second_ids = set(decode_metadata(metadata_items[0].text.value)["feature"]["embedded_item_ids"])
+        self.assertTrue(second_ids)
+        self.assertTrue(first_ids.isdisjoint(second_ids))
+        self.assertEqual(1, len(source.definition.shapes))
 
     def test_partial_designator_creation_discards_transaction(self):
         class Attributes: angle = 0
         class Text: position = "position"; attributes = Attributes()
         class Field: text = Text(); visible = True
-        class Source: reference_field = Field()
+        class Source: reference_field = Field(); definition = _FakeDefinition("source-definition")
         artwork=StudioArtwork(filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),),strokes=(),guides=(),document=CompositionDocument(objects=()))
         session=IpcSession.connect(environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"},client_factory=_Client)
-        session.board.create_items=lambda items: []
-        with self.assertRaisesRegex(RuntimeError,"rolled back"):
+        session.board.update_items=lambda items: []
+        with self.assertRaisesRegex(RuntimeError,"replacement geometry"):
             _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",None),))
         self.assertTrue(any(item[0]=="drop" for item in session.board.messages))
         self.assertTrue(Source.reference_field.visible)
@@ -787,6 +833,8 @@ class IpcMigrationTests(unittest.TestCase):
         )
         self.assertEqual(2, len(footprint.definition.items))
         self.assertEqual(METADATA_FIELD_NAME, footprint.definition.items[-1].name)
+        self.assertEqual(1, len(footprint.definition.shapes))
+        self.assertEqual(3, len(footprint.definition.shapes[0].polygons[0].outline))
         self.assertTrue(footprint.attributes.not_in_schematic)
         self.assertGreater(footprint.proto.ByteSize(), 0)
         second = placement.build_footprint(

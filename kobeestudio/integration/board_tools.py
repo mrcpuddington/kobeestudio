@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
-from .ipc_artwork import METADATA_FIELD_NAME, decode_metadata
+from .ipc_artwork import (
+    DESIGNATOR_METADATA_FIELD_NAME,
+    METADATA_FIELD_NAME,
+    decode_metadata,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,20 @@ def _metadata(footprint: Any) -> Mapping[str, Any]:
         try: return decode_metadata(getattr(item.text, "value", ""))
         except Exception: return {}
     return {}
+
+
+def _embedded_designator_ids(footprint: Any) -> Tuple[str, ...]:
+    for item in getattr(footprint.definition, "items", ()):
+        if getattr(item, "name", "") != DESIGNATOR_METADATA_FIELD_NAME:
+            continue
+        try:
+            payload = decode_metadata(getattr(item.text, "value", ""))
+            feature = payload.get("feature", {})
+            if isinstance(feature, Mapping):
+                return tuple(str(value) for value in feature.get("embedded_item_ids", ()))
+        except Exception:
+            return ()
+    return ()
 
 
 def _require_updated(result: Sequence[Any], requested: Sequence[Any], operation: str) -> None:
@@ -73,7 +91,19 @@ class BoardToolsService:
             payload = _metadata(item); feature = payload.get("feature", {}) if isinstance(payload, Mapping) else {}
             if isinstance(feature, Mapping) and feature.get("kind") == "designator_label" and str(feature.get("source_footprint_id", "")) in source_ids:
                 generated.append(item)
+        embedded_removed = 0
         for footprint in footprints:
+            embedded_ids = set(_embedded_designator_ids(footprint))
+            retained = []
+            for item in footprint.definition.items:
+                item_id = str(getattr(getattr(item, "id", None), "value", ""))
+                if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME:
+                    embedded_removed += 1
+                elif item_id and item_id in embedded_ids:
+                    embedded_removed += 1
+                else:
+                    retained.append(item)
+            footprint.definition.items = retained
             footprint.reference_field.visible = False
         transaction = self.session.begin_commit()
         try:
@@ -83,7 +113,7 @@ class BoardToolsService:
             self.session.commit(transaction, "Remove footprint designators")
         except Exception:
             self.session.discard(transaction); raise
-        return BoardToolResult(len(footprints), skipped, len(generated))
+        return BoardToolResult(len(footprints), skipped, len(generated) + embedded_removed)
 
     def remove_silkscreen(self, scope: str) -> BoardToolResult:
         footprints, skipped = self.eligible(scope)
@@ -100,6 +130,9 @@ class BoardToolsService:
                 if getattr(field, "layer", None) in silk_layers: field.visible = False
             retained = []
             for item in footprint.definition.items:
+                if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME:
+                    removed += 1
+                    continue
                 if getattr(item, "layer", None) not in silk_layers: retained.append(item); continue
                 if hasattr(item, "visible") and hasattr(item, "name"):
                     item.visible = False; retained.append(item)

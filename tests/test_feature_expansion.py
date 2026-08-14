@@ -18,6 +18,10 @@ from kobeestudio.core.raster_trace import RasterTraceSettings, trace_png_bytes
 from kobeestudio.core.svg_symbols import SvgAssetStore, validate_svg_bytes
 from kobeestudio.core.studio_artwork import render_graphic_artwork
 from kobeestudio.integration.board_tools import BoardToolsService
+from kobeestudio.integration.ipc_artwork import (
+    DESIGNATOR_METADATA_FIELD_NAME,
+    encode_metadata,
+)
 
 
 class GraphicObjectTests(unittest.TestCase):
@@ -223,6 +227,24 @@ class BoardToolsTests(unittest.TestCase):
         footprint=_Footprint(); board=_Board([footprint]); result=BoardToolsService(_Session(board)).remove_designators("selected")
         self.assertFalse(footprint.reference_field.visible); self.assertEqual(1,result.affected)
         self.assertEqual("begin",board.events[0]); self.assertEqual("push",board.events[-1][0])
+
+    def test_designator_cleanup_removes_only_linked_embedded_geometry(self):
+        footprint = _Footprint()
+        generated = BoardShape("F.SilkS")
+        generated.id = type("Id", (), {"value": "kobee-shape"})()
+        metadata = _Field(DESIGNATOR_METADATA_FIELD_NAME, "", "F.SilkS")
+        metadata.text.value = encode_metadata(
+            {"feature": {"kind": "designator_label", "embedded_item_ids": ["kobee-shape"]}}
+        )
+        unrelated = BoardShape("F.SilkS")
+        unrelated.id = type("Id", (), {"value": "user-shape"})()
+        footprint.definition.items.extend((generated, metadata, unrelated))
+        board = _Board([footprint])
+        result = BoardToolsService(_Session(board)).remove_designators("selected")
+        self.assertIn(unrelated, footprint.definition.items)
+        self.assertNotIn(generated, footprint.definition.items)
+        self.assertNotIn(metadata, footprint.definition.items)
+        self.assertEqual(2, result.removed_items)
 
     def test_silkscreen_cleanup_preserves_fab_pads_and_field_values(self):
         footprint=_Footprint(); board=_Board([footprint]); result=BoardToolsService(_Session(board)).remove_silkscreen("board")

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed IPC polygon serialization so KiCad receives real point geometry rather
+  than empty polygon shells, and made designator geometry plus native-reference
+  visibility one atomic source-footprint update.
 - Added a final Labels → Variables tab for reusable global/project multi-line
   templates that preview `.kicad_pro` values while retaining native `${NAME}`
   expressions in KiCad footprint text for dynamic resolution.
