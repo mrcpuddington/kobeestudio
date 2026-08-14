@@ -16,6 +16,7 @@ import urllib.parse
 import ssl
 import certifi
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Tuple
 
@@ -34,6 +35,8 @@ MAX_CATALOG_BYTES = 16 * 1024 * 1024
 MAX_PREVIEW_CACHE_FACES = 24
 GOOGLE_FONTS_METADATA_URL = "https://fonts.google.com/metadata/fonts"
 GOOGLE_FONTS_CSS_URL = "https://fonts.googleapis.com/css2"
+PCB_SYMBOL_GLYPHS = "Ωµμ°±"
+GOOGLE_SYMBOL_SUBSETS = frozenset(("greek", "greek-ext", "math", "symbols"))
 
 
 def _urlopen(request, timeout=30):
@@ -69,6 +72,54 @@ def _font_names(path: Path) -> Tuple[str, str]:
     except Exception as error:
         raise ValueError("Downloaded file is not a valid OpenType font: {}".format(error)) from error
     return str(family).strip(), str(face).strip()
+
+
+@lru_cache(maxsize=256)
+def _missing_font_glyphs_cached(
+    path: str, modified_ns: int, size: int, glyphs: str,
+) -> Tuple[str, ...]:
+    # modified_ns and size intentionally participate in the cache key so a
+    # repaired/replaced face can never inherit stale coverage results.
+    del modified_ns, size
+    font = None
+    try:
+        font = TTFont(path, lazy=True)
+        cmap = font.getBestCmap() or {}
+        requested = tuple(dict.fromkeys(str(glyphs)))
+        return tuple(glyph for glyph in requested if not glyph.isspace() and ord(glyph) not in cmap)
+    finally:
+        if font is not None:
+            font.close()
+
+
+def missing_font_glyphs(path: Path, glyphs: str = PCB_SYMBOL_GLYPHS) -> Tuple[str, ...]:
+    """Return requested Unicode characters absent from an actual font face.
+
+    Google Fonts subset metadata is useful for narrowing a catalog, but it is
+    not a face-level guarantee.  Reading the Unicode cmap gives the UI an exact
+    answer without rendering or downloading any font other than the one the
+    user selected.
+    """
+    try:
+        resolved = Path(path)
+        stats = resolved.stat()
+        return _missing_font_glyphs_cached(
+            str(resolved), stats.st_mtime_ns, stats.st_size, str(glyphs)
+        )
+    except Exception as error:
+        raise ValueError("Could not inspect font character coverage: {}".format(error)) from error
+
+
+def catalog_family_likely_supports_symbols(family: Mapping[str, Any]) -> bool:
+    """Use Google's coarse tags only as a fast, non-authoritative filter."""
+    raw_subsets = family.get("subsets", ())
+    subsets = {
+        str(subset).strip().lower()
+        for subset in raw_subsets
+        if isinstance(subset, str)
+    } if isinstance(raw_subsets, (list, tuple, set, frozenset)) else set()
+    name = str(family.get("family", "")).casefold()
+    return bool(subsets & GOOGLE_SYMBOL_SUBSETS) or "math" in name or "symbol" in name
 
 
 def _normalise_font_bytes(data: bytes) -> bytes:

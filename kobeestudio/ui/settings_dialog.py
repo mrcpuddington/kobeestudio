@@ -16,7 +16,12 @@ from ..core.quick_labels import QuickLabelStore
 from ..core.settings_profiles import SettingsProfileStore
 from ..core.svg_symbols import SvgAssetStore
 from ..core.library_archive import export_library, reset_library, restore_library
-from ..core.font_library import FontLibraryStore
+from ..core.font_library import (
+    PCB_SYMBOL_GLYPHS,
+    FontLibraryStore,
+    catalog_family_likely_supports_symbols,
+    missing_font_glyphs,
+)
 from ..core.component_presets import ComponentPresetStore
 from ..core.raster_trace import RasterTraceSettings, trace_png_file
 from ..version import __version__
@@ -49,7 +54,7 @@ class FontPreviewPanel(wx.Panel):
 
     def __init__(self, parent):
         super().__init__(parent, style=wx.BORDER_SIMPLE)
-        self.SetMinSize(wx.Size(-1, 145))
+        self.SetMinSize(wx.Size(-1, 86))
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self._filled = ()
         self._strokes = ()
@@ -307,7 +312,7 @@ class SettingsDialog(wx.Dialog):
             parent,
             title="Kobee Studio Settings",
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
-            size=wx.Size(980, 620),
+            size=wx.Size(980, 700),
         )
         self.preferences_store = preferences_store
         self.profile_store = profile_store
@@ -581,22 +586,36 @@ class SettingsDialog(wx.Dialog):
 
     def _build_fonts_page(self):
         root = wx.BoxSizer(wx.VERTICAL); self.fonts_page.SetSizer(root)
-        root.Add(self._heading(self.fonts_page, "Google Fonts library"), 0, wx.ALL, 14)
-        search_row = wx.BoxSizer(wx.HORIZONTAL)
-        self.font_search = wx.SearchCtrl(self.fonts_page, style=wx.TE_PROCESS_ENTER)
-        self.font_search.SetDescriptiveText("Search Google Fonts")
-        self.font_search.Bind(wx.EVT_TEXT, lambda event: self._refresh_font_catalog())
-        search_row.Add(self.font_search, 1, wx.RIGHT, 8)
-        search_row.Add(ThemedActionButton(self.fonts_page, "Refresh catalog", self._refresh_font_catalog_online), 0)
-        root.Add(search_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 14)
+        heading_row = wx.BoxSizer(wx.HORIZONTAL)
+        heading_row.Add(self._heading(self.fonts_page, "Google Fonts library"), 1, wx.ALIGN_CENTER_VERTICAL)
+        heading_row.Add(ThemedActionButton(self.fonts_page, "Refresh catalog", self._refresh_font_catalog_online), 0)
+        root.Add(heading_row, 0, wx.EXPAND | wx.ALL, 14)
         columns = wx.BoxSizer(wx.HORIZONTAL)
         catalog_col = wx.BoxSizer(wx.VERTICAL); installed_col = wx.BoxSizer(wx.VERTICAL)
+        catalog_col.Add(wx.StaticText(self.fonts_page, label="Search available families"), 0, wx.BOTTOM, 5)
+        self.font_search = wx.SearchCtrl(self.fonts_page, style=wx.TE_PROCESS_ENTER)
+        self.font_search.SetDescriptiveText("Type a family name")
+        self.font_search.Bind(wx.EVT_TEXT, lambda event: self._refresh_font_catalog())
+        catalog_col.Add(self.font_search, 0, wx.EXPAND | wx.BOTTOM, 7)
+        self.font_symbol_filter = wx.CheckBox(
+            self.fonts_page,
+            label="Likely to include Ω / math symbols (Google tags)",
+        )
+        self.font_symbol_filter.SetToolTip(
+            "Google's category tags narrow the list quickly. Exact Ω, µ, μ, ° and ± coverage is checked from the selected font file."
+        )
+        self.font_symbol_filter.Bind(wx.EVT_CHECKBOX, self._on_font_symbol_filter_changed)
+        catalog_col.Add(self.font_symbol_filter, 0, wx.BOTTOM, 9)
         catalog_col.Add(wx.StaticText(self.fonts_page, label="Available families"), 0, wx.BOTTOM, 5)
-        self.font_catalog_list = ThemedListBox(self.fonts_page); catalog_col.Add(self.font_catalog_list, 1, wx.EXPAND)
+        self.font_catalog_list = ThemedListBox(self.fonts_page)
+        self.font_catalog_list.SetMinSize(wx.Size(-1, 175))
+        catalog_col.Add(self.font_catalog_list, 1, wx.EXPAND)
         self.install_font_button = ThemedActionButton(self.fonts_page, "Choose faces and install…", self._install_font_faces)
         catalog_col.Add(self.install_font_button, 0, wx.TOP, 8)
         installed_col.Add(wx.StaticText(self.fonts_page, label="My installed faces"), 0, wx.BOTTOM, 5)
-        self.installed_font_list = ThemedListBox(self.fonts_page); installed_col.Add(self.installed_font_list, 1, wx.EXPAND)
+        self.installed_font_list = ThemedListBox(self.fonts_page)
+        self.installed_font_list.SetMinSize(wx.Size(-1, 218))
+        installed_col.Add(self.installed_font_list, 1, wx.EXPAND)
         font_actions = wx.BoxSizer(wx.HORIZONTAL)
         self.repair_font_button = ThemedActionButton(self.fonts_page, "Redownload missing", self._repair_font_face)
         font_actions.Add(self.repair_font_button, 0, wx.RIGHT, 6)
@@ -614,7 +633,7 @@ class SettingsDialog(wx.Dialog):
         self.font_face_choice.Bind(wx.EVT_CHOICE, self._on_font_preview_changed)
         preview_controls.Add(self.font_face_choice, 0, wx.RIGHT, 10)
         preview_controls.Add(wx.StaticText(self.fonts_page, label="Sample"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
-        self.font_preview_text = wx.TextCtrl(self.fonts_page, value="R1  10kΩ  INPUT")
+        self.font_preview_text = wx.TextCtrl(self.fonts_page, value="R1  10kΩ  4.7µF  ±1°")
         self.font_preview_text.SetMaxLength(80)
         self.font_preview_text.Bind(wx.EVT_TEXT, self._on_font_preview_changed)
         preview_controls.Add(self.font_preview_text, 1)
@@ -629,8 +648,23 @@ class SettingsDialog(wx.Dialog):
 
     def _refresh_font_catalog(self):
         query = self.font_search.GetValue().strip().casefold() if hasattr(self, "font_search") else ""
-        self._visible_font_catalog = tuple(item for item in self._font_catalog if query in str(item.get("family", "")).casefold())
+        symbols_only = self.font_symbol_filter.GetValue() if hasattr(self, "font_symbol_filter") else False
+        self._visible_font_catalog = tuple(
+            item for item in self._font_catalog
+            if query in str(item.get("family", "")).casefold()
+            and (not symbols_only or catalog_family_likely_supports_symbols(item))
+        )
         self.font_catalog_list.Set(tuple("{}  ·  {}".format(item.get("family", "Unnamed"), item.get("category", "Google Fonts")) for item in self._visible_font_catalog))
+
+    def _on_font_symbol_filter_changed(self, event):
+        self._refresh_font_catalog()
+        if self.font_symbol_filter.GetValue():
+            self.font_status.SetLabel(
+                "Showing Google's likely math/Greek families. Select a face for an exact Ω µ μ ° ± check."
+            )
+        else:
+            self.font_status.SetLabel("Showing all Google Font families.")
+        event.Skip()
 
     @staticmethod
     def _font_face_keys(family):
@@ -679,7 +713,7 @@ class SettingsDialog(wx.Dialog):
             self.font_preview.set_message("Select a font family to preview it")
             return
         family, weight, style = selected
-        sample = self.font_preview_text.GetValue().strip() or "R1  10kΩ  INPUT"
+        sample = self.font_preview_text.GetValue().strip() or "R1  10kΩ  4.7µF  ±1°"
         self._font_preview_generation += 1
         generation = self._font_preview_generation
         self.font_preview.set_message("Loading {}…".format(family))
@@ -728,10 +762,17 @@ class SettingsDialog(wx.Dialog):
         path, _source_url, cached = result
         renderer_name = "__kobee_preview_{}".format(self.font_store._preview_key(family, weight, style)[:16])
         try:
+            missing = missing_font_glyphs(path, PCB_SYMBOL_GLYPHS)
             artwork = self.font_preview_renderer(path, renderer_name, sample)
             self.font_preview.set_artwork(artwork)
-            self.font_status.SetLabel("Previewing {} {} {}{}.".format(
-                family, weight, style.title(), " from the offline cache" if cached else ""
+            source_note = " from the offline cache" if cached else ""
+            coverage_note = (
+                " Includes common PCB symbols (Ω µ μ ° ±)."
+                if not missing else
+                " Missing common symbols: {}.".format(" ".join(missing))
+            )
+            self.font_status.SetLabel("Previewing {} {} {}{}.{}".format(
+                family, weight, style.title(), source_note, coverage_note
             ))
         except Exception as caught:
             self.font_preview.set_message("Preview unavailable")
@@ -739,7 +780,18 @@ class SettingsDialog(wx.Dialog):
 
     def _refresh_installed_fonts(self):
         self._installed_fonts = self.font_store.records()
-        self.installed_font_list.Set(tuple("{}{}".format(item.display_name, " — Missing file" if item.missing else "") for item in self._installed_fonts))
+        labels = []
+        for item in self._installed_fonts:
+            if item.missing:
+                coverage = " — Missing file"
+            else:
+                try:
+                    missing = missing_font_glyphs(item.path, PCB_SYMBOL_GLYPHS)
+                    coverage = " — PCB symbols ✓" if not missing else " — Missing {}".format(" ".join(missing))
+                except ValueError:
+                    coverage = " — Coverage unavailable"
+            labels.append("{}{}".format(item.display_name, coverage))
+        self.installed_font_list.Set(tuple(labels))
         self._update_font_actions()
 
     def _on_font_selection(self, event):

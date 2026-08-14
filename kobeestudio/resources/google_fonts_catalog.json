@@ -114,7 +114,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -128,7 +131,11 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -232,7 +239,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -323,7 +334,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -339,7 +354,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -359,7 +378,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -379,7 +402,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -453,14 +480,22 @@
       "family": "Alike",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
       "family": "Alike Angular",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -639,7 +674,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -762,7 +800,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -782,7 +823,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -963,7 +1007,11 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Handwriting",
@@ -980,14 +1028,21 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "Anta",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -1189,7 +1244,11 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -1203,7 +1262,11 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -1329,7 +1392,11 @@
       "family": "Asset",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -1601,7 +1668,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -1609,7 +1679,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -1617,7 +1690,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -1625,7 +1701,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -2599,7 +2678,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -2617,7 +2700,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -2640,7 +2727,10 @@
         "400": {},
         "400i": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -2649,7 +2739,10 @@
         "400": {},
         "400i": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -2677,7 +2770,11 @@
       "family": "Borel",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -2775,7 +2872,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -3075,7 +3175,11 @@
         "400": {},
         "400i": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -3085,7 +3189,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -3131,7 +3239,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -3149,7 +3260,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -3189,7 +3303,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -3431,7 +3549,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -3453,7 +3575,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -3598,7 +3723,10 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -3632,7 +3760,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -3669,7 +3800,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -3866,7 +4000,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -4131,7 +4269,11 @@
         "400": {},
         "500": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Handwriting",
@@ -4159,7 +4301,10 @@
       "family": "Dela Gothic One",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -4223,7 +4368,11 @@
       "family": "Didact Gothic",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -4380,7 +4529,11 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -4422,7 +4575,11 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -5202,7 +5359,11 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Monospace",
@@ -5211,7 +5372,11 @@
         "400": {},
         "500": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5235,7 +5400,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5259,7 +5428,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5283,7 +5456,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5562,7 +5739,11 @@
       "family": "GFS Didot",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5572,7 +5753,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -5805,7 +5990,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -5815,7 +6004,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5838,7 +6031,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5858,7 +6054,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -5930,7 +6129,10 @@
       "family": "Gidole",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -6072,7 +6274,12 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "symbols"
+      ]
     },
     {
       "category": "Monospace",
@@ -6090,7 +6297,11 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -6107,7 +6318,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -6130,7 +6345,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -6225,7 +6444,10 @@
       "family": "Great Vibes",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -6422,7 +6644,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -6499,14 +6724,22 @@
       "family": "Hedvig Letters Sans",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
       "family": "Hedvig Letters Serif",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -6521,7 +6754,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -6666,7 +6903,11 @@
       "family": "Honk",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -6767,7 +7008,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -7211,7 +7455,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -7235,7 +7483,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Monospace",
@@ -7249,7 +7501,13 @@
         "500i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Monospace",
@@ -7263,7 +7521,13 @@
         "500i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -7315,14 +7579,22 @@
       "family": "Jacquard 12",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Jacquard 12 Charted",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -7343,14 +7615,22 @@
       "family": "Jacquarda Bastarda 9",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Jacquarda Bastarda 9 Charted",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -7471,7 +7751,10 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -7632,7 +7915,11 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -7742,7 +8029,10 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "math"
+      ]
     },
     {
       "category": "Display",
@@ -8028,7 +8318,10 @@
       "fonts": {
         "400": {},
         "600": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -8247,7 +8540,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -8264,14 +8561,20 @@
         "400": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "LXGW Marker Gothic",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Monospace",
@@ -8280,7 +8583,11 @@
         "300": {},
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -8289,7 +8596,11 @@
         "300": {},
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -8622,7 +8933,11 @@
         "400": {},
         "400i": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -8634,14 +8949,22 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
       "family": "Libertinus Serif Display",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -8794,7 +9117,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -8890,7 +9216,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -8988,7 +9318,11 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Handwriting",
@@ -9045,7 +9379,11 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -9115,7 +9453,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -9156,7 +9498,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -9213,7 +9559,11 @@
       "family": "Madimi One",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -9315,14 +9665,20 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
       "family": "Mansalva",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -9676,14 +10032,22 @@
       "family": "Micro 5",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Micro 5 Charted",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -9819,7 +10183,10 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -10277,7 +10644,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -10315,7 +10685,10 @@
       "family": "Mynerve",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -10336,7 +10709,10 @@
       "family": "Nabla",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math"
+      ]
     },
     {
       "category": "Serif",
@@ -10398,7 +10774,11 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10488,7 +10868,11 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -10638,7 +11022,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10655,7 +11043,11 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -10680,7 +11072,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10704,7 +11099,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10746,7 +11145,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10834,7 +11237,11 @@
       "family": "Noto Sans Brahmi",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10863,7 +11270,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10921,7 +11332,11 @@
       "family": "Noto Sans Chorasmian",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -10995,7 +11410,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11054,14 +11473,23 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek-ext",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "Noto Sans Glagolitic",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11090,7 +11518,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11169,7 +11601,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11521,7 +11956,11 @@
       "family": "Noto Sans Mongolian",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11536,7 +11975,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11760,7 +12203,11 @@
       "family": "Noto Sans PhagsPa",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -11923,14 +12370,21 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "Noto Sans Symbols 2",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -12217,7 +12671,12 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "math"
+      ]
     },
     {
       "category": "Serif",
@@ -12300,7 +12759,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -12366,7 +12829,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -12759,7 +13226,11 @@
       "family": "Noto Znamenny Musical Notation",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -12780,7 +13251,10 @@
       "family": "Nova Mono",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -12905,7 +13379,10 @@
       "family": "Oi",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -12918,7 +13395,11 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -12997,7 +13478,13 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -13532,7 +14019,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -13596,7 +14087,10 @@
       "fonts": {
         "400": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -13667,7 +14161,11 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "math"
+      ]
     },
     {
       "category": "Handwriting",
@@ -13681,7 +14179,10 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "math"
+      ]
     },
     {
       "category": "Handwriting",
@@ -13709,7 +14210,10 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "math"
+      ]
     },
     {
       "category": "Handwriting",
@@ -13723,7 +14227,10 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "math"
+      ]
     },
     {
       "category": "Handwriting",
@@ -14646,7 +15153,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -14847,7 +15358,10 @@
       "family": "Press Start 2P",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -14911,28 +15425,44 @@
       "family": "Protest Guerrilla",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Protest Revolution",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Protest Riot",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Protest Strike",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -15585,7 +16115,13 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -15609,7 +16145,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -15625,7 +16165,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Monospace",
@@ -15645,7 +16188,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -15684,7 +16230,11 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Handwriting",
@@ -15839,7 +16389,11 @@
       "family": "Rubik Broken Fax",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -15874,14 +16428,22 @@
       "family": "Rubik Doodle Shadow",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Rubik Doodle Triangles",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -15902,7 +16464,11 @@
       "family": "Rubik Glitch Pop",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -15916,14 +16482,22 @@
       "family": "Rubik Lines",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Rubik Maps",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -15979,7 +16553,11 @@
       "family": "Rubik Scribble",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -16055,7 +16633,11 @@
       "family": "Ruslan Display",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -16129,7 +16711,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -16331,7 +16916,10 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -16851,14 +17439,22 @@
       "family": "Sixtyfour",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Monospace",
       "family": "Sixtyfour Convergence",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -16994,7 +17590,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17022,7 +17621,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17050,7 +17652,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17078,7 +17683,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Handwriting",
@@ -17205,7 +17813,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17227,7 +17839,11 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -17249,7 +17865,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17692,7 +18311,10 @@
         "600": {},
         "700": {},
         "800": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Monospace",
@@ -17735,7 +18357,11 @@
       "family": "Tac One",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -17832,7 +18458,10 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17855,7 +18484,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -17954,7 +18586,10 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -18003,14 +18638,21 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "Tiny5",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -18276,7 +18918,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Display",
@@ -18316,14 +18962,22 @@
         "500i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
       "family": "Ubuntu Condensed",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Monospace",
@@ -18333,7 +18987,11 @@
         "400i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -18355,7 +19013,11 @@
         "700i": {},
         "800": {},
         "800i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Monospace",
@@ -18369,7 +19031,11 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "greek-ext"
+      ]
     },
     {
       "category": "Serif",
@@ -18623,7 +19289,10 @@
         "600i": {},
         "700": {},
         "700i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -18679,7 +19348,10 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -18934,7 +19606,11 @@
       "family": "Workbench",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Monospace",
@@ -18966,7 +19642,11 @@
         "500": {},
         "600": {},
         "700": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -18985,28 +19665,44 @@
       "family": "Yarndings 12",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Yarndings 12 Charted",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Yarndings 20",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
       "family": "Yarndings 20 Charted",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Display",
@@ -19099,7 +19795,12 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -19127,7 +19828,12 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -19155,7 +19861,12 @@
         "800i": {},
         "900": {},
         "900i": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Sans Serif",
@@ -19172,7 +19883,12 @@
         "700": {},
         "800": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek",
+        "math",
+        "symbols"
+      ]
     },
     {
       "category": "Serif",
@@ -19336,14 +20052,20 @@
       "family": "Zen Antique",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
       "family": "Zen Antique Soft",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -19379,7 +20101,10 @@
       "family": "Zen Kurenaido",
       "fonts": {
         "400": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",
@@ -19398,7 +20123,10 @@
         "500": {},
         "700": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Serif",
@@ -19409,7 +20137,10 @@
         "600": {},
         "700": {},
         "900": {}
-      }
+      },
+      "subsets": [
+        "greek"
+      ]
     },
     {
       "category": "Display",

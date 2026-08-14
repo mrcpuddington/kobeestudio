@@ -11,7 +11,12 @@ from unittest.mock import patch
 
 from kobeestudio.core.component_presets import ComponentPresetStore
 from kobeestudio.core.composition import CompositionDocument, DocumentStyle, GraphicObject, Point, Size, TypographyStyle
-from kobeestudio.core.font_library import FontLibraryStore
+from kobeestudio.core.font_library import (
+    PCB_SYMBOL_GLYPHS,
+    FontLibraryStore,
+    catalog_family_likely_supports_symbols,
+    missing_font_glyphs,
+)
 from kobeestudio.core.library_archive import export_library, restore_library
 from kobeestudio.core.pin_header import PinHeaderSpec, maximum_pin_label_height
 from kobeestudio.core.raster_trace import RasterTraceSettings, trace_png_bytes
@@ -71,6 +76,15 @@ class FontLibraryStoreTests(unittest.TestCase):
             self.assertGreaterEqual(len(families), 1900)
             roboto = next(item for item in families if item["family"] == "Roboto")
             self.assertIn("400i", roboto["fonts"])
+            self.assertTrue(catalog_family_likely_supports_symbols(roboto))
+
+    def test_symbol_filter_is_coarse_but_face_coverage_is_exact(self):
+        fonts = Path(__file__).resolve().parents[1] / "kobeestudio/fonts"
+        self.assertEqual((), missing_font_glyphs(fonts / "mplus-1mn-medium.ttf", PCB_SYMBOL_GLYPHS))
+        self.assertEqual(("μ",), missing_font_glyphs(fonts / "FreddySpark-Regular.ttf", PCB_SYMBOL_GLYPHS))
+        self.assertTrue(catalog_family_likely_supports_symbols({"family": "Example", "subsets": ["greek"]}))
+        self.assertTrue(catalog_family_likely_supports_symbols({"family": "Noto Sans Math", "subsets": ["menu"]}))
+        self.assertFalse(catalog_family_likely_supports_symbols({"family": "Example", "subsets": ["latin"]}))
 
     def test_install_retains_licence_and_missing_face_can_be_repaired_in_place(self):
         bundled = Path(__file__).resolve().parents[1] / "kobeestudio/fonts/FreddySpark-Regular.ttf"
