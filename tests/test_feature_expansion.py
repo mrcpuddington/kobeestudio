@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 import io
+import zipfile
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
@@ -89,6 +90,37 @@ class FontLibraryStoreTests(unittest.TestCase):
             with patch("kobeestudio.core.font_library._urlopen", side_effect=OSError("offline")):
                 with self.assertRaises(OSError): store.refresh_catalog()
             self.assertIn("Roboto", {item["family"] for item in store.load_catalog()})
+
+    def test_selected_face_preview_is_cached_and_install_reuses_its_download(self):
+        bundled = Path(__file__).resolve().parents[1] / "kobeestudio/fonts/FreddySpark-Regular.ttf"
+        with tempfile.TemporaryDirectory() as directory:
+            store = FontLibraryStore(Path(directory))
+            with patch.object(
+                store, "_google_face_bytes",
+                return_value=(bundled.read_bytes(), "https://fonts.test/face.woff2"),
+            ) as download, patch.object(
+                store, "_google_licence",
+                return_value=("OFL", "https://fonts.test/OFL.txt"),
+            ):
+                first_path, _url, first_cached = store.preview_face("Preview Sans", 400, "normal")
+                second_path, _url, second_cached = store.preview_face("Preview Sans", 400, "normal")
+                installed = store.download_google_face("Preview Sans", 400, "normal")
+            self.assertFalse(first_cached)
+            self.assertTrue(second_cached)
+            self.assertEqual(first_path, second_path)
+            self.assertTrue(first_path.is_file())
+            self.assertTrue(installed.path.is_file())
+            download.assert_called_once_with("Preview Sans", 400, "normal")
+
+    def test_preview_cache_is_not_part_of_portable_library_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "cache/font-previews/v1").mkdir(parents=True)
+            (root / "cache/font-previews/v1/preview.ttf").write_bytes(b"cache")
+            archive = root / "backup.zip"
+            self.assertEqual(0, export_library(root, archive))
+            with zipfile.ZipFile(archive) as bundle:
+                self.assertEqual([], bundle.namelist())
 
 
 class LibraryArchiveExpansionTests(unittest.TestCase):

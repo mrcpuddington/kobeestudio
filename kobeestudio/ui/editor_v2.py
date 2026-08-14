@@ -148,7 +148,10 @@ TOOL_DEFINITIONS = (
     ("codes", "Barcode", "QR / Barcode"),
     ("graphics", "Imported Graphic", "Imported Graphic"),
     ("board_tools", "Cleanup", "Board Tools"),
-    ("board_tools", "Designators", "Board Tools"),
+    # Designators use the standard label renderer while remaining in the
+    # Board Tools family.  This lets the main window own the complete style
+    # form and exact live preview without a second modal editor.
+    ("board_tools", "Designators", "Label"),
 )
 
 MEASUREMENT_SETTING_KEYS = frozenset(
@@ -1926,8 +1929,49 @@ class ToolPage(wx.Panel):
                     box.Add(KobeeAction(self._active_parent, title, callback), 0, wx.EXPAND | wx.BOTTOM, 7)
             else:
                 box.Add(wx.StaticText(self._active_parent, label="Create styled labels from footprint references at their existing anchors."), 0, wx.BOTTOM, 12)
-                box.Add(KobeeAction(self._active_parent, "Add selected designator…", lambda: self.dialog.run_add_designators("selected")), 0, wx.EXPAND | wx.BOTTOM, 7)
-                box.Add(KobeeAction(self._active_parent, "Add all board designators…", lambda: self.dialog.run_add_designators("board")), 0, wx.EXPAND | wx.BOTTOM, 7)
+                grid = self._grid(box)
+                scope = self._add(grid, "DesignatorScopeChoice", "Apply to", self.choice(("Selected footprints", "Whole board"), "Selected footprints"))
+                self._designator_profiles = self.dialog.profile_store.list("labels")
+                profile = self._add(
+                    grid, "DesignatorProfileChoice", "Saved label style",
+                    self.choice(("Current settings",) + tuple(item.name for item in self._designator_profiles), "Current settings"),
+                )
+                reference = wx.TextCtrl(self._active_parent, value="Select a footprint in KiCad", style=wx.TE_READONLY)
+                self._add(grid, "MultiLineText", "Preview reference", reference)
+                self.designator_status = wx.StaticText(self._active_parent, label="")
+                self.designator_status.Wrap(420)
+                box.Add(self.designator_status, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 10)
+                actions = wx.BoxSizer(wx.HORIZONTAL)
+                actions.Add(KobeeAction(self._active_parent, "Refresh board selection", self.dialog.refresh_designator_selection), 0, wx.RIGHT, 7)
+                self.designator_apply_button = KobeeAction(self._active_parent, "Apply designators", self.dialog.apply_designators_from_page, primary=True)
+                self.designator_apply_button.Disable()
+                actions.Add(self.designator_apply_button, 0)
+                box.Add(actions, 0, wx.EXPAND)
+
+                content = self._card("Content")
+                content.Add(wx.StaticText(self._active_parent, label="Layout"), 0, wx.BOTTOM, 4)
+                layout = self.segmented(("Label", "Label + symbol"), "Label")
+                content.Add(layout, 0, wx.EXPAND | wx.BOTTOM, 9)
+                self.controls["ContentModeChoice"] = layout; self._bind(layout)
+                symbol_label = wx.StaticText(self._active_parent, label="Symbol")
+                symbol = PickerButton(
+                    self._active_parent, "Choose a symbol", "No icon", kind="symbol",
+                    callback=self._choose_icon, symbol_catalog=self.dialog.symbol_catalog,
+                )
+                content.Add(symbol_label, 0, wx.BOTTOM, 4); content.Add(symbol, 0, wx.EXPAND | wx.BOTTOM, 9)
+                self.controls["IconChoice"] = symbol
+                self._content_widgets["symbol"] = (symbol_label, symbol)
+                grid = self._grid(content)
+                self._add(grid, "IconPositionChoice", "Symbol position", self.choice(("Left of text", "Right of text"), "Left of text"))
+                icon_height = self._add(grid, "IconHeightCtrl", "Symbol size (mm)", self.spin(0, 20, 0, 0.1))
+                icon_height._kobee_auto_value_resolver = lambda: self.controls["HeightCtrl"].GetValue()
+                self._add(grid, "IconGapCtrl", "Symbol gap (mm)", self.spin(0, 20, 0.3, 0.1))
+                layout.Bind(wx.EVT_CHOICE, self._on_content_mode_changed)
+                scope.Bind(wx.EVT_CHOICE, self.dialog.on_designator_scope_changed)
+                profile.Bind(wx.EVT_CHOICE, self._on_designator_profile_changed)
+                self._build_container(LABEL_SHAPE_LABELS)
+                self._build_typography(padding=True, width=True)
+                self._update_content_ui()
         else:
             barcode = self.label == "Barcode"
             code = self._card("Code 128 barcode" if barcode else "QR code")
@@ -1976,6 +2020,18 @@ class ToolPage(wx.Panel):
         control = self.controls["MultiLineText"]
         control.WriteText(value)
         control.SetFocus()
+
+    def _on_designator_profile_changed(self, event):
+        index = self.controls["DesignatorProfileChoice"].GetSelection()
+        if index > 0 and index - 1 < len(self._designator_profiles):
+            reference = self.controls["MultiLineText"].GetValue()
+            scope = self.controls["DesignatorScopeChoice"].GetStringSelection()
+            self.apply(self._designator_profiles[index - 1].settings)
+            self.controls["MultiLineText"].ChangeValue(reference)
+            self.controls["DesignatorScopeChoice"].SetStringSelection(scope)
+            self.dialog._preview_fingerprint = None
+            self.dialog.request_preview()
+        event.Skip()
 
     def _resize_lines(self, count, prefix):
         control = self.controls["MultiLineText"]
@@ -2317,93 +2373,6 @@ class ToolPage(wx.Panel):
             self._on_header_pitch_changed(None)
 
 
-class DesignatorStyleDialog(wx.Dialog):
-    """Focused editor for one style applied to locked footprint references."""
-
-    def __init__(self, parent, reference, profiles, settings, page, symbol_catalog):
-        super().__init__(parent, title="Kobee designator style", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        self._profiles = tuple(profiles); self._page = page; self._catalog = symbol_catalog
-        self._symbol_refs = ("",) + tuple(format_symbol_reference(item.asset_id, item.variant) for item in symbol_catalog.symbols)
-        self._symbol_labels = ("No symbol",) + tuple(
-            "{} · {}{}".format(item.category, item.name, " — " + item.variant.replace("_", " ").title() if item.variant != "default" else "")
-            for item in symbol_catalog.symbols
-        )
-        root=wx.BoxSizer(wx.VERTICAL); body=wx.ScrolledWindow(self,style=wx.VSCROLL|wx.TAB_TRAVERSAL|wx.BORDER_NONE); body.SetScrollRate(0,12)
-        content=wx.BoxSizer(wx.VERTICAL); body.SetSizer(content); form=wx.FlexGridSizer(0,2,8,10); form.AddGrowableCol(1)
-        content.Add(form,1,wx.EXPAND|wx.ALL,14); root.Add(body,1,wx.EXPAND)
-        self.profile=ThemedChoice(body,choices=("Standard label defaults",)+tuple(item.name for item in self._profiles))
-        self.reference=wx.TextCtrl(body,value=reference,style=wx.TE_READONLY)
-        self.layout=ThemedChoice(body,choices=("Label","Label + symbol"))
-        self.font=ThemedChoice(body,choices=page._font_labels())
-        self.height=ThemedSpinCtrlDouble(body,min=0.1,max=20,initial=1.2,inc=0.1)
-        self.shape=ThemedChoice(body,choices=tuple(LABEL_SHAPE_LABELS))
-        self.variant=ThemedChoice(body,choices=("Outline","Inverted fill"))
-        self.border=ThemedSpinCtrlDouble(body,min=0.01,max=5,initial=0.2,inc=0.05)
-        self.radius=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.2,inc=0.05)
-        self.padding_top=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.5,inc=0.1)
-        self.padding_right=ThemedSpinCtrlDouble(body,min=0,max=20,initial=1.2,inc=0.1)
-        self.padding_bottom=ThemedSpinCtrlDouble(body,min=0,max=20,initial=0.5,inc=0.1)
-        self.padding_left=ThemedSpinCtrlDouble(body,min=0,max=20,initial=1.2,inc=0.1)
-        self.symbol=ThemedChoice(body,choices=self._symbol_labels)
-        self.icon_position=ThemedChoice(body,choices=tuple(ICON_POSITION_LABELS))
-        rows=(("Saved style",self.profile),("Reference text (locked)",self.reference),("Layout",self.layout),("Typeface",self.font),("Text height (mm)",self.height),("Container",self.shape),("Appearance",self.variant),("Border (mm)",self.border),("Corner radius (mm)",self.radius),("Top padding (mm)",self.padding_top),("Right padding (mm)",self.padding_right),("Bottom padding (mm)",self.padding_bottom),("Left padding (mm)",self.padding_left),("Symbol",self.symbol),("Symbol position",self.icon_position))
-        for label,control in rows:
-            form.Add(wx.StaticText(body,label=label),0,wx.ALIGN_CENTER_VERTICAL); form.Add(control,1,wx.EXPAND)
-        note=wx.StaticText(body,label="The semantic KiCad reference stays unchanged. Kobee only replaces its visible silkscreen artwork.")
-        note.Wrap(520); content.Add(note,0,wx.LEFT|wx.RIGHT|wx.BOTTOM,14); body.FitInside()
-        root.Add(self.CreateStdDialogButtonSizer(wx.OK|wx.CANCEL),0,wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM,14)
-        self.SetSizer(root); self.SetMinSize(wx.Size(620,480)); self.SetSize(wx.Size(680,680))
-        self.profile.Bind(wx.EVT_CHOICE,self._profile_changed); self.layout.Bind(wx.EVT_CHOICE,self._layout_changed)
-        self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
-        self._apply(settings); self._layout_changed(None)
-
-    def _apply(self, settings):
-        def choose(control,key,default):
-            value=settings.get(key,default); control.SetStringSelection(str(value))
-        choose(self.layout,"ContentModeChoice","Label")
-        self.font.SetStringSelection(self._page._font_label(settings.get("FontComboBox","FreddySpark-Regular")))
-        self.height.SetValue(float(settings.get("HeightCtrl",1.2))); choose(self.shape,"ShapeChoice","Rounded rectangle")
-        choose(self.variant,"ShapeVariantChoice","Outline"); self.border.SetValue(float(settings.get("BorderThicknessCtrl",0.2)))
-        self.radius.SetValue(float(settings.get("CornerRadiusCtrl",0.2)))
-        for control,key,default in ((self.padding_top,"PaddingTopCtrl",0.5),(self.padding_right,"PaddingRightCtrl",1.2),(self.padding_bottom,"PaddingBottomCtrl",0.5),(self.padding_left,"PaddingLeftCtrl",1.2)):
-            control.SetValue(float(settings.get(key,default)))
-        reference=str(settings.get("SymbolAssetId","") or ICON_LABELS.get(settings.get("IconChoice","No icon"),""))
-        variant=str(settings.get("SymbolVariant","default")); formatted=format_symbol_reference(reference,variant) if reference else ""
-        self.symbol.SetSelection(self._symbol_refs.index(formatted) if formatted in self._symbol_refs else 0)
-        choose(self.icon_position,"IconPositionChoice","Left of text")
-
-    def _profile_changed(self,event):
-        index=self.profile.GetSelection()
-        if index>0: self._apply(self._profiles[index-1].settings); self._layout_changed(None)
-        event.Skip()
-
-    def _layout_changed(self,event):
-        enabled=self.layout.GetStringSelection()=="Label + symbol"
-        self.symbol.Enable(enabled); self.icon_position.Enable(enabled)
-        if event is not None: event.Skip()
-
-    def _on_ok(self, event):
-        if self.layout.GetStringSelection() == "Label + symbol" and self.symbol.GetSelection() <= 0:
-            wx.MessageBox("Choose a symbol or switch the layout to Label.", "Designator style", wx.OK | wx.ICON_INFORMATION, self)
-            return
-        self.EndModal(wx.ID_OK)
-
-    def settings(self):
-        result={
-            "ContentModeChoice":self.layout.GetStringSelection(), "FontComboBox":self._page._font_renderer(self.font.GetStringSelection()),
-            "HeightCtrl":self.height.GetValue(), "ShapeChoice":self.shape.GetStringSelection(), "ShapeVariantChoice":self.variant.GetStringSelection(),
-            "BorderThicknessCtrl":self.border.GetValue(), "CornerRadiusCtrl":self.radius.GetValue(), "PaddingTopCtrl":self.padding_top.GetValue(),
-            "PaddingRightCtrl":self.padding_right.GetValue(), "PaddingBottomCtrl":self.padding_bottom.GetValue(), "PaddingLeftCtrl":self.padding_left.GetValue(),
-            "IconPositionChoice":self.icon_position.GetStringSelection(),
-        }
-        selection=self.symbol.GetSelection(); reference=self._symbol_refs[selection] if 0<=selection<len(self._symbol_refs) else ""
-        if reference:
-            result["SymbolAssetId"],result["SymbolVariant"]=parse_symbol_reference(reference)
-        else:
-            result["SymbolAssetId"],result["SymbolVariant"]="","default"
-        return result
-
-
 class StudioEditorDialog(wx.Dialog):
     """Modern, page-based Kobee Studio editor with a persistent preview."""
 
@@ -2465,6 +2434,8 @@ class StudioEditorDialog(wx.Dialog):
         self._recalled_profile_ids = {}
         self.restart_requested = False
         self._missing_font_metadata = None
+        self._designator_footprints = ()
+        self._designator_skipped = 0
         self._output_layers = (FRONT_SILKSCREEN,)
         self._text_vectorizer = TextVectorizer(self.buzzard)
         self._timer = wx.Timer(self)
@@ -2865,6 +2836,7 @@ class StudioEditorDialog(wx.Dialog):
             font_store=self.font_store,
             global_component_store=self.global_component_store,
             project_component_store=self.project_component_store,
+            font_preview_renderer=self._render_font_settings_preview,
             symbol_catalog=symbol_catalog_for_context(
                 project=self.project_path,
                 data_root=self.data_root,
@@ -2891,6 +2863,28 @@ class StudioEditorDialog(wx.Dialog):
         self._refresh_symbol_catalog()
         self._refresh_profile_bar()
         self.request_preview()
+
+    def _render_font_settings_preview(self, path, renderer_name, sample):
+        """Render Settings' selected face through the PCB polygon pipeline."""
+        self.buzzard.register_font(renderer_name, path)
+        style = DocumentStyle(
+            typography=TypographyStyle(
+                font_name=renderer_name,
+                height_mm=2.0,
+                alignment="center",
+            ),
+            shape=ShapeStyle(
+                padding=Padding.symmetric(0.0, 0.0),
+                border_thickness_mm=0.0,
+            ),
+        )
+        return render_label_artwork(
+            self._text_vectorizer,
+            str(sample),
+            style,
+            FRONT_SILKSCREEN,
+            shape=None,
+        )
 
     def _show_profile_help(self):
         wx.MessageBox(
@@ -3014,14 +3008,7 @@ class StudioEditorDialog(wx.Dialog):
 
     def _build_designator_record(self, source, settings, existing, api):
         reference = str(source.reference_field.text.value).strip(); source_id = self._footprint_id_text(source)
-        reference_layer = source.reference_field.layer
-        if reference_layer == api["BoardLayer"].BL_B_SilkS:
-            back = True
-        elif reference_layer == api["BoardLayer"].BL_F_SilkS:
-            back = False
-        else:
-            back = source.layer == api["BoardLayer"].BL_B_Cu
-        layer = BOTTOM_SILKSCREEN if back else FRONT_SILKSCREEN
+        layer = self._designator_output_layer(source, api)
         local = dict(settings, MultiLineText=reference, LayerComboBox=layer, StudioModeChoice="Label")
         style = self._document_style(local)
         icon_id = str(local.get("SymbolAssetId", "") or ICON_LABELS.get(local.get("IconChoice", "No icon"), "")) if local.get("ContentModeChoice") == "Label + symbol" else ""
@@ -3037,24 +3024,97 @@ class StudioEditorDialog(wx.Dialog):
         payload = build_footprint_payload(local, document=artwork.document, feature=feature)
         return source, artwork, payload, layer, existing.get(source_id)
 
-    def run_add_designators(self, scope):
+    @staticmethod
+    def _designator_scope_id(label):
+        return "board" if str(label) == "Whole board" else "selected"
+
+    def _designator_output_layer(self, source, api=None):
+        reference_layer = source.reference_field.layer
+        back_values = {BOTTOM_SILKSCREEN, "B.SilkS"}
+        if api is not None:
+            back_values.add(api["BoardLayer"].BL_B_SilkS)
+        if reference_layer in back_values:
+            return BOTTOM_SILKSCREEN
+        front_values = {FRONT_SILKSCREEN, "F.SilkS"}
+        if api is not None:
+            front_values.add(api["BoardLayer"].BL_F_SilkS)
+        if reference_layer in front_values:
+            return FRONT_SILKSCREEN
+        if api is not None and source.layer == api["BoardLayer"].BL_B_Cu:
+            return BOTTOM_SILKSCREEN
+        return FRONT_SILKSCREEN
+
+    def prepare_designators(self, scope=None, show_message=False):
+        page = self.page_by_tool.get("Designators")
+        if page is None or self.editor_session is None:
+            return ()
+        if scope in ("single", "selected", "board"):
+            scope = "selected" if scope == "single" else scope
+            page.controls["DesignatorScopeChoice"].SetStringSelection(
+                "Whole board" if scope == "board" else "Selected footprints"
+            )
+        else:
+            scope = self._designator_scope_id(page.controls["DesignatorScopeChoice"].GetStringSelection())
+        service = self.editor_session.board_tools()
+        footprints, skipped = service.eligible(scope)
+        with_references = tuple(
+            item for item in footprints
+            if str(getattr(item.reference_field.text, "value", "")).strip()
+        )
+        skipped += len(footprints) - len(with_references)
+        self._designator_footprints = with_references
+        self._designator_skipped = skipped
+        if not with_references:
+            page.controls["MultiLineText"].ChangeValue("Select a footprint in KiCad")
+            page.designator_status.SetLabel(
+                "No eligible footprints with references were found. Select an ordinary footprint and refresh."
+                if scope == "selected" else
+                "No eligible board footprints with references were found."
+            )
+            page.designator_apply_button.Disable()
+            self.preview.set_artwork((), (), (), FRONT_SILKSCREEN)
+            self.preview_error.SetLabel("")
+            if show_message:
+                wx.MessageBox(page.designator_status.GetLabel(), "Designators", wx.OK | wx.ICON_INFORMATION, self)
+            return ()
+        reference = str(with_references[0].reference_field.text.value).strip()
+        page.controls["MultiLineText"].ChangeValue(reference)
+        page.designator_status.SetLabel(
+            "Previewing {}. The style will be applied to {} footprint(s); {} locked, generated, or empty-reference item(s) will be skipped.".format(
+                reference, len(with_references), skipped
+            )
+        )
+        page.designator_apply_button.Enable()
+        layer = self._designator_output_layer(with_references[0])
+        self._set_output_layers((layer,), preview_layer=layer)
+        self._preview_fingerprint = None
+        self.request_preview()
+        return with_references
+
+    def refresh_designator_selection(self, event=None):
+        self.prepare_designators()
+
+    def on_designator_scope_changed(self, event):
+        self.prepare_designators()
+        event.Skip()
+
+    def apply_designators_from_page(self, event=None):
+        page = self.page_by_tool["Designators"]
+        scope = self._designator_scope_id(page.controls["DesignatorScopeChoice"].GetStringSelection())
+        self.run_add_designators(scope)
+
+    def run_add_designators(self, scope=None):
         if self.editor_session is None: return
-        service = self.editor_session.board_tools(); requested_scope = "selected" if scope == "single" else scope
-        footprints, skipped = service.eligible(requested_scope)
-        if scope == "single" and len(service.footprints("selected")) != 1:
-            wx.MessageBox("Select exactly one ordinary footprint before running this action.", "Add designator", wx.OK | wx.ICON_INFORMATION, self); return
-        with_references = tuple(item for item in footprints if str(getattr(item.reference_field.text, "value", "")).strip())
-        skipped += len(footprints) - len(with_references); footprints = with_references
+        footprints = self.prepare_designators(scope, show_message=True)
+        skipped = self._designator_skipped
         if not footprints:
-            wx.MessageBox("No eligible footprints with references were found.", "Add designators", wx.OK | wx.ICON_INFORMATION, self); return
-        profiles = self.profile_store.list("labels")
+            return
+        self.request_preview(immediate=True)
+        if self.error or self.artwork is None:
+            wx.MessageBox(self.error or "The designator preview could not be generated.", "Could not add designators", wx.OK | wx.ICON_ERROR, self)
+            return
         settings = mode_defaults("Label"); settings.update(DEFAULT_LABEL_DIMENSIONS)
-        sample = str(footprints[0].reference_field.text.value).strip() if len(footprints) == 1 else "Multiple references (text is taken from each footprint)"
-        editor = DesignatorStyleDialog(self, sample, profiles, settings, self.page_by_tool["Standard"], self.symbol_catalog)
-        try:
-            if editor.ShowModal() != wx.ID_OK: return
-            settings.update(editor.settings())
-        finally: editor.Destroy()
+        settings.update(self.page_by_tool["Designators"].settings())
         if wx.MessageBox("Create or update styled designators for {} footprint(s)?\n\nThe native reference fields will be hidden after successful placement.".format(len(footprints)), "Confirm designator creation", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION, self) != wx.YES: return
         try:
             existing = {}
@@ -3135,7 +3195,9 @@ class StudioEditorDialog(wx.Dialog):
         board_tools = self._family == "board_tools"
         self.profile_bar.Show(not board_tools); self.placement_bar.Show(not board_tools); self.place_button.Show(not board_tools)
         self.Layout()
-        if board_tools:
+        if tool == "Designators":
+            self.prepare_designators()
+        elif board_tools:
             self.preview.set_artwork((), (), (), FRONT_SILKSCREEN); self.preview_error.SetLabel("")
         else:
             self.request_preview()
@@ -3333,7 +3395,7 @@ class StudioEditorDialog(wx.Dialog):
         )
 
     def _regenerate_preview(self):
-        if self._family == "board_tools": return
+        if self._family == "board_tools" and self._tool != "Designators": return
         settings = self.CurrentSettings()
         fingerprint = json.dumps(settings, sort_keys=True, separators=(",", ":"))
         if fingerprint == self._preview_fingerprint:

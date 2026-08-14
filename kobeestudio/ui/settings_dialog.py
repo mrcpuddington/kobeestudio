@@ -44,6 +44,65 @@ SYMBOL_CATEGORIES = ("Custom", "Controls", "Direction", "Electrical", "PCB", "Sa
 SYMBOL_VARIANTS = ("default", "rounded")
 
 
+class FontPreviewPanel(wx.Panel):
+    """Small cached-polygon canvas used by the on-demand font browser."""
+
+    def __init__(self, parent):
+        super().__init__(parent, style=wx.BORDER_SIMPLE)
+        self.SetMinSize(wx.Size(-1, 145))
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self._filled = ()
+        self._strokes = ()
+        self._message = "Select a font family to preview it"
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_SIZE, lambda event: (self.Refresh(False), event.Skip()))
+
+    def set_message(self, message):
+        self._filled = (); self._strokes = (); self._message = str(message)
+        self.Refresh(False)
+
+    def set_artwork(self, artwork):
+        self._filled = tuple(artwork.filled_polygons)
+        self._strokes = tuple(artwork.strokes)
+        self._message = ""
+        self.Refresh(False)
+
+    def _on_paint(self, event):
+        dc = wx.AutoBufferedPaintDC(self)
+        dark = is_dark_mode(wx)
+        background = wx.Colour(39, 37, 34) if dark else wx.Colour(255, 255, 253)
+        foreground = wx.Colour(245, 242, 236) if dark else wx.Colour(34, 33, 30)
+        dc.SetBackground(wx.Brush(background)); dc.Clear()
+        rect = self.GetClientRect().Deflate(14)
+        polygons = self._filled + tuple(stroke.points for stroke in self._strokes)
+        points = tuple(point for polygon in polygons for point in polygon)
+        if not points:
+            dc.SetTextForeground(wx.Colour(181, 175, 165) if dark else wx.Colour(113, 108, 100))
+            dc.DrawLabel(self._message, rect, wx.ALIGN_CENTER)
+            return
+        min_x = min(point.x for point in points); max_x = max(point.x for point in points)
+        min_y = min(point.y for point in points); max_y = max(point.y for point in points)
+        width = max(0.001, max_x - min_x); height = max(0.001, max_y - min_y)
+        scale = min(rect.width / width, rect.height / height) * 0.88
+        centre_x = (min_x + max_x) / 2.0; centre_y = (min_y + max_y) / 2.0
+
+        def device(point):
+            return wx.Point(
+                round(rect.GetX() + rect.width / 2.0 + (point.x - centre_x) * scale),
+                round(rect.GetY() + rect.height / 2.0 + (point.y - centre_y) * scale),
+            )
+
+        dc.SetPen(wx.Pen(foreground, 1)); dc.SetBrush(wx.Brush(foreground))
+        for polygon in self._filled:
+            if len(polygon) >= 3:
+                dc.DrawPolygon(tuple(device(point) for point in polygon))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        for stroke in self._strokes:
+            if len(stroke.points) >= 2:
+                dc.SetPen(wx.Pen(foreground, max(1, round(stroke.width_mm * scale))))
+                dc.DrawLines(tuple(device(point) for point in stroke.points))
+
+
 class SymbolUploadDetailsDialog(wx.Dialog):
     """Collect friendly symbol metadata; filenames are never user-facing IDs."""
 
@@ -241,6 +300,7 @@ class SettingsDialog(wx.Dialog):
         font_store: Optional[FontLibraryStore] = None,
         global_component_store: Optional[ComponentPresetStore] = None,
         project_component_store: Optional[ComponentPresetStore] = None,
+        font_preview_renderer: Optional[Callable] = None,
         initial_page: int = 0,
     ):
         super().__init__(
@@ -258,6 +318,7 @@ class SettingsDialog(wx.Dialog):
         self.font_store = font_store or FontLibraryStore(preferences_store.root)
         self.global_component_store = global_component_store or ComponentPresetStore.global_store(preferences_store.root)
         self.project_component_store = project_component_store
+        self.font_preview_renderer = font_preview_renderer
         self.symbol_catalog = symbol_catalog
         self._hidden_symbol_ids = set(hidden_symbol_ids)
         self._hidden_label_ids = set(hidden_label_ids)
@@ -268,6 +329,10 @@ class SettingsDialog(wx.Dialog):
         self._upload_items = ()
         self._quick_labels = ()
         self.restart_editor = False
+        self._font_preview_generation = 0
+        self._font_preview_loading = False
+        self._font_preview_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_font_preview_timer, self._font_preview_timer)
 
         root = wx.BoxSizer(wx.VERTICAL)
         self.notebook = wx.Simplebook(self)
@@ -538,8 +603,25 @@ class SettingsDialog(wx.Dialog):
         font_actions.Add(ThemedActionButton(self.fonts_page, "Remove selected", self._remove_font_face), 0)
         installed_col.Add(font_actions, 0, wx.TOP, 8)
         self.installed_font_list.Bind(wx.EVT_LISTBOX, self._on_font_selection)
+        self.font_catalog_list.Bind(wx.EVT_LISTBOX, self._on_font_catalog_selection)
         columns.Add(catalog_col, 1, wx.EXPAND | wx.RIGHT, 8); columns.Add(installed_col, 1, wx.EXPAND | wx.LEFT, 8)
         root.Add(columns, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 14)
+        preview_box = wx.StaticBoxSizer(wx.VERTICAL, self.fonts_page, "Selected font preview")
+        preview_controls = wx.BoxSizer(wx.HORIZONTAL)
+        preview_controls.Add(wx.StaticText(self.fonts_page, label="Face"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        self.font_face_choice = ThemedChoice(self.fonts_page, choices=("400 Regular",))
+        self.font_face_choice.SetMinSize(wx.Size(150, 30))
+        self.font_face_choice.Bind(wx.EVT_CHOICE, self._on_font_preview_changed)
+        preview_controls.Add(self.font_face_choice, 0, wx.RIGHT, 10)
+        preview_controls.Add(wx.StaticText(self.fonts_page, label="Sample"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        self.font_preview_text = wx.TextCtrl(self.fonts_page, value="R1  10kΩ  INPUT")
+        self.font_preview_text.SetMaxLength(80)
+        self.font_preview_text.Bind(wx.EVT_TEXT, self._on_font_preview_changed)
+        preview_controls.Add(self.font_preview_text, 1)
+        preview_box.Add(preview_controls, 0, wx.EXPAND | wx.ALL, 8)
+        self.font_preview = FontPreviewPanel(self.fonts_page)
+        preview_box.Add(self.font_preview, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 8)
+        root.Add(preview_box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 14)
         self.font_status = wx.StaticText(self.fonts_page, label="Installed fonts remain available offline.")
         root.Add(self.font_status, 0, wx.ALL, 14)
         self._font_catalog = self.font_store.load_catalog(); self._visible_font_catalog = ()
@@ -549,6 +631,111 @@ class SettingsDialog(wx.Dialog):
         query = self.font_search.GetValue().strip().casefold() if hasattr(self, "font_search") else ""
         self._visible_font_catalog = tuple(item for item in self._font_catalog if query in str(item.get("family", "")).casefold())
         self.font_catalog_list.Set(tuple("{}  ·  {}".format(item.get("family", "Unnamed"), item.get("category", "Google Fonts")) for item in self._visible_font_catalog))
+
+    @staticmethod
+    def _font_face_keys(family):
+        return tuple(str(key) for key in (family.get("fonts") or {"400": {}}))
+
+    @staticmethod
+    def _font_face_label(key):
+        return "{} {}".format(key.rstrip("i"), "Italic" if key.endswith("i") else "Regular")
+
+    def _on_font_catalog_selection(self, event):
+        selection = self.font_catalog_list.GetSelection()
+        if not 0 <= selection < len(self._visible_font_catalog):
+            return
+        keys = self._font_face_keys(self._visible_font_catalog[selection])
+        self.font_face_choice.SetItems(tuple(self._font_face_label(key) for key in keys))
+        preferred = keys.index("400") if "400" in keys else 0
+        self.font_face_choice.SetSelection(preferred)
+        self._start_font_preview()
+        event.Skip()
+
+    def _on_font_preview_changed(self, event):
+        # Text editing uses the already-renderable cached face and does not
+        # initiate a catalog-wide operation.  A generation token coalesces the
+        # rapid events emitted while typing or changing a face.
+        self._font_preview_timer.StartOnce(240)
+        event.Skip()
+
+    def _on_font_preview_timer(self, event):
+        self._start_font_preview()
+
+    def _selected_preview_face(self):
+        selection = self.font_catalog_list.GetSelection()
+        if not 0 <= selection < len(self._visible_font_catalog):
+            return None
+        family = self._visible_font_catalog[selection]
+        keys = self._font_face_keys(family)
+        index = self.font_face_choice.GetSelection()
+        if not 0 <= index < len(keys):
+            return None
+        key = keys[index]
+        return str(family.get("family", "")), int(key.rstrip("i")), "italic" if key.endswith("i") else "normal"
+
+    def _start_font_preview(self):
+        selected = self._selected_preview_face()
+        if selected is None:
+            self.font_preview.set_message("Select a font family to preview it")
+            return
+        family, weight, style = selected
+        sample = self.font_preview_text.GetValue().strip() or "R1  10kΩ  INPUT"
+        self._font_preview_generation += 1
+        generation = self._font_preview_generation
+        self.font_preview.set_message("Loading {}…".format(family))
+        self.font_status.SetLabel("Loading one selected face for preview…")
+
+        installed = next((
+            face for face in self.font_store.list()
+            if face.family == family and face.weight == weight and face.style == style
+        ), None)
+        if installed is not None:
+            self._font_preview_ready(
+                generation, family, weight, style, sample,
+                (installed.path, installed.source_url, True), None, False,
+            )
+            return
+        if self._font_preview_loading:
+            # The completion callback will restart using the newest selected
+            # face/sample.  Never fan out network work while someone browses
+            # rapidly through the 1,900-family catalog.
+            return
+        self._font_preview_loading = True
+
+        def worker():
+            try:
+                result, error = self.font_store.preview_face(family, weight, style), None
+            except Exception as caught:
+                result, error = None, caught
+            wx.CallAfter(self._font_preview_ready, generation, family, weight, style, sample, result, error, True)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _font_preview_ready(self, generation, family, weight, style, sample, result, error, from_worker=True):
+        if from_worker:
+            self._font_preview_loading = False
+        if not self or self.IsBeingDeleted():
+            return
+        if generation != self._font_preview_generation:
+            self._start_font_preview()
+            return
+        if error is not None:
+            self.font_preview.set_message("Preview unavailable")
+            self.font_status.SetLabel("Could not preview {}: {}".format(family, error))
+            return
+        if self.font_preview_renderer is None:
+            self.font_preview.set_message("Preview renderer is unavailable in this session")
+            return
+        path, _source_url, cached = result
+        renderer_name = "__kobee_preview_{}".format(self.font_store._preview_key(family, weight, style)[:16])
+        try:
+            artwork = self.font_preview_renderer(path, renderer_name, sample)
+            self.font_preview.set_artwork(artwork)
+            self.font_status.SetLabel("Previewing {} {} {}{}.".format(
+                family, weight, style.title(), " from the offline cache" if cached else ""
+            ))
+        except Exception as caught:
+            self.font_preview.set_message("Preview unavailable")
+            self.font_status.SetLabel("Could not render {}: {}".format(family, caught))
 
     def _refresh_installed_fonts(self):
         self._installed_fonts = self.font_store.records()
@@ -599,8 +786,8 @@ class SettingsDialog(wx.Dialog):
         selection = self.font_catalog_list.GetSelection()
         if not 0 <= selection < len(self._visible_font_catalog): return
         family = self._visible_font_catalog[selection]
-        face_keys = tuple(str(key) for key in (family.get("fonts") or {"400": {}}))
-        choices = tuple("{}{}".format(key.rstrip("i"), " Italic" if key.endswith("i") else " Regular") for key in face_keys)
+        face_keys = self._font_face_keys(family)
+        choices = tuple(self._font_face_label(key) for key in face_keys)
         chooser = wx.MultiChoiceDialog(self, "Choose one or more faces to install", str(family.get("family", "Google Font")), choices)
         try:
             if chooser.ShowModal() != wx.ID_OK or not chooser.GetSelections(): return

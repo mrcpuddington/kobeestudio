@@ -121,7 +121,10 @@ def main(startup_action=None) -> int:
             try:
                 if startup_action == "add-designator":
                     dialog._select_tool("Designators")
-                    wx.CallAfter(dialog.run_add_designators, "single")
+                    # Keep the style editor and live reference preview in the
+                    # main window.  The user explicitly applies after seeing
+                    # the selected footprint rendered there.
+                    wx.CallAfter(dialog.prepare_designators, "selected", True)
                 elif startup_action in ("remove-designators", "remove-silkscreen"):
                     dialog._select_tool("Cleanup")
                     wx.CallAfter(dialog.run_board_cleanup, "designators" if startup_action == "remove-designators" else "silkscreen", "selected")

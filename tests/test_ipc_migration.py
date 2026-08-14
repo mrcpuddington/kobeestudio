@@ -127,6 +127,12 @@ class _MinimalPlacement(IpcArtworkPlacement):
     def build_footprint(self, artwork, payload, output_layer, output_layers=None):
         return _PlacedFootprint()
 
+    @staticmethod
+    def _angle_from_degrees(value):
+        class FakeAngle:
+            degrees = float(value)
+        return FakeAngle()
+
 
 class IpcMigrationTests(unittest.TestCase):
     def test_project_asset_context_uses_only_a_saved_board_filename(self):
@@ -370,11 +376,14 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertNotIn("wx.SpinCtrlDouble(self, min=0.1, max=1000", settings)
         self.assertIn("ThemedSpinCtrlDouble(self, min=0.1, max=1000", settings)
 
-    def test_designator_action_opens_the_focused_style_editor(self):
+    def test_designator_action_uses_main_window_controls_and_live_preview(self):
         source = (ROOT / "kobeestudio/ui/editor_v2.py").read_text()
-        self.assertIn("class DesignatorStyleDialog(wx.Dialog):", source)
-        self.assertIn("Reference text (locked)", source)
-        self.assertIn("settings.update(editor.settings())", source)
+        entry = (ROOT / "ipc_plugin/kobeestudio_ipc.py").read_text()
+        self.assertIn('"DesignatorScopeChoice"', source)
+        self.assertIn('"Preview reference"', source)
+        self.assertIn("self.prepare_designators()", source)
+        self.assertIn('self._tool != "Designators"', source)
+        self.assertNotIn('wx.CallAfter(dialog.run_add_designators, "single")', entry)
 
     def test_ipc_session_uses_the_connection_details_from_kicad(self):
         session = IpcSession.connect(
@@ -530,7 +539,6 @@ class IpcMigrationTests(unittest.TestCase):
         placement.start_interactive_move(placed)
         self.assertEqual(["placed-footprint-id"], session.board.moved)
 
-    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_designator_batch_uses_exact_anchor_updates_existing_and_is_one_commit(self):
         class Attributes: angle = 32.5
         class Text:
@@ -559,6 +567,37 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(1,len(pushes))
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_real_kipy_designator_keeps_visible_geometry_at_reference_anchor(self):
+        from kipy.board_types import FootprintInstance
+        from kipy.geometry import Vector2
+        from kipy.proto.board.board_types_pb2 import BoardLayer
+        from kipy.util import to_mm
+
+        source = FootprintInstance()
+        source.reference_field.text.value = "R17"
+        source.reference_field.text.position = Vector2.from_xy_mm(42.0, 27.5)
+        source.reference_field.text.attributes.angle = 37.0
+        source.reference_field.layer = BoardLayer.BL_F_SilkS
+        source.reference_field.visible = True
+        source.layer = BoardLayer.BL_F_Cu
+        artwork = StudioArtwork(
+            filled_polygons=((Point(-1,-0.5),Point(1,-0.5),Point(0,0.5)),),
+            strokes=(), guides=(), document=CompositionDocument(objects=()),
+        )
+        session = IpcSession.connect(
+            environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"}, client_factory=_Client,
+        )
+        created, updated = IpcArtworkPlacement(session).place_designators(
+            ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", None),)
+        )
+        generated = session.board.created[0][0]
+        self.assertEqual((1, 0), (created, updated))
+        self.assertAlmostEqual(42.0, to_mm(generated.position.x))
+        self.assertAlmostEqual(27.5, to_mm(generated.position.y))
+        self.assertAlmostEqual(37.0, generated.orientation.degrees)
+        self.assertTrue(generated.definition.shapes)
+        self.assertFalse(source.reference_field.visible)
+
     def test_partial_designator_creation_discards_transaction(self):
         class Attributes: angle = 0
         class Text: position = "position"; attributes = Attributes()
@@ -570,6 +609,7 @@ class IpcMigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,"rolled back"):
             _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",None),))
         self.assertTrue(any(item[0]=="drop" for item in session.board.messages))
+        self.assertTrue(Source.reference_field.visible)
 
     def test_metadata_round_trip_reopens_selected_artwork(self):
         payload = {

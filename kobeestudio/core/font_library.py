@@ -31,6 +31,7 @@ from .data_paths import user_data_root
 FONT_SCHEMA_VERSION = 1
 MAX_FONT_BYTES = 32 * 1024 * 1024
 MAX_CATALOG_BYTES = 16 * 1024 * 1024
+MAX_PREVIEW_CACHE_FACES = 24
 GOOGLE_FONTS_METADATA_URL = "https://fonts.google.com/metadata/fonts"
 GOOGLE_FONTS_CSS_URL = "https://fonts.googleapis.com/css2"
 
@@ -70,6 +71,41 @@ def _font_names(path: Path) -> Tuple[str, str]:
     return str(family).strip(), str(face).strip()
 
 
+def _normalise_font_bytes(data: bytes) -> bytes:
+    """Validate an OpenType payload and return renderer-friendly TTF bytes."""
+    if not isinstance(data, bytes) or not data or len(data) > MAX_FONT_BYTES:
+        raise ValueError("Font file must be between 1 byte and 32 MiB")
+    try:
+        font = TTFont(io.BytesIO(data), lazy=False)
+        font.flavor = None
+        output = io.BytesIO()
+        font.save(output)
+        font.close()
+        normalised = output.getvalue()
+    except Exception as error:
+        raise ValueError("Downloaded file is not a valid OpenType font: {}".format(error)) from error
+    if not normalised or len(normalised) > MAX_FONT_BYTES:
+        raise ValueError("Decoded font exceeds the 32 MiB safety limit")
+    return normalised
+
+
+def _atomic_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=".font-preview-", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, str(path))
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
 @dataclass(frozen=True)
 class FontFace:
     face_id: str
@@ -95,6 +131,10 @@ class FontLibraryStore:
         self.data_root = Path(data_root) if data_root is not None else user_data_root()
         self.root = self.data_root / "fonts" / "v1"
         self.catalog_path = self.root / "catalog.json"
+        # Preview files are an expendable performance cache, not portable
+        # library data.  Keeping them outside fonts/v1 prevents backups from
+        # growing merely because somebody browsed the catalog.
+        self.preview_root = self.data_root / "cache" / "font-previews" / "v1"
 
     def list(self) -> Tuple[FontFace, ...]:
         return tuple(item for item in self.records() if not item.missing)
@@ -158,19 +198,8 @@ class FontLibraryStore:
         staging = Path(tempfile.mkdtemp(prefix=".install-", dir=str(destination.parent)))
         try:
             font_path = staging / "font.ttf"
-            try:
-                font = TTFont(io.BytesIO(data), lazy=False)
-                # Google CSS normally serves WOFF2. Decode it to a static TTF
-                # so the existing polygon renderer has one predictable input.
-                font.flavor = None
-                font.save(str(font_path))
-                font.close()
-            except Exception as error:
-                raise ValueError("Downloaded file is not a valid OpenType font: {}".format(error)) from error
-            with font_path.open("rb") as stream:
-                normalized_data = stream.read()
-            if len(normalized_data) > MAX_FONT_BYTES:
-                raise ValueError("Decoded font exceeds the 32 MiB safety limit")
+            normalized_data = _normalise_font_bytes(data)
+            font_path.write_bytes(normalized_data)
             actual_family, actual_face = _font_names(font_path)
             renderer_name = "{}-{}-{}-{}".format(
                 actual_family.replace(" ", ""), weight, style, face_id[:8]
@@ -201,12 +230,80 @@ class FontLibraryStore:
         return self.install_bytes(data, **face)
 
     def download_google_face(self, family: str, weight: int = 400, style: str = "normal") -> FontFace:
-        data, source_url = self._google_face_bytes(family, weight, style)
+        preview_path, source_url, _cached = self.preview_face(family, weight, style)
+        data = preview_path.read_bytes()
         licence_text, licence_url = self._google_licence(family)
         return self.install_bytes(
             data, family=family, weight=weight, style=style, source_url=source_url,
             licence_url=licence_url, licence_text=licence_text,
         )
+
+    @staticmethod
+    def _preview_key(family: str, weight: int, style: str) -> str:
+        identity = "{}\0{}\0{}".format(str(family).strip().casefold(), int(weight), str(style).lower())
+        return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+    def preview_face(self, family: str, weight: int = 400, style: str = "normal") -> Tuple[Path, str, bool]:
+        """Return one validated cached TTF for an on-demand catalog preview.
+
+        Only the explicitly selected face is downloaded.  The cache is small,
+        bounded, excluded from backups, and reused by installation so browsing
+        a font never causes a second font-file download.
+        """
+        family, weight, style = str(family).strip(), int(weight), str(style).lower()
+        if not family or not 1 <= weight <= 1000 or style not in ("normal", "italic"):
+            raise ValueError("Invalid Google Font face")
+        key = self._preview_key(family, weight, style)
+        font_path = self.preview_root / "{}.ttf".format(key)
+        metadata_path = self.preview_root / "{}.json".format(key)
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if metadata.get("family") != family or int(metadata.get("weight")) != weight or metadata.get("style") != style:
+                raise ValueError("Preview cache identity mismatch")
+            if hashlib.sha256(font_path.read_bytes()).hexdigest() != metadata.get("content_sha256"):
+                raise ValueError("Preview cache checksum mismatch")
+            _font_names(font_path)
+            os.utime(font_path, None)
+            os.utime(metadata_path, None)
+            return font_path, str(metadata.get("source_url", "")), True
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            for path in (font_path, metadata_path):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+
+        data, source_url = self._google_face_bytes(family, weight, style)
+        normalised = _normalise_font_bytes(data)
+        _atomic_bytes(font_path, normalised)
+        _atomic_json(metadata_path, {
+            "schema_version": 1,
+            "family": family,
+            "weight": weight,
+            "style": style,
+            "source_url": source_url,
+            "content_sha256": hashlib.sha256(normalised).hexdigest(),
+        })
+        self._prune_preview_cache(keep_key=key)
+        return font_path, source_url, False
+
+    def _prune_preview_cache(self, keep_key: str = "") -> None:
+        try:
+            entries = sorted(
+                self.preview_root.glob("*.ttf"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            return
+        for font_path in entries[MAX_PREVIEW_CACHE_FACES:]:
+            if font_path.stem == keep_key:
+                continue
+            for path in (font_path, font_path.with_suffix(".json")):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
 
     def _google_face_bytes(self, family: str, weight: int = 400, style: str = "normal"):
         family, weight, style = str(family).strip(), int(weight), str(style).lower()

@@ -313,17 +313,22 @@ class IpcArtworkPlacement:
             pass
         self.session.board.interactive_move(placed.id)
 
-    def place_designators(self, records: Sequence[Tuple[Any, StudioArtwork, Mapping[str, Any], str, Optional[Any]]]):
-        """Create/update linked designator artwork and hide native fields atomically."""
+    @staticmethod
+    def _angle_from_degrees(value: float):
         try:
             from kipy.geometry import Angle
         except ImportError as error:
             raise IpcUnavailableError("The installed kicad-python package is incomplete") from error
+        return Angle.from_degrees(float(value))
+
+    def place_designators(self, records: Sequence[Tuple[Any, StudioArtwork, Mapping[str, Any], str, Optional[Any]]]):
+        """Create/update linked designator artwork and hide native fields atomically."""
         creates, updates, sources = [], [], []
+        original_visibility = []
         for source, artwork, payload, output_layer, existing in records:
             footprint = self.build_footprint(artwork, payload, output_layer)
             footprint.position = source.reference_field.text.position
-            footprint.orientation = Angle.from_degrees(float(source.reference_field.text.attributes.angle))
+            footprint.orientation = self._angle_from_degrees(source.reference_field.text.attributes.angle)
             if existing is not None:
                 footprint.proto.id.CopyFrom(existing.id)
                 try: footprint.definition.proto.id.CopyFrom(existing.definition.proto.id)
@@ -331,10 +336,13 @@ class IpcArtworkPlacement:
                 updates.append(footprint)
             else:
                 creates.append(footprint)
-            source.reference_field.visible = False
             sources.append(source)
+            original_visibility.append(bool(source.reference_field.visible))
         transaction = self.session.begin_commit()
         try:
+            # Do not touch the native references until KiCad has accepted
+            # every replacement.  This makes a failed/partial create leave the
+            # board visibly unchanged as well as rolling back the transaction.
             if creates:
                 created_result = self.session.board.create_items(creates)
                 if len(created_result or ()) != len(creates):
@@ -344,10 +352,14 @@ class IpcArtworkPlacement:
                 if len(updated_result or ()) != len(updates):
                     raise RuntimeError("KiCad did not update every designator; the operation was rolled back")
             if sources:
+                for source in sources:
+                    source.reference_field.visible = False
                 source_result = self.session.board.update_items(sources)
                 if len(source_result or ()) != len(sources):
                     raise RuntimeError("KiCad did not update every source footprint; the operation was rolled back")
             self.session.commit(transaction, "Add Kobee Studio designators")
         except Exception:
+            for source, visible in zip(sources, original_visibility):
+                source.reference_field.visible = visible
             self.session.discard(transaction); raise
         return len(creates), len(updates)
