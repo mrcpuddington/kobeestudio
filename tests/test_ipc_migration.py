@@ -52,14 +52,24 @@ class _Board:
 
     def create_items(self, item):
         self.created.append(item)
-        return [item]
+        return list(item) if isinstance(item, (tuple, list)) else [item]
+
+    def get_items_by_id(self, ids):
+        requested = {getattr(item_id, "value", str(item_id)) for item_id in ids}
+        candidates = []
+        for batch in self.created + self.updated:
+            candidates.extend(batch if isinstance(batch, (tuple, list)) else (batch,))
+        return [
+            item for item in candidates
+            if getattr(getattr(item, "id", None), "value", None) in requested
+        ]
 
     def remove_items(self, item):
         self.messages.append(("remove", item))
 
     def update_items(self, item):
         self.updated.append(item)
-        return [item]
+        return list(item) if isinstance(item, (tuple, list)) else [item]
 
     def add_to_selection(self, item):
         self.messages.append(("select", item))
@@ -100,6 +110,7 @@ class _FakeProto:
 class _FakeDefinition:
     def __init__(self, definition_id="definition-id"):
         self.proto = _FakeProto(definition_id)
+        self.items = [object()]
 
 
 class _PlacedFootprint:
@@ -209,6 +220,7 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("class BrandedHeader(wx.Panel):", source)
         self.assertIn("icon=family", source)
         self.assertIn('("labels", "Standard", "Label")', source)
+        self.assertIn('("labels", "Safe Labels", "Label")', source)
         self.assertIn('("labels", "Connector Overlay", "2.54 mm Pin Header")', source)
         self.assertIn('("graphics", "Imported Graphic", "Imported Graphic")', source)
         self.assertIn('("board_tools", "Cleanup", "Board Tools")', source)
@@ -332,8 +344,8 @@ class IpcMigrationTests(unittest.TestCase):
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
-        self.assertEqual("stable", metadata["versions"][0]["status"])
-        self.assertEqual("1.4.1", metadata["versions"][0]["version"])
+        self.assertEqual("1.5.0", metadata["versions"][0]["version"])
+        self.assertEqual("development", metadata["versions"][0]["status"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
@@ -382,6 +394,9 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn('"DesignatorScopeChoice"', source)
         self.assertIn('"Preview reference"', source)
         self.assertIn("self.prepare_designators()", source)
+        self.assertIn("self._selection_timer.Start(450)", source)
+        self.assertIn("self.designator_footer_button.Show(tool == \"Designators\")", source)
+        self.assertNotIn('"Refresh board selection"', source)
         self.assertIn('self._tool != "Designators"', source)
         self.assertNotIn('wx.CallAfter(dialog.run_add_designators, "single")', entry)
 
@@ -539,7 +554,7 @@ class IpcMigrationTests(unittest.TestCase):
         placement.start_interactive_move(placed)
         self.assertEqual(["placed-footprint-id"], session.board.moved)
 
-    def test_designator_batch_uses_exact_anchor_updates_existing_and_is_one_commit(self):
+    def test_designator_batch_verifies_artwork_before_hiding_native_reference(self):
         class Attributes: angle = 32.5
         class Text:
             position = "native-reference-position"
@@ -564,7 +579,30 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual("existing-designator",placed.id.value)
         self.assertFalse(Source.reference_field.visible)
         pushes=[item for item in session.board.messages if item[0]=="push"]
-        self.assertEqual(1,len(pushes))
+        self.assertEqual(2,len(pushes))
+        self.assertEqual("Create Kobee Studio designators", pushes[0][2])
+        self.assertEqual("Hide native footprint references", pushes[1][2])
+
+    def test_designator_verification_failure_never_hides_native_reference(self):
+        class Attributes: angle = 0
+        class Text: position = "position"; attributes = Attributes()
+        class Field: text = Text(); visible = True
+        class Source: reference_field = Field()
+        artwork = StudioArtwork(
+            filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),),
+            strokes=(), guides=(), document=CompositionDocument(objects=()),
+        )
+        session = IpcSession.connect(
+            environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"}, client_factory=_Client,
+        )
+        placement = _MinimalPlacement(session)
+        placement.build_footprint = lambda *_args, **_kwargs: _PlacedFootprint()
+        empty = placement.build_footprint(None, None, None)
+        empty.definition.items = []
+        placement.build_footprint = lambda *_args, **_kwargs: empty
+        with self.assertRaisesRegex(RuntimeError, "Native references were left visible"):
+            placement.place_designators(((Source(), artwork, {}, "F.SilkS", None),))
+        self.assertTrue(Source.reference_field.visible)
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_real_kipy_designator_keeps_visible_geometry_at_reference_anchor(self):
@@ -669,6 +707,12 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(METADATA_FIELD_NAME, footprint.definition.items[-1].name)
         self.assertTrue(footprint.attributes.not_in_schematic)
         self.assertGreater(footprint.proto.ByteSize(), 0)
+        second = placement.build_footprint(
+            artwork,
+            {"format": "kobee-studio-composition", "legacy_settings": {}},
+            "F.SilkS",
+        )
+        self.assertNotEqual(footprint.definition.id.name, second.definition.id.name)
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_ipc_footprint_repeats_artwork_on_each_selected_output_layer(self):

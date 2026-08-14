@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import re
 import traceback
 import threading
 from pathlib import Path
@@ -49,6 +50,11 @@ from ..core.svg_symbols import (
     symbol_catalog_for_context,
 )
 from ..core.quick_labels import QuickLabelStore
+from ..core.reference_templates import (
+    ReferenceTemplateStore,
+    resolve_reference_template,
+    template_placeholders,
+)
 from ..core.legacy_adapter import build_footprint_payload
 from ..core.transforms import (
     BOTTOM_COPPER,
@@ -141,6 +147,7 @@ MODULE_LABELS_FOR_PROFILE = {
 
 TOOL_DEFINITIONS = (
     ("labels", "Standard", "Label"),
+    ("labels", "Safe Labels", "Label"),
     ("labels", "Connector Overlay", "2.54 mm Pin Header"),
     ("labels", "Component Callout", "Component Callout"),
     ("labels", "Component Array", "Component Array"),
@@ -1216,7 +1223,7 @@ class ToolPage(wx.Panel):
         event.Skip()
 
     def _section_for_card(self, title):
-        if title in ("Content", "Presentation"):
+        if title in ("Content", "Presentation", "Safe label template"):
             return "Basics"
         if title == "Container":
             return "Container"
@@ -1775,7 +1782,58 @@ class ToolPage(wx.Panel):
                 )
 
     def _build(self):
-        if self.label == "Standard":
+        if self.label == "Safe Labels":
+            template = self._card("Safe label template")
+            helper = wx.StaticText(
+                self._active_parent,
+                label=(
+                    "Build one reusable, multi-line label from board references. "
+                    "Use $designator (first), $designator1, $designator2, … or "
+                    "$designators (all selected references, one per line)."
+                ),
+            )
+            helper.Wrap(430)
+            template.Add(helper, 0, wx.EXPAND | wx.BOTTOM, 10)
+            grid = self._grid(template)
+            self._reference_templates = ()
+            saved = self._add(
+                grid,
+                "SafeLabelTemplateChoice",
+                "Saved template",
+                self.choice(("New template",), "New template"),
+            )
+            source_scope = self._add(
+                grid,
+                "SafeLabelSourceScopeChoice",
+                "Use references from",
+                self.choice(("Selected footprints", "Whole board"), "Selected footprints"),
+            )
+            save_scopes = ("My library",) + (("This project",) if self.dialog.project_reference_template_store is not None else ())
+            self._add(
+                grid,
+                "SafeLabelSaveScopeChoice",
+                "Save in",
+                self.choice(save_scopes, "My library"),
+            )
+            raw = self.text("$designator", multiline=True)
+            raw.SetMinSize(wx.Size(120, 118))
+            self._add(grid, "SafeLabelTemplateText", "Template text", raw)
+            self.safe_label_status = wx.StaticText(self._active_parent, label="")
+            self.safe_label_status.Wrap(430)
+            template.Add(self.safe_label_status, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 10)
+            actions = wx.BoxSizer(wx.HORIZONTAL)
+            actions.Add(KobeeAction(self._active_parent, "Save as new…", self._save_reference_template), 0, wx.RIGHT, 7)
+            self.reference_template_update = KobeeAction(self._active_parent, "Update", self._update_reference_template)
+            self.reference_template_delete = KobeeAction(self._active_parent, "Delete", self._delete_reference_template)
+            actions.Add(self.reference_template_update, 0, wx.RIGHT, 7)
+            actions.Add(self.reference_template_delete, 0)
+            template.Add(actions, 0, wx.EXPAND)
+            saved.Bind(wx.EVT_CHOICE, self._on_reference_template_changed)
+            source_scope.Bind(wx.EVT_CHOICE, self.dialog.on_safe_label_scope_changed)
+            self._refresh_reference_templates()
+            self._build_container(LABEL_SHAPE_LABELS)
+            self._build_typography(padding=True, width=True)
+        elif self.label == "Standard":
             content = self._card("Content")
             self._build_content(content, multiline=True, subtitle=True, icon=True, preset=True)
             self._build_container(LABEL_SHAPE_LABELS)
@@ -1942,7 +2000,8 @@ class ToolPage(wx.Panel):
                 self.designator_status.Wrap(420)
                 box.Add(self.designator_status, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 10)
                 actions = wx.BoxSizer(wx.HORIZONTAL)
-                actions.Add(KobeeAction(self._active_parent, "Refresh board selection", self.dialog.refresh_designator_selection), 0, wx.RIGHT, 7)
+                automatic = wx.StaticText(self._active_parent, label="KiCad selection updates automatically")
+                actions.Add(automatic, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 7)
                 self.designator_apply_button = KobeeAction(self._active_parent, "Apply designators", self.dialog.apply_designators_from_page, primary=True)
                 self.designator_apply_button.Disable()
                 actions.Add(self.designator_apply_button, 0)
@@ -2015,6 +2074,127 @@ class ToolPage(wx.Panel):
                 wx.EVT_CHECKBOX, self._on_machine_code_changed
             )
             self._update_machine_code_ui()
+
+    def _reference_template_store(self):
+        if (
+            self.controls["SafeLabelSaveScopeChoice"].GetStringSelection() == "This project"
+            and self.dialog.project_reference_template_store is not None
+        ):
+            return self.dialog.project_reference_template_store
+        return self.dialog.global_reference_template_store
+
+    def _refresh_reference_templates(self, selected_id=None):
+        if "SafeLabelTemplateChoice" not in self.controls:
+            return
+        entries = []
+        for label, store in (
+            ("My library", self.dialog.global_reference_template_store),
+            ("This project", self.dialog.project_reference_template_store),
+        ):
+            if store is None:
+                continue
+            entries.extend(("{}  ·  {}".format(item.name, label), item, store) for item in store.list())
+        self._reference_templates = tuple(entries)
+        choice = self.controls["SafeLabelTemplateChoice"]
+        choice.SetItems(("New template",) + tuple(item[0] for item in entries))
+        selection = 0
+        if selected_id:
+            selection = next(
+                (index + 1 for index, (_label, item, _store) in enumerate(entries) if item.template_id == selected_id),
+                0,
+            )
+        choice.SetSelection(selection)
+        self.reference_template_update.Enable(selection > 0)
+        self.reference_template_delete.Enable(selection > 0)
+
+    def _selected_reference_template(self):
+        index = self.controls["SafeLabelTemplateChoice"].GetSelection() - 1
+        return self._reference_templates[index] if 0 <= index < len(self._reference_templates) else None
+
+    def _on_reference_template_changed(self, event):
+        selected = self._selected_reference_template()
+        if selected is None:
+            self.reference_template_update.Disable()
+            self.reference_template_delete.Disable()
+        else:
+            _label, template, store = selected
+            self.dialog._loading = True
+            try:
+                self.apply(dict(template.settings))
+                self.controls["SafeLabelTemplateText"].ChangeValue(template.template_text)
+                self.controls["SafeLabelSaveScopeChoice"].SetStringSelection(
+                    "This project" if store.scope == "project" else "My library"
+                )
+            finally:
+                self.dialog._loading = False
+            self.reference_template_update.Enable()
+            self.reference_template_delete.Enable()
+        self.dialog._preview_fingerprint = None
+        self.dialog.request_preview()
+        event.Skip()
+
+    def _template_style_settings(self):
+        settings = self.settings(resolve_safe=False)
+        for key in (
+            "MultiLineText",
+            "SafeLabelTemplateChoice",
+            "SafeLabelTemplateText",
+            "SafeLabelSourceScopeChoice",
+            "SafeLabelSaveScopeChoice",
+        ):
+            settings.pop(key, None)
+        return settings
+
+    def _save_reference_template(self, event=None, template_id=None, default_name=""):
+        prompt = wx.TextEntryDialog(self, "Name this reusable safe label:", "Save safe label template", default_name)
+        try:
+            if prompt.ShowModal() != wx.ID_OK:
+                return
+            saved = self._reference_template_store().save(
+                prompt.GetValue(),
+                self.controls["SafeLabelTemplateText"].GetValue(),
+                self._template_style_settings(),
+                template_id=template_id,
+            )
+            self._refresh_reference_templates(saved.template_id)
+        except (OSError, TypeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not save safe label", wx.OK | wx.ICON_ERROR, self)
+        finally:
+            prompt.Destroy()
+
+    def _update_reference_template(self, event=None):
+        selected = self._selected_reference_template()
+        if selected is None:
+            return
+        _label, template, store = selected
+        try:
+            saved = store.save(
+                template.name,
+                self.controls["SafeLabelTemplateText"].GetValue(),
+                self._template_style_settings(),
+                template_id=template.template_id,
+            )
+            self._refresh_reference_templates(saved.template_id)
+        except (OSError, TypeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not update safe label", wx.OK | wx.ICON_ERROR, self)
+
+    def _delete_reference_template(self, event=None):
+        selected = self._selected_reference_template()
+        if selected is None:
+            return
+        _label, template, store = selected
+        if wx.MessageBox(
+            "Delete the saved safe label “{}”?".format(template.name),
+            "Delete safe label",
+            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+            self,
+        ) != wx.YES:
+            return
+        try:
+            store.delete(template.template_id)
+            self._refresh_reference_templates()
+        except (OSError, LookupError) as error:
+            wx.MessageBox(str(error), "Could not delete safe label", wx.OK | wx.ICON_ERROR, self)
 
     def _insert_character(self, value):
         control = self.controls["MultiLineText"]
@@ -2255,7 +2435,7 @@ class ToolPage(wx.Panel):
         finally:
             dialog.Destroy()
 
-    def settings(self):
+    def settings(self, resolve_safe=True):
         settings = {key: _control_value(control) for key, control in self.controls.items()}
         settings.pop("GraphicSearchCtrl", None)
         if "FontComboBox" in settings:
@@ -2284,6 +2464,13 @@ class ToolPage(wx.Panel):
             else:
                 settings["GraphicAssetId"] = self._graphic_fallback_id
                 settings["GraphicGeometrySvg"] = self._graphic_fallback_svg
+        if "SafeLabelTemplateText" in self.controls:
+            raw_template = self.controls["SafeLabelTemplateText"].GetValue()
+            settings["SafeLabelTemplateText"] = raw_template
+            if resolve_safe:
+                settings["MultiLineText"] = self.dialog.resolve_safe_label(raw_template)
+            else:
+                settings["MultiLineText"] = raw_template
         return settings
 
     def apply(self, settings):
@@ -2390,6 +2577,7 @@ class StudioEditorDialog(wx.Dialog):
         self.font_store = FontLibraryStore(self.data_root)
         self.global_component_store = ComponentPresetStore.global_store(self.data_root)
         self.global_label_store = QuickLabelStore.global_store(self.data_root)
+        self.global_reference_template_store = ReferenceTemplateStore.global_store(self.data_root)
         self.project_asset_store = (
             SvgAssetStore.project_store(self.project_path)
             if self.project_path is not None
@@ -2401,6 +2589,11 @@ class StudioEditorDialog(wx.Dialog):
         )
         self.project_label_store = (
             QuickLabelStore.project_store(self.project_path)
+            if self.project_path is not None
+            else None
+        )
+        self.project_reference_template_store = (
+            ReferenceTemplateStore.project_store(self.project_path)
             if self.project_path is not None
             else None
         )
@@ -2436,10 +2629,15 @@ class StudioEditorDialog(wx.Dialog):
         self._missing_font_metadata = None
         self._designator_footprints = ()
         self._designator_skipped = 0
+        self._selection_fingerprint = None
+        self._safe_label_footprints = ()
+        self._safe_label_binding_ids = ()
         self._output_layers = (FRONT_SILKSCREEN,)
         self._text_vectorizer = TextVectorizer(self.buzzard)
         self._timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_preview_timer, self._timer)
+        self._selection_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_board_selection_timer, self._selection_timer)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         settings, footprint = self._initial_settings()
         self.updateFootprint = footprint
@@ -2454,6 +2652,9 @@ class StudioEditorDialog(wx.Dialog):
         self.Centre(wx.BOTH)
         # Let Windows paint the dialog before generating geometry for its first preview.
         wx.CallAfter(self.request_preview)
+        if self._tool == "Safe Labels":
+            wx.CallAfter(self.prepare_safe_label_sources)
+            wx.CallAfter(self._sync_board_selection_timer)
         if self._missing_font_metadata:
             wx.CallAfter(self._offer_missing_font)
 
@@ -2728,9 +2929,9 @@ class StudioEditorDialog(wx.Dialog):
 
         root.Add(wx.StaticLine(self), 0, wx.EXPAND)
         footer = wx.BoxSizer(wx.HORIZONTAL)
-        shortcut = wx.StaticText(self, label="Ctrl/Shift + Enter places artwork")
-        shortcut.SetForegroundColour(palette["muted"])
-        footer.Add(shortcut, 1, wx.ALIGN_CENTER_VERTICAL)
+        self.footer_shortcut = wx.StaticText(self, label="Ctrl/Shift + Enter places artwork")
+        self.footer_shortcut.SetForegroundColour(palette["muted"])
+        footer.Add(self.footer_shortcut, 1, wx.ALIGN_CENTER_VERTICAL)
         cancel = KobeeAction(self, "Cancel", self._cancel)
         self.place_button = KobeeAction(
             self,
@@ -2738,8 +2939,17 @@ class StudioEditorDialog(wx.Dialog):
             lambda: self.OnOkClick(None),
             primary=True,
         )
+        self.designator_footer_button = KobeeAction(
+            self,
+            "Apply designators",
+            self.apply_designators_from_page,
+            primary=True,
+        )
+        self.designator_footer_button.Disable()
+        self.designator_footer_button.Hide()
         footer.Add(cancel, 0, wx.RIGHT, 7)
         footer.Add(self.place_button, 0)
+        footer.Add(self.designator_footer_button, 0)
         root.Add(footer, 0, wx.EXPAND | wx.ALL, 12)
 
         self.Bind(wx.EVT_CHAR_HOOK, self._on_char_hook)
@@ -2957,7 +3167,10 @@ class StudioEditorDialog(wx.Dialog):
 
     def _on_char_hook(self, event):
         if event.GetKeyCode() == wx.WXK_RETURN and (event.ControlDown() or event.ShiftDown()):
-            self.OnOkClick(event)
+            if self._tool == "Designators":
+                self.apply_designators_from_page(event)
+            elif self._family != "board_tools":
+                self.OnOkClick(event)
             return
         if event.GetKeyCode() == wx.WXK_ESCAPE:
             self._cancel()
@@ -2966,10 +3179,12 @@ class StudioEditorDialog(wx.Dialog):
 
     def _cancel(self):
         self._timer.Stop()
+        self._selection_timer.Stop()
         self.EndModal(wx.ID_CANCEL)
 
     def _on_close(self, event):
         self._timer.Stop()
+        self._selection_timer.Stop()
         event.Skip()
 
     def run_board_cleanup(self, operation, scope):
@@ -3005,6 +3220,37 @@ class StudioEditorDialog(wx.Dialog):
     def _footprint_id_text(footprint):
         identifier = getattr(footprint, "id", "")
         return str(getattr(identifier, "value", identifier))
+
+    @staticmethod
+    def _reference_sort_key(footprint):
+        reference = str(getattr(footprint.reference_field.text, "value", "")).strip()
+        parts = tuple(
+            (0, int(part)) if part.isdigit() else (1, part.casefold())
+            for part in re.split(r"([0-9]+)", reference)
+            if part
+        )
+        return parts
+
+    def _set_designator_apply_enabled(self, enabled):
+        page = self.page_by_tool.get("Designators")
+        if page is not None and hasattr(page, "designator_apply_button"):
+            page.designator_apply_button.Enable(bool(enabled))
+        if hasattr(self, "designator_footer_button"):
+            self.designator_footer_button.Enable(bool(enabled))
+
+    def _eligible_reference_footprints(self, scope):
+        service = self.editor_session.board_tools()
+        footprints, skipped = service.eligible(scope)
+        with_references = tuple(
+            sorted(
+                (
+                    item for item in footprints
+                    if str(getattr(item.reference_field.text, "value", "")).strip()
+                ),
+                key=self._reference_sort_key,
+            )
+        )
+        return with_references, skipped + len(footprints) - len(with_references)
 
     def _build_designator_record(self, source, settings, existing, api):
         reference = str(source.reference_field.text.value).strip(); source_id = self._footprint_id_text(source)
@@ -3055,28 +3301,40 @@ class StudioEditorDialog(wx.Dialog):
             )
         else:
             scope = self._designator_scope_id(page.controls["DesignatorScopeChoice"].GetStringSelection())
-        service = self.editor_session.board_tools()
-        footprints, skipped = service.eligible(scope)
-        with_references = tuple(
-            item for item in footprints
-            if str(getattr(item.reference_field.text, "value", "")).strip()
+        with_references, skipped = self._eligible_reference_footprints(scope)
+        fingerprint = (
+            "designators",
+            scope,
+            tuple(
+                (
+                    self._footprint_id_text(item),
+                    str(item.reference_field.text.value).strip(),
+                    str(getattr(item.reference_field, "layer", "")),
+                )
+                for item in with_references
+            ),
+            skipped,
         )
-        skipped += len(footprints) - len(with_references)
         self._designator_footprints = with_references
         self._designator_skipped = skipped
+        unchanged = fingerprint == self._selection_fingerprint
+        self._selection_fingerprint = fingerprint
         if not with_references:
             page.controls["MultiLineText"].ChangeValue("Select a footprint in KiCad")
             page.designator_status.SetLabel(
-                "No eligible footprints with references were found. Select an ordinary footprint and refresh."
+                "No eligible footprints with references were found. Select an ordinary footprint in KiCad; this view updates automatically."
                 if scope == "selected" else
                 "No eligible board footprints with references were found."
             )
-            page.designator_apply_button.Disable()
+            self._set_designator_apply_enabled(False)
             self.preview.set_artwork((), (), (), FRONT_SILKSCREEN)
             self.preview_error.SetLabel("")
             if show_message:
                 wx.MessageBox(page.designator_status.GetLabel(), "Designators", wx.OK | wx.ICON_INFORMATION, self)
             return ()
+        if unchanged:
+            self._set_designator_apply_enabled(True)
+            return with_references
         reference = str(with_references[0].reference_field.text.value).strip()
         page.controls["MultiLineText"].ChangeValue(reference)
         page.designator_status.SetLabel(
@@ -3084,7 +3342,7 @@ class StudioEditorDialog(wx.Dialog):
                 reference, len(with_references), skipped
             )
         )
-        page.designator_apply_button.Enable()
+        self._set_designator_apply_enabled(True)
         layer = self._designator_output_layer(with_references[0])
         self._set_output_layers((layer,), preview_layer=layer)
         self._preview_fingerprint = None
@@ -3092,11 +3350,116 @@ class StudioEditorDialog(wx.Dialog):
         return with_references
 
     def refresh_designator_selection(self, event=None):
+        self._selection_fingerprint = None
         self.prepare_designators()
 
     def on_designator_scope_changed(self, event):
+        self._selection_fingerprint = None
         self.prepare_designators()
+        self._sync_board_selection_timer()
         event.Skip()
+
+    def resolve_safe_label(self, template_text):
+        placeholders = template_placeholders(template_text)
+        if not placeholders:
+            return str(template_text)
+        references = tuple(
+            str(item.reference_field.text.value).strip()
+            for item in self._safe_label_footprints
+        )
+        if not references and self.editor_session is None:
+            # Standalone mode can still demonstrate and edit a template, but
+            # placing through KiCad will always use real board references.
+            references = ("R1", "C2", "U3", "J4", "D5", "Q6", "L7", "TP8")
+        return resolve_reference_template(template_text, references)
+
+    def prepare_safe_label_sources(self, scope=None):
+        page = self.page_by_tool.get("Safe Labels")
+        if page is None:
+            return ()
+        if self.editor_session is None:
+            self._safe_label_footprints = ()
+            page.safe_label_status.SetLabel("Standalone preview uses sample references. Open from KiCad to bind real footprints.")
+            self._preview_fingerprint = None
+            self.request_preview()
+            return ()
+        if scope is None:
+            scope = self._designator_scope_id(page.controls["SafeLabelSourceScopeChoice"].GetStringSelection())
+        footprints, skipped = self._eligible_reference_footprints(scope)
+        if scope == "selected" and not footprints and self._safe_label_binding_ids:
+            try:
+                from kipy.proto.common.types import KIID
+
+                ids = [KIID(value=value) for value in self._safe_label_binding_ids]
+                rebound = tuple(self.editor_session.board.get_items_by_id(ids))
+                footprints = tuple(
+                    sorted(
+                        (
+                            item for item in rebound
+                            if hasattr(item, "reference_field")
+                            and not getattr(item, "locked", False)
+                            and str(getattr(item.reference_field.text, "value", "")).strip()
+                        ),
+                        key=self._reference_sort_key,
+                    )
+                )
+            except Exception:
+                footprints = ()
+        fingerprint = (
+            "safe-label",
+            scope,
+            tuple((self._footprint_id_text(item), str(item.reference_field.text.value).strip()) for item in footprints),
+            skipped,
+        )
+        changed = fingerprint != self._selection_fingerprint
+        self._selection_fingerprint = fingerprint
+        self._safe_label_footprints = footprints
+        if footprints:
+            self._safe_label_binding_ids = tuple(self._footprint_id_text(item) for item in footprints)
+        references = tuple(str(item.reference_field.text.value).strip() for item in footprints)
+        page.safe_label_status.SetLabel(
+            "Bound references: {}{}".format(
+                ", ".join(references) if references else "none — select footprints in KiCad",
+                " · {} skipped".format(skipped) if skipped else "",
+            )
+        )
+        if changed:
+            self._preview_fingerprint = None
+            self.request_preview()
+        return footprints
+
+    def on_safe_label_scope_changed(self, event):
+        self._selection_fingerprint = None
+        self.prepare_safe_label_sources()
+        self._sync_board_selection_timer()
+        event.Skip()
+
+    def _sync_board_selection_timer(self):
+        selected_scope = False
+        if self.editor_session is not None and self._tool == "Designators":
+            page = self.page_by_tool["Designators"]
+            selected_scope = self._designator_scope_id(page.controls["DesignatorScopeChoice"].GetStringSelection()) == "selected"
+        elif self.editor_session is not None and self._tool == "Safe Labels":
+            page = self.page_by_tool["Safe Labels"]
+            selected_scope = self._designator_scope_id(page.controls["SafeLabelSourceScopeChoice"].GetStringSelection()) == "selected"
+        if selected_scope:
+            if not self._selection_timer.IsRunning():
+                self._selection_timer.Start(450)
+        else:
+            self._selection_timer.Stop()
+
+    def _on_board_selection_timer(self, event):
+        try:
+            if self._tool == "Designators":
+                self.prepare_designators()
+            elif self._tool == "Safe Labels":
+                self.prepare_safe_label_sources()
+            else:
+                self._selection_timer.Stop()
+        except Exception:
+            # Selection polling is convenience only. The explicit Apply/Place
+            # path will surface any IPC error with full context.
+            pass
 
     def apply_designators_from_page(self, event=None):
         page = self.page_by_tool["Designators"]
@@ -3193,14 +3556,26 @@ class StudioEditorDialog(wx.Dialog):
             self._loading = was_loading
         self._refresh_profile_bar()
         board_tools = self._family == "board_tools"
-        self.profile_bar.Show(not board_tools); self.placement_bar.Show(not board_tools); self.place_button.Show(not board_tools)
+        self.profile_bar.Show(not board_tools)
+        self.placement_bar.Show(not board_tools)
+        self.place_button.Show(not board_tools)
+        self.designator_footer_button.Show(tool == "Designators")
+        self.footer_shortcut.SetLabel(
+            "Ctrl/Shift + Enter applies designators"
+            if tool == "Designators" else
+            "Ctrl/Shift + Enter places artwork"
+        )
         self.Layout()
+        self._selection_fingerprint = None
         if tool == "Designators":
             self.prepare_designators()
+        elif tool == "Safe Labels":
+            self.prepare_safe_label_sources()
         elif board_tools:
             self.preview.set_artwork((), (), (), FRONT_SILKSCREEN); self.preview_error.SetLabel("")
         else:
             self.request_preview()
+        self._sync_board_selection_timer()
 
     def _rebuild_tool_bar(self):
         for family, label, mode in TOOL_DEFINITIONS:
@@ -3222,7 +3597,16 @@ class StudioEditorDialog(wx.Dialog):
 
     def _route_settings(self, settings):
         mode = settings.get("StudioModeChoice", "Label")
-        if mode == "QR / Barcode":
+        if settings.get("StudioTool") == "Safe Labels":
+            tool = "Safe Labels"
+            bindings = settings.get("SafeLabelBindings", ())
+            if isinstance(bindings, (tuple, list)):
+                self._safe_label_binding_ids = tuple(
+                    str(item.get("source_footprint_id", ""))
+                    for item in bindings
+                    if isinstance(item, dict) and str(item.get("source_footprint_id", ""))
+                )
+        elif mode == "QR / Barcode":
             tool = "Barcode" if settings.get("MachineCodeTypeChoice") == "Code 128 barcode" else "QR Code"
         else:
             tool = {
@@ -3301,6 +3685,15 @@ class StudioEditorDialog(wx.Dialog):
         if hasattr(self.active_page, "_effective_end_caps"):
             settings["StartCapChoice"], settings["EndCapChoice"] = self.active_page._effective_end_caps()
         settings["StudioModeChoice"] = self.active_page.mode
+        if self._tool == "Safe Labels":
+            settings["StudioTool"] = "Safe Labels"
+            settings["SafeLabelBindings"] = [
+                {
+                    "source_footprint_id": self._footprint_id_text(item),
+                    "reference": str(item.reference_field.text.value).strip(),
+                }
+                for item in self._safe_label_footprints
+            ]
         settings["MachineCodeTypeChoice"] = "Code 128 barcode" if self._tool == "Barcode" else settings.get("MachineCodeTypeChoice", "QR Code")
         settings["LayerComboBox"] = self.output_layer
         settings["OutputLayers"] = list(self.output_layers)
@@ -3610,6 +4003,10 @@ class StudioEditorDialog(wx.Dialog):
         self.preview_error.Wrap(max(240, self.preview.GetClientSize().width))
 
     def OnOkClick(self, event):
+        if self._tool == "Safe Labels":
+            # Close the small gap between a KiCad selection change and the
+            # polling timer so Place always binds the current selection.
+            self.prepare_safe_label_sources()
         self.request_preview(immediate=True)
         if self.error or self.artwork is None:
             wx.MessageBox(self.error or "Enter valid artwork before placing it.", "Kobee Studio", wx.OK | wx.ICON_ERROR, self)

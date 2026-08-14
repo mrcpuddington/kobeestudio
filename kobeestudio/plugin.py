@@ -130,6 +130,13 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                     ),
                     "data": dialog.artwork.component_callout.to_dict(),
                 }
+            elif getattr(dialog, "_tool", "") == "Safe Labels":
+                safe_settings = dialog.CurrentSettings()
+                feature = {
+                    "kind": "safe_label",
+                    "template": safe_settings.get("SafeLabelTemplateText", ""),
+                    "bindings": safe_settings.get("SafeLabelBindings", ()),
+                }
             payload = build_footprint_payload(
                 dialog.CurrentSettings(),
                 document=dialog.artwork.document,

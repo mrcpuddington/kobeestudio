@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import re
-import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
@@ -217,7 +217,11 @@ class IpcArtworkPlacement:
         if output_layer not in layers:
             output_layer = layers[0]
         api = self._api()
-        name = "kobee-studio-{:08X}".format(int(round(time.time())))
+        # A second-resolution name caused every item in a bulk designator
+        # operation to share one footprint-library identity.  KiCad accepts
+        # the create request but can subsequently coalesce/drop those board
+        # definitions.  Give every new definition an unambiguous identity.
+        name = "kobee-studio-{}".format(uuid.uuid4().hex[:12])
         footprint = api["FootprintInstance"]()
         definition = footprint.definition
         definition.id.name = name
@@ -322,7 +326,13 @@ class IpcArtworkPlacement:
         return Angle.from_degrees(float(value))
 
     def place_designators(self, records: Sequence[Tuple[Any, StudioArtwork, Mapping[str, Any], str, Optional[Any]]]):
-        """Create/update linked designator artwork and hide native fields atomically."""
+        """Create/update linked designators, verify them, then hide native fields.
+
+        KiCad does not expose uncommitted items through ``get_items_by_id``.
+        Replacements are therefore committed and read back before the native
+        references are touched.  A failed verification leaves the semantic
+        reference visible instead of producing a blank board.
+        """
         creates, updates, sources = [], [], []
         original_visibility = []
         for source, artwork, payload, output_layer, existing in records:
@@ -338,28 +348,61 @@ class IpcArtworkPlacement:
                 creates.append(footprint)
             sources.append(source)
             original_visibility.append(bool(source.reference_field.visible))
-        transaction = self.session.begin_commit()
+        artwork_transaction = self.session.begin_commit()
+        replacements = []
         try:
-            # Do not touch the native references until KiCad has accepted
-            # every replacement.  This makes a failed/partial create leave the
-            # board visibly unchanged as well as rolling back the transaction.
             if creates:
                 created_result = self.session.board.create_items(creates)
                 if len(created_result or ()) != len(creates):
                     raise RuntimeError("KiCad did not create every designator; the operation was rolled back")
+                replacements.extend(created_result)
             if updates:
                 updated_result = self.session.board.update_items(updates)
                 if len(updated_result or ()) != len(updates):
                     raise RuntimeError("KiCad did not update every designator; the operation was rolled back")
-            if sources:
-                for source in sources:
-                    source.reference_field.visible = False
-                source_result = self.session.board.update_items(sources)
-                if len(source_result or ()) != len(sources):
-                    raise RuntimeError("KiCad did not update every source footprint; the operation was rolled back")
-            self.session.commit(transaction, "Add Kobee Studio designators")
+                replacements.extend(updated_result)
+            self.session.commit(artwork_transaction, "Create Kobee Studio designators")
+        except Exception:
+            self.session.discard(artwork_transaction)
+            raise
+
+        # The response proves only that KiCad accepted each command.  Read the
+        # committed board objects back and require at least one real geometry
+        # primitive in every generated footprint before hiding anything.
+        try:
+            replacement_ids = [item.id for item in replacements]
+            read_back = (
+                tuple(self.session.board.get_items_by_id(replacement_ids))
+                if replacement_ids and hasattr(self.session.board, "get_items_by_id")
+                else tuple(replacements)
+            )
+            if len(read_back) != len(replacements):
+                raise RuntimeError("KiCad did not retain every generated designator")
+            for replacement in read_back:
+                visible_items = tuple(
+                    item for item in getattr(replacement.definition, "items", ())
+                    if getattr(item, "name", "") != METADATA_FIELD_NAME
+                )
+                if not visible_items:
+                    raise RuntimeError("KiCad retained a designator without any visible geometry")
+        except Exception as error:
+            # Do not remove a pre-existing designator update here: the central
+            # safety guarantee is that native references remain unchanged.
+            raise RuntimeError(
+                "Generated designators could not be verified on the board. Native references were left visible: {}".format(error)
+            )
+
+        reference_transaction = self.session.begin_commit()
+        try:
+            for source in sources:
+                source.reference_field.visible = False
+            source_result = self.session.board.update_items(sources)
+            if len(source_result or ()) != len(sources):
+                raise RuntimeError("KiCad did not update every source footprint; native references were restored")
+            self.session.commit(reference_transaction, "Hide native footprint references")
         except Exception:
             for source, visible in zip(sources, original_visibility):
                 source.reference_field.visible = visible
-            self.session.discard(transaction); raise
+            self.session.discard(reference_transaction)
+            raise
         return len(creates), len(updates)

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added reusable global/project Safe Label templates with multi-line,
+  multi-designator placeholders and self-contained source bindings.
+- Made the Designators editor track KiCad's selection automatically and keep
+  Apply visible in every Designators section.
+- Gave bulk designator footprints unique identities and verify their committed
+  geometry before hiding any native reference field.
 - Added a searchable Google Fonts library with selectable faces, offline installed fonts, verified downloads, and missing-face recovery.
 - Added global/project graphics and component preset libraries, safe broad SVG import, live PNG tracing, and transformable imported-graphic artwork.
 - Generalized connector overlays across common pitches and custom pitch values while preserving existing 2.54 mm artwork.

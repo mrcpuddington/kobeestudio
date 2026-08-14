@@ -86,6 +86,13 @@ def main(startup_action=None) -> int:
                 }
             elif any(getattr(item, "kind", "") == "graphic" for item in dialog.artwork.document.objects):
                 feature = {"kind": "imported_graphic", "data": dialog.artwork.document.to_dict()}
+            elif getattr(dialog, "_tool", "") == "Safe Labels":
+                safe_settings = dialog.CurrentSettings()
+                feature = {
+                    "kind": "safe_label",
+                    "template": safe_settings.get("SafeLabelTemplateText", ""),
+                    "bindings": safe_settings.get("SafeLabelBindings", ()),
+                }
             payload = build_footprint_payload(
                 dialog.CurrentSettings(),
                 document=dialog.artwork.document,
