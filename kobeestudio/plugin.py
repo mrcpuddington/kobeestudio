@@ -14,6 +14,7 @@ import wx
 
 from .integration.kicad_compatibility import KiCadCompatibility
 from .integration.platform_branding import configure_window_branding
+from .ui.single_instance import StudioWindowSingleton
 if os.environ.get("KOBEE_USE_LEGACY_EDITOR"):
     from .ui.main_dialog import MainDialog
 else:
@@ -81,7 +82,10 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
 
     def Run(self):
         self._diagnostics()
+        singleton = StudioWindowSingleton(Path(self.config_file).parent)
         try:
+            if not singleton.acquire_or_activate():
+                return
             # Import here so a missing bundled dependency becomes a visible
             # KiCad dialog instead of making the ActionPlugin vanish at load.
             from .core.text_geometry import TextGeometry
@@ -96,6 +100,17 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                     / "kobee-studio-platform-icon.png"
                 )
                 configure_window_branding(dialog, icon_path, wx)
+                def focus_existing_dialog():
+                    if dialog.IsBeingDeleted():
+                        return
+                    if dialog.IsIconized():
+                        dialog.Iconize(False)
+                    dialog.Show(True)
+                    dialog.Raise()
+                    dialog.SetFocus()
+                    dialog.RequestUserAttention(wx.USER_ATTENTION_INFO)
+
+                singleton.attach(lambda: wx.CallAfter(focus_existing_dialog))
                 try:
                     dialog.ShowModal()
                     restart_requested = bool(getattr(dialog, "restart_requested", False))
@@ -105,6 +120,8 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                     break
         except Exception as error:
             self._show_error("Kobee Studio could not start", error)
+        finally:
+            singleton.release()
 
     def _generate_and_place(self, dialog, buzzard):
         try:

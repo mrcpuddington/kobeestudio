@@ -95,13 +95,15 @@ LABEL_SHAPE_LABELS = {
     "Chamfer": "chamfer",
     "Hexagon": "hexagon",
 }
-HEADER_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
-del HEADER_SHAPE_LABELS["No container"]
-del HEADER_SHAPE_LABELS["Circle"]
-del HEADER_SHAPE_LABELS["Independent ends"]
-header_shapes = list(HEADER_SHAPE_LABELS.items())
-header_shapes.insert(3, ("Independent long edges", "custom_long_edges"))
-HEADER_SHAPE_LABELS = dict(header_shapes)
+# Connector overlays are functional PCB annotation, not decorative labels.
+# Keep their choices intentionally small so every option has predictable
+# clearance and vertex geometry.  The renderer still understands historical
+# asymmetric shapes when reopening existing boards.
+HEADER_SHAPE_LABELS = {
+    "Rectangle": "rectangle",
+    "Rounded rectangle": "rounded_rectangle",
+    "Pill": "pill",
+}
 COMPONENT_SHAPE_LABELS = dict(LABEL_SHAPE_LABELS)
 del COMPONENT_SHAPE_LABELS["No container"]
 VARIANT_LABELS = ("Inverted fill", "Outline")

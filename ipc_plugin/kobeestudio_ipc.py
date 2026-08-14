@@ -32,6 +32,7 @@ if os.environ.get("KOBEE_USE_LEGACY_EDITOR"):
     from kobeestudio.ui.main_dialog import MainDialog
 else:
     from kobeestudio.ui.editor_v2 import MainDialog
+from kobeestudio.ui.single_instance import StudioWindowSingleton
 
 BRAND_ICON = next(
     (
@@ -62,13 +63,18 @@ def main(startup_action=None) -> int:
     _trace("wx app created")
     configure_application_branding(app, BRAND_ICON)
     session = None
+    singleton = None
     try:
+        config_dir = Path(wx.StandardPaths.Get().GetUserConfigDir()) / "kobee-studio"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        singleton = StudioWindowSingleton(config_dir)
+        if not singleton.acquire_or_activate():
+            _trace("existing Studio window focused")
+            return 0
         session = IpcSession.connect(client_name=unique_client_name())
         _trace("IPC connected")
         placement = IpcArtworkPlacement(session)
         pending_move = None
-        config_dir = Path(wx.StandardPaths.Get().GetUserConfigDir()) / "kobee-studio"
-        config_dir.mkdir(parents=True, exist_ok=True)
 
         def place(dialog, _buzzard):
             nonlocal pending_move
@@ -140,6 +146,17 @@ def main(startup_action=None) -> int:
             _trace("editor constructed")
             configure_window_branding(dialog, BRAND_ICON, wx)
             app.SetTopWindow(dialog)
+            def focus_existing_dialog():
+                if not dialog or dialog.IsBeingDeleted():
+                    return
+                if dialog.IsIconized():
+                    dialog.Iconize(False)
+                dialog.Show(True)
+                dialog.Raise()
+                dialog.SetFocus()
+                dialog.RequestUserAttention(wx.USER_ATTENTION_INFO)
+
+            singleton.attach(lambda: wx.CallAfter(focus_existing_dialog))
             _trace("showing editor")
             try:
                 if startup_action == "add-designator":
@@ -175,6 +192,8 @@ def main(startup_action=None) -> int:
     finally:
         if session is not None:
             session.close()
+        if singleton is not None:
+            singleton.release()
     return 0
 
 

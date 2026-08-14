@@ -1579,6 +1579,11 @@ class ToolPage(wx.Panel):
             if self.mode == "2.54 mm Pin Header"
             else "Independent ends"
         )
+        # Connector overlays deliberately use only the three robust enclosure
+        # types in HEADER_SHAPE_LABELS.  Existing asymmetric payloads still
+        # render, but are normalised to a rounded rectangle when edited.
+        if self.mode == "2.54 mm Pin Header":
+            special_shape = None
         base_shapes = tuple(shape for shape in shapes if shape != special_shape)
         self._container_special_shape = special_shape if special_shape in shapes else None
         self._last_standard_shape = "Rounded rectangle"
@@ -2610,6 +2615,8 @@ class ToolPage(wx.Panel):
                 else ("Left", "Right")
             )
         saved_shape = str(settings.get("ShapeChoice", ""))
+        if self.mode == "2.54 mm Pin Header" and saved_shape not in HEADER_SHAPE_LABELS:
+            saved_shape = "Rounded rectangle"
         special_shape = getattr(self, "_container_special_shape", None)
         if special_shape and "IndependentEdgesChoice" in self.controls:
             independent = saved_shape == special_shape
