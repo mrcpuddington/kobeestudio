@@ -1192,6 +1192,63 @@ class ToolPage(wx.Panel):
         self._active_parent = card
         return card.body
 
+    def _cleanup_example(self, parent, title, filename):
+        """Return a labelled, bounded before/after reference image box."""
+        frame = wx.StaticBox(parent, label=title)
+        sizer = wx.StaticBoxSizer(frame, wx.VERTICAL)
+        image_path = Path(__file__).resolve().parents[1] / "resources" / "ReferenceImages" / filename
+        try:
+            image = wx.Image(str(image_path), wx.BITMAP_TYPE_PNG)
+            if not image.IsOk():
+                raise ValueError("invalid image")
+            scale = min(220 / image.GetWidth(), 145 / image.GetHeight(), 1.0)
+            image = image.Scale(
+                max(1, round(image.GetWidth() * scale)),
+                max(1, round(image.GetHeight() * scale)),
+                wx.IMAGE_QUALITY_HIGH,
+            )
+            preview = wx.StaticBitmap(frame, bitmap=wx.Bitmap(image))
+            sizer.Add(preview, 0, wx.ALIGN_CENTER | wx.ALL, 7)
+        except Exception:
+            # Keep the cleanup action usable even if a hand-edited package is
+            # missing its optional explanatory artwork.
+            sizer.Add(wx.StaticText(frame, label="Example image unavailable"), 0, wx.ALL, 12)
+        return sizer
+
+    def _add_cleanup_operation(self, box, title, description, operation, before_image, after_image):
+        """Build one clear cleanup row with actions and visual consequences."""
+        heading = wx.StaticText(self._active_parent, label=title)
+        heading.SetFont(heading.GetFont().Bold())
+        box.Add(heading, 0, wx.TOP | wx.BOTTOM, 3)
+        note = wx.StaticText(self._active_parent, label=description)
+        note.Wrap(540)
+        box.Add(note, 0, wx.EXPAND | wx.BOTTOM, 8)
+        actions = wx.BoxSizer(wx.HORIZONTAL)
+        actions.Add(
+            KobeeAction(
+                self._active_parent,
+                "Selected footprints",
+                lambda: self.dialog.run_board_cleanup(operation, "selected"),
+                primary=True,
+            ),
+            0,
+            wx.RIGHT,
+            7,
+        )
+        actions.Add(
+            KobeeAction(
+                self._active_parent,
+                "Whole board",
+                lambda: self.dialog.run_board_cleanup(operation, "board"),
+            ),
+            0,
+        )
+        box.Add(actions, 0, wx.EXPAND | wx.BOTTOM, 8)
+        examples = wx.BoxSizer(wx.HORIZONTAL)
+        examples.Add(self._cleanup_example(self._active_parent, "Before", before_image), 1, wx.EXPAND | wx.RIGHT, 6)
+        examples.Add(self._cleanup_example(self._active_parent, "After", after_image), 1, wx.EXPAND | wx.LEFT, 6)
+        box.Add(examples, 0, wx.EXPAND | wx.BOTTOM, 12)
+
     def _desired_card_columns(self):
         # Cards belong to explicit sidebar sections. One focused card per
         # section keeps the settings readable without stealing preview width.
@@ -2005,8 +2062,22 @@ class ToolPage(wx.Panel):
                 box.Add(wx.StaticText(self._active_parent, label="Open Kobee Studio from KiCad PCB Editor to use board tools."), 0, wx.ALL, 8)
             elif self.label == "Cleanup":
                 box.Add(wx.StaticText(self._active_parent, label="Safely update selected footprints or the whole board in one undoable KiCad operation."), 0, wx.BOTTOM, 12)
-                for title, callback in (("Remove designators from selected", lambda: self.dialog.run_board_cleanup("designators", "selected")), ("Remove silkscreen from selected", lambda: self.dialog.run_board_cleanup("silkscreen", "selected")), ("Remove designators from whole board", lambda: self.dialog.run_board_cleanup("designators", "board")), ("Remove silkscreen from whole board", lambda: self.dialog.run_board_cleanup("silkscreen", "board"))):
-                    box.Add(KobeeAction(self._active_parent, title, callback), 0, wx.EXPAND | wx.BOTTOM, 7)
+                self._add_cleanup_operation(
+                    box,
+                    "Remove designators",
+                    "Hide native reference fields and remove linked Kobee designator labels. Component silkscreen remains unchanged.",
+                    "designators",
+                    "RemoveDesignatorBefore.png",
+                    "RemoveDesignatorAfter.png",
+                )
+                self._add_cleanup_operation(
+                    box,
+                    "Remove silkscreen",
+                    "Remove component graphics and free text on front and back silk. Existing Kobee designator labels are preserved.",
+                    "silkscreen",
+                    "RemoveSilkscreenBefore.png",
+                    "RemoveSilkscreenAfter.png",
+                )
             else:
                 box.Add(wx.StaticText(self._active_parent, label="Create styled labels from footprint references at their existing anchors."), 0, wx.BOTTOM, 12)
                 grid = self._grid(box)

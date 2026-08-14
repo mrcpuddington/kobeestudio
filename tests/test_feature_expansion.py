@@ -271,6 +271,22 @@ class BoardToolsTests(unittest.TestCase):
         self.assertFalse(footprint.datasheet_field.visible); self.assertFalse(footprint.description_field.visible)
         self.assertEqual(("url","part"),(footprint.datasheet_field.text.value,footprint.description_field.text.value))
 
+    def test_silkscreen_cleanup_preserves_linked_designator_artwork(self):
+        footprint = _Footprint()
+        designator = BoardShape("F.SilkS")
+        designator.id = type("Id", (), {"value": "kobee-designator"})()
+        metadata = _Field(DESIGNATOR_METADATA_FIELD_NAME, "", "F.SilkS")
+        metadata.text.value = encode_metadata(
+            {"feature": {"kind": "designator_label", "embedded_item_ids": ["kobee-designator"]}}
+        )
+        component_mark = BoardShape("F.SilkS")
+        footprint.definition.items.extend((designator, metadata, component_mark))
+        result = BoardToolsService(_Session(_Board([footprint]))).remove_silkscreen("board")
+        self.assertIn(designator, footprint.definition.items)
+        self.assertIn(metadata, footprint.definition.items)
+        self.assertNotIn(component_mark, footprint.definition.items)
+        self.assertEqual(3, result.removed_items)
+
     def test_partial_ipc_update_rolls_back_instead_of_committing(self):
         footprint=_Footprint(); board=_Board([footprint]); board.update_items=lambda items: []
         with self.assertRaisesRegex(RuntimeError,"rolled back"):

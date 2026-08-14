@@ -120,6 +120,10 @@ class BoardToolsService:
         if not footprints: return BoardToolResult(0, skipped)
         front, back = self._silk_layers(); silk_layers = {front, back, "F.SilkS", "B.SilkS"}; removed = 0
         for footprint in footprints:
+            # Keep legacy embedded designators as well as the new movable
+            # designator footprints.  Removing component silkscreen must not
+            # imply removal of a separately chosen reference marker.
+            embedded_designator_ids = set(_embedded_designator_ids(footprint))
             semantic_fields = tuple(
                 field for field in (
                     getattr(footprint, "reference_field", None), getattr(footprint, "value_field", None),
@@ -131,7 +135,11 @@ class BoardToolsService:
             retained = []
             for item in footprint.definition.items:
                 if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME:
-                    removed += 1
+                    retained.append(item)
+                    continue
+                item_id = str(getattr(getattr(item, "id", None), "value", ""))
+                if item_id and item_id in embedded_designator_ids:
+                    retained.append(item)
                     continue
                 if getattr(item, "layer", None) not in silk_layers: retained.append(item); continue
                 if hasattr(item, "visible") and hasattr(item, "name"):

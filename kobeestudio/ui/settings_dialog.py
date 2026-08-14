@@ -28,6 +28,7 @@ from ..version import __version__
 from .theme import apply_native_theme, is_dark_mode
 from .themed_controls import (
     ThemedActionButton,
+    ThemedCheckBox,
     ThemedChoice,
     ThemedListBox,
     ThemedSpinCtrl,
@@ -597,7 +598,10 @@ class SettingsDialog(wx.Dialog):
         self.font_search.SetDescriptiveText("Type a family name")
         self.font_search.Bind(wx.EVT_TEXT, lambda event: self._refresh_font_catalog())
         catalog_col.Add(self.font_search, 0, wx.EXPAND | wx.BOTTOM, 7)
-        self.font_symbol_filter = wx.CheckBox(
+        # wx's native Cocoa checkbox can retain a white label after the
+        # surrounding dialog changes appearance.  Use the painted control so
+        # this important filter remains legible in both light and dark modes.
+        self.font_symbol_filter = ThemedCheckBox(
             self.fonts_page,
             label="Likely to include Ω / math symbols (Google tags)",
         )

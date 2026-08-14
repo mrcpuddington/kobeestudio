@@ -166,7 +166,12 @@ class _MinimalPlacement(IpcArtworkPlacement):
         return {"Field": _FakeField, "BoardLayer": _FakeBoardLayer}
 
     def build_footprint(self, artwork, payload, output_layer, output_layers=None):
-        return _PlacedFootprint()
+        footprint = _PlacedFootprint()
+        metadata = _FakeField()
+        metadata.name = METADATA_FIELD_NAME
+        metadata.text.value = encode_metadata(payload or {})
+        footprint.definition.items.append(metadata)
+        return footprint
 
     @staticmethod
     def _angle_from_degrees(value):
@@ -259,6 +264,15 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn('("labels", "Connector Overlay", "2.54 mm Pin Header")', source)
         self.assertIn('("graphics", "Imported Graphic", "Imported Graphic")', source)
         self.assertIn('("board_tools", "Cleanup", "Board Tools")', source)
+        self.assertIn('"Remove designators"', source)
+        self.assertIn('"Remove silkscreen"', source)
+        self.assertIn('"RemoveDesignatorBefore.png"', source)
+        self.assertIn('"RemoveSilkscreenAfter.png"', source)
+        for filename in (
+            "RemoveDesignatorBefore.png", "RemoveDesignatorAfter.png",
+            "RemoveSilkscreenBefore.png", "RemoveSilkscreenAfter.png",
+        ):
+            self.assertTrue((ROOT / "kobeestudio/resources/ReferenceImages" / filename).is_file())
         self.assertIn('("labels", "Component Callout", "Component Callout")', source)
         self.assertIn('("labels", "Component Array", "Component Array")', source)
         self.assertIn('("codes", "QR Code", "QR / Barcode")', source)
@@ -640,20 +654,59 @@ class IpcMigrationTests(unittest.TestCase):
         session = IpcSession.connect(
             environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"}, client_factory=_Client,
         )
+        source = Source()
         existing = _PlacedFootprint("existing-designator", "existing-definition")
-        created, updated = _MinimalPlacement(session).place_designators(((Source(),artwork,{},"F.SilkS",existing),))
-        placed = session.board.updated[0][0]
+        existing.position = "manually-moved-position"
+        existing.orientation = "manually-rotated-orientation"
+        created, updated = _MinimalPlacement(session).place_designators((
+            (source, artwork, {"feature": {"kind": "designator_label"}}, "F.SilkS", existing),
+        ))
+        placed = session.board.updated[1][0]
         self.assertEqual((0,1),(created,updated))
-        metadata = next(item for item in placed.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME)
+        metadata = next(item for item in placed.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME)
         feature = decode_metadata(metadata.text.value)["feature"]
-        generated_ids = set(feature["embedded_item_ids"])
-        self.assertTrue(generated_ids)
-        self.assertTrue(generated_ids.issubset({getattr(getattr(item,"id",None),"value","") for item in placed.definition.items}))
-        self.assertFalse(Source.reference_field.visible)
+        self.assertEqual("designator_label", feature["kind"])
+        self.assertFalse(source.reference_field.visible)
+        self.assertEqual("existing-designator", placed.id.value)
+        self.assertIsNot(source, placed)
+        self.assertEqual("manually-moved-position", placed.position)
+        self.assertEqual("manually-rotated-orientation", placed.orientation)
         pushes=[item for item in session.board.messages if item[0]=="push"]
         self.assertEqual(1,len(pushes))
         self.assertEqual("Create or update Kobee Studio designators", pushes[0][2])
-        self.assertIn(("remove", [existing]), session.board.messages)
+        self.assertNotIn(("remove", [existing]), session.board.messages)
+
+    def test_new_designator_is_a_separate_movable_footprint(self):
+        class Attributes: angle = 32.5
+        class Text:
+            position = "native-reference-position"
+            attributes = Attributes()
+        class Field:
+            text = Text(); visible = True
+        class Source:
+            reference_field = Field(); definition = _FakeDefinition("source-definition")
+        artwork = StudioArtwork(
+            filled_polygons=((Point(0,0),Point(1,0),Point(0,1)),), strokes=(), guides=(),
+            document=CompositionDocument(objects=()),
+        )
+        session = IpcSession.connect(
+            environ={"KICAD_API_SOCKET":"/tmp/api.sock","KICAD_API_TOKEN":"secret"}, client_factory=_Client,
+        )
+        source = Source()
+        created, updated = _MinimalPlacement(session).place_designators((
+            (source, artwork, {"feature": {"kind": "designator_label"}}, "F.SilkS", None),
+        ))
+        movable = session.board.created[0][0]
+        self.assertEqual((1, 0), (created, updated))
+        self.assertIsNot(source, movable)
+        self.assertEqual("native-reference-position", movable.position)
+        self.assertFalse(source.reference_field.visible)
+        self.assertFalse(any(
+            getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME
+            for item in source.definition.items
+        ))
+        metadata = next(item for item in movable.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME)
+        self.assertEqual("designator_label", decode_metadata(metadata.text.value)["feature"]["kind"])
 
     def test_designator_verification_failure_never_hides_native_reference(self):
         class Attributes: angle = 0
@@ -700,27 +753,24 @@ class IpcMigrationTests(unittest.TestCase):
         created, updated = IpcArtworkPlacement(session).place_designators(
             ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", None),)
         )
-        generated = session.board.updated[0][0]
+        generated = session.board.created[0][0]
         self.assertEqual((1, 0), (created, updated))
         shapes = generated.definition.shapes
         self.assertTrue(shapes)
         points = shapes[0].polygons[0].outline
         self.assertAlmostEqual(42.0, to_mm(sum(node.point.x for node in points) / len(points)), places=1)
         self.assertAlmostEqual(27.5, to_mm(sum(node.point.y for node in points) / len(points)), places=1)
-        metadata = next(item for item in generated.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME)
-        first_ids = set(decode_metadata(metadata.text.value)["feature"]["embedded_item_ids"])
+        metadata = next(item for item in generated.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME)
+        self.assertEqual("designator_label", decode_metadata(metadata.text.value)["feature"]["kind"])
         self.assertFalse(source.reference_field.visible)
 
         created, updated = IpcArtworkPlacement(session).place_designators(
-            ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", None),)
+            ((source, artwork, {"feature":{"kind":"designator_label"}}, "F.SilkS", generated),)
         )
         self.assertEqual((0, 1), (created, updated))
-        metadata_items = [item for item in source.definition.items if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME]
-        self.assertEqual(1, len(metadata_items))
-        second_ids = set(decode_metadata(metadata_items[0].text.value)["feature"]["embedded_item_ids"])
-        self.assertTrue(second_ids)
-        self.assertTrue(first_ids.isdisjoint(second_ids))
-        self.assertEqual(1, len(source.definition.shapes))
+        refreshed = session.board.updated[-1][0]
+        self.assertEqual(generated.id.value, refreshed.id.value)
+        self.assertFalse(source.reference_field.visible)
 
     def test_partial_designator_creation_discards_transaction(self):
         class Attributes: angle = 0

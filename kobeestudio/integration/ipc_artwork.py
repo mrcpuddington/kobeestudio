@@ -466,17 +466,16 @@ class IpcArtworkPlacement:
         return Angle.from_degrees(float(value))
 
     def place_designators(self, records: Sequence[Tuple[Any, StudioArtwork, Mapping[str, Any], str, Optional[Any]]]):
-        """Embed styled designators and hide native fields in one transaction.
+        """Create movable designator footprints while atomically hiding references.
 
-        A separately-created footprint can be accepted by one IPC commit and
-        disappear before a later source-footprint update hides the semantic
-        reference.  Embedding the polygons in the source footprint makes the
-        replacement geometry and visibility change one indivisible update.
+        A designator is deliberately a separate Kobee footprint: after it is
+        created the PCB user can move or rotate it independently of its source
+        component.  The source link in its metadata keeps reruns idempotent.
+        Earlier releases embedded geometry in the source footprint; that data
+        is removed as a one-time migration during the same undoable commit.
         """
-        api = self._api()
-        sources = []
+        plans = []
         originals = []
-        obsolete_footprints = []
         created_count = 0
         updated_count = 0
         for source, artwork, payload, output_layer, existing in records:
@@ -489,92 +488,90 @@ class IpcArtworkPlacement:
                 ),
                 None,
             )
-            prior_ids = set()
+            embedded_ids = set()
             if embedded_metadata is not None:
                 try:
                     prior_payload = decode_metadata(embedded_metadata.text.value)
                     prior_feature = prior_payload.get("feature", {})
                     if isinstance(prior_feature, Mapping):
-                        prior_ids.update(str(value) for value in prior_feature.get("embedded_item_ids", ()))
+                        embedded_ids.update(str(value) for value in prior_feature.get("embedded_item_ids", ()))
                 except Exception:
                     pass
-
             retained = [
                 item for item in original_items
                 if getattr(item, "name", "") != DESIGNATOR_METADATA_FIELD_NAME
-                and str(getattr(getattr(item, "id", None), "value", "")) not in prior_ids
+                and str(getattr(getattr(item, "id", None), "value", "")) not in embedded_ids
             ]
             generated = self.build_footprint(artwork, payload, output_layer)
-            generated.position = source.reference_field.text.position
-            generated.orientation = self._angle_from_degrees(
-                source.reference_field.text.attributes.angle
-            )
             visible_items = [
                 item for item in generated.definition.items
                 if getattr(item, "name", "") != METADATA_FIELD_NAME
             ]
             if not visible_items:
                 raise RuntimeError("The designator renderer produced no visible geometry")
-            embedded_ids = []
-            for item in visible_items:
-                identifier = getattr(item, "id", None)
-                if identifier is None or not hasattr(identifier, "value"):
-                    raise RuntimeError("KiCad cannot identify generated designator geometry")
-                identifier.value = str(uuid.uuid4())
-                embedded_ids.append(identifier.value)
-
-            embedded_payload = dict(payload)
-            embedded_feature = dict(embedded_payload.get("feature", {}))
-            embedded_feature["embedded_item_ids"] = embedded_ids
-            embedded_payload["feature"] = embedded_feature
-            metadata = api["Field"]()
-            metadata.name = DESIGNATOR_METADATA_FIELD_NAME
-            metadata.layer = self._layer(api, output_layer)
-            metadata.text.value = encode_metadata(embedded_payload)
-            metadata.text.id.value = str(uuid.uuid4())
-            metadata.visible = False
-
-            source.definition.items = retained + visible_items + [metadata]
-            source.reference_field.visible = False
-            sources.append(source)
-            originals.append((source, original_items, original_visibility))
-            if embedded_metadata is None and existing is None:
-                created_count += 1
+            if existing is None:
+                generated.position = source.reference_field.text.position
+                generated.orientation = self._angle_from_degrees(
+                    source.reference_field.text.attributes.angle
+                )
+                created_count += 1 if embedded_metadata is None else 0
+                updated_count += 1 if embedded_metadata is not None else 0
             else:
+                # Keep any manual PCB placement when refreshing a designator's
+                # artwork; the source reference supplies the initial anchor.
+                try:
+                    generated.definition.proto.id.CopyFrom(existing.definition.proto.id)
+                except Exception:
+                    pass
+                generated.position = existing.position
+                generated.orientation = existing.orientation
+                generated.proto.id.CopyFrom(existing.id)
+                try:
+                    generated.locked = existing.locked
+                except Exception:
+                    pass
                 updated_count += 1
-            if existing is not None:
-                obsolete_footprints.append(existing)
+            plans.append((source, generated, existing, retained))
+            originals.append((source, original_items, original_visibility))
 
+        sources = tuple(source for source, _generated, _existing, _retained in plans)
+        for source, _generated, _existing, retained in plans:
+            source.definition.items = retained
+            source.reference_field.visible = False
+        new_designators = tuple(generated for _source, generated, existing, _retained in plans if existing is None)
+        updated_designators = tuple(generated for _source, generated, existing, _retained in plans if existing is not None)
         transaction = self.session.begin_commit()
         try:
             updated_sources = tuple(self.session.board.update_items(sources) or ())
             if len(updated_sources) != len(sources):
                 raise RuntimeError("KiCad did not update every selected footprint")
-            for updated_source in updated_sources:
+            created = tuple(self.session.board.create_items(new_designators) or ()) if new_designators else ()
+            if len(created) != len(new_designators):
+                raise RuntimeError("KiCad did not create every designator footprint")
+            updated = tuple(self.session.board.update_items(updated_designators) or ()) if updated_designators else ()
+            if len(updated) != len(updated_designators):
+                raise RuntimeError("KiCad did not update every designator footprint")
+            created_iter = iter(created)
+            updated_iter = iter(updated)
+            placed_by_plan = tuple(
+                (next(updated_iter) if existing is not None else next(created_iter), source)
+                for source, _generated, existing, _retained in plans
+            )
+            for placed, source in placed_by_plan:
                 metadata = next(
                     (
-                        item for item in getattr(updated_source.definition, "items", ())
-                        if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME
+                        item for item in getattr(placed.definition, "items", ())
+                        if getattr(item, "name", "") == METADATA_FIELD_NAME
                     ),
                     None,
                 )
                 if metadata is None:
-                    raise RuntimeError("KiCad dropped the designator metadata")
-                verified_payload = decode_metadata(metadata.text.value)
-                feature = verified_payload.get("feature", {})
-                expected_ids = {
-                    str(value) for value in feature.get("embedded_item_ids", ())
-                } if isinstance(feature, Mapping) else set()
-                actual_ids = {
-                    str(getattr(getattr(item, "id", None), "value", ""))
-                    for item in getattr(updated_source.definition, "items", ())
-                }
-                if not expected_ids or not expected_ids.issubset(actual_ids):
-                    raise RuntimeError("KiCad dropped the generated designator geometry")
-                if bool(updated_source.reference_field.visible):
+                    raise RuntimeError("KiCad dropped the movable designator metadata")
+                feature = decode_metadata(metadata.text.value).get("feature", {})
+                if not isinstance(feature, Mapping) or feature.get("kind") != "designator_label":
+                    raise RuntimeError("KiCad dropped the movable designator source link")
+                if bool(source.reference_field.visible):
                     raise RuntimeError("KiCad did not hide the native reference")
-            if obsolete_footprints:
-                self.session.board.remove_items(obsolete_footprints)
             self.session.commit(transaction, "Create or update Kobee Studio designators")
         except Exception as error:
             for source, items, visible in originals:
