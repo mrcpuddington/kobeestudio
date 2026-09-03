@@ -38,6 +38,7 @@ ORIENTATIONS = ("horizontal", "vertical")
 PIN1_ENDS = ("start", "end")
 LABEL_SIDES = ("above", "below", "left", "right")
 OPENING_MODES = ("none", "continuous", "individual")
+OPENING_SHAPES = ("rounded_rectangle", "pill")
 PIN_LABEL_CLEARANCE_MM = 0.20
 
 
@@ -76,6 +77,8 @@ class PinHeaderSpec:
     label_outer_padding_mm: Optional[float] = None
     rail_cross_size_mm: float = 0.0
     opening_mode: str = "none"
+    opening_shape: str = "pill"
+    opening_corner_radius_mm: float = 0.5
     opening_end_padding_mm: float = 0.0
     pin1_marker: bool = True
     shape: str = "rounded_rectangle"
@@ -98,10 +101,18 @@ class PinHeaderSpec:
             "leading_padding_mm",
             "trailing_padding_mm",
             "label_padding_mm",
-            "opening_end_padding_mm",
             "rail_cross_size_mm",
         ):
             _non_negative(name, getattr(self, name))
+        if not math.isfinite(float(self.opening_end_padding_mm)):
+            raise ValueError("opening_end_padding_mm must be finite")
+        if (
+            (self.pin_count - 1) * self.pitch_mm
+            + self.pad_clearance_mm
+            + 2.0 * self.opening_end_padding_mm
+            <= 0
+        ):
+            raise ValueError("opening_end_padding_mm leaves no valid connector opening")
         # New controls are deliberately optional in the serialized model so
         # every existing header keeps its former geometry on reopen.
         for name in (
@@ -132,6 +143,9 @@ class PinHeaderSpec:
             raise ValueError("Vertical headers require labels left or right")
         if self.opening_mode not in OPENING_MODES:
             raise ValueError("Unsupported connector opening: {}".format(self.opening_mode))
+        if self.opening_shape not in OPENING_SHAPES:
+            raise ValueError("Unsupported connector opening shape: {}".format(self.opening_shape))
+        _non_negative("opening_corner_radius_mm", self.opening_corner_radius_mm)
         if self.opening_mode == "individual" and self.pad_clearance_mm > self.pitch_mm:
             raise ValueError(
                 "Individual pin openings cannot be wider than the pitch; use a continuous opening"
@@ -166,6 +180,8 @@ class PinHeaderSpec:
             "label_outer_padding_mm": self.label_outer_padding_mm,
             "rail_cross_size_mm": self.rail_cross_size_mm,
             "opening_mode": self.opening_mode,
+            "opening_shape": self.opening_shape,
+            "opening_corner_radius_mm": self.opening_corner_radius_mm,
             "opening_end_padding_mm": self.opening_end_padding_mm,
             "pin1_marker": self.pin1_marker,
             "shape": self.shape,
@@ -202,6 +218,11 @@ class PinHeaderSpec:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "PinHeaderSpec":
+        opening_shape = str(data.get("opening_shape", "pill"))
+        opening_corner_radius_mm = float(data.get("opening_corner_radius_mm", 0.5))
+        if opening_shape == "rectangle":
+            opening_shape = "rounded_rectangle"
+            opening_corner_radius_mm = 0.0
         style_data = data.get("style", {})
         typography_data = style_data.get("typography", {})
         shape_data = style_data.get("shape", {})
@@ -260,6 +281,8 @@ class PinHeaderSpec:
             rail_cross_size_mm=float(data.get("rail_cross_size_mm", 0.0)),
             # Existing 0.3.0-dev headers always used a continuous opening.
             opening_mode=str(data.get("opening_mode", "continuous")),
+            opening_shape=opening_shape,
+            opening_corner_radius_mm=opening_corner_radius_mm,
             opening_end_padding_mm=float(data.get("opening_end_padding_mm", 0.0)),
             pin1_marker=bool(data.get("pin1_marker", True)),
             shape=str(data.get("shape", "rounded_rectangle")),
@@ -442,20 +465,24 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
         maximum_end_padding = (
             spec.trailing_padding_mm if direction > 0 else spec.leading_padding_mm
         )
-        axis_min = min(
-            axis_min,
+        opening_axis_min = (
             min(axis_values)
             - clearance_radius
+            - minimum_end_padding
             - spec.opening_end_padding_mm
-            - minimum_end_padding,
         )
-        axis_max = max(
-            axis_max,
+        opening_axis_max = (
             max(axis_values)
             + clearance_radius
+            + maximum_end_padding
             + spec.opening_end_padding_mm
-            + maximum_end_padding,
         )
+        if spec.opening_end_padding_mm >= 0:
+            axis_min = min(axis_min, opening_axis_min)
+            axis_max = max(axis_max, opening_axis_max)
+        else:
+            axis_min = max(axis_min, opening_axis_min)
+            axis_max = min(axis_max, opening_axis_max)
     for centre, label_axis_size in zip(axis_values, label_axis_sizes):
         axis_min = min(axis_min, centre - label_axis_size / 2.0 - spec.label_padding_mm)
         axis_max = max(axis_max, centre + label_axis_size / 2.0 + spec.label_padding_mm)
@@ -593,7 +620,30 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
         translation=rail_centre,
     )
     rail_min, rail_max = polygon_bounds((rail.regions[0].outer,))
-    guides = tuple(_circle(centre, spec.pad_clearance_mm) for centre in pin_centres)
+    opening_style = replace(
+        spec.style.shape,
+        padding=Padding(),
+        filled=True,
+        inverted=False,
+        border_thickness_mm=0.0,
+        corner_radius_mm=spec.opening_corner_radius_mm,
+    )
+
+    def opening_at(centre: Point, size: Size) -> Polygon:
+        opening = render_shape(
+            ShapeObject("header.connector-opening", shape=spec.opening_shape, size=size),
+            opening_style,
+        )
+        return transform_geometry(
+            opening,
+            FRONT_SILKSCREEN,
+            translation=centre,
+        ).regions[0].outer
+
+    guides = tuple(
+        opening_at(centre, Size(spec.pad_clearance_mm, spec.pad_clearance_mm))
+        for centre in pin_centres
+    )
     keepout_axis_min = min(axis_values) - clearance_radius - spec.opening_end_padding_mm
     keepout_axis_max = max(axis_values) + clearance_radius + spec.opening_end_padding_mm
     keepout_axis_size = keepout_axis_max - keepout_axis_min
@@ -604,13 +654,16 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
     else:
         keepout_size = Size(spec.pad_clearance_mm, keepout_axis_size)
         keepout_centre = Point(0.0, keepout_axis_centre)
-    keepout_object = ShapeObject("header.connector-keepout", shape="pill", size=keepout_size)
+    keepout_object = ShapeObject(
+        "header.connector-keepout", shape=spec.opening_shape, size=keepout_size
+    )
     keepout_style = replace(
         spec.style.shape,
         padding=Padding(),
         filled=True,
         inverted=False,
         border_thickness_mm=0.0,
+        corner_radius_mm=spec.opening_corner_radius_mm,
     )
     keepout_geometry = render_shape(keepout_object, keepout_style)
     keepout_geometry = transform_geometry(
