@@ -2088,6 +2088,13 @@ class StudioEditorDialog(wx.Dialog):
         defaults = mode_defaults("Label")
         defaults.update(DEFAULT_LABEL_DIMENSIONS)
         defaults["LayerComboBox"] = FRONT_SILKSCREEN
+        connector_labels = self._selected_connector_labels()
+        if connector_labels:
+            header_defaults = mode_defaults("2.54 mm Pin Header")
+            header_defaults["MultiLineText"] = "\n".join(connector_labels)
+            header_defaults["HeaderPinCountCtrl"] = len(connector_labels)
+            header_defaults["LayerComboBox"] = FRONT_SILKSCREEN
+            return header_defaults, None
         try:
             profile = self.profile_store.load("labels")
             defaults.update(profile.settings)
@@ -2095,6 +2102,24 @@ class StudioEditorDialog(wx.Dialog):
         except (LookupError, OSError, TypeError, ValueError, json.JSONDecodeError):
             pass
         return defaults, None
+
+    def _selected_connector_labels(self):
+        """Pin labels from a single selected connector, or None.
+
+        A wired connector already carries a net name on every pad, so retyping
+        them into the header overlay is busywork.  Selecting the connector and
+        running the plugin now prefills the overlay instead of opening the label
+        tool with an empty canvas.
+        """
+        if self.editor_session is None:
+            return None
+        try:
+            from ..integration.ipc_selection import selected_connector_labels
+
+            return selected_connector_labels(self.editor_session)
+        except Exception:
+            wx.LogError(traceback.format_exc())
+            return None
 
     @staticmethod
     def _normalise_loaded_settings(params):

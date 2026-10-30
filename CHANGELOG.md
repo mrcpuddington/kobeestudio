@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Prefilled the 2.54 mm pin header overlay from a selected connector: the editor now reads the pad numbers and net names of the selected header and starts with one label per pin instead of an empty label page. Pads without a net fall back to `Pin N`, and Kobee artwork footprints still open as artwork edits.
+
 ## 1.4.1 - 2026-08-09
 
 - Hardened the KiCad 10 IPC editor on Windows by removing re-entrant control events and silencing renderer output that could block KiCad's captured process stream.
