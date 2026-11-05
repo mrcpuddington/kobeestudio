@@ -12,23 +12,22 @@
   <a href="#install-kobee-studio--kicad-10"><strong>↓ Skip to install instructions</strong></a>
 </p>
 
-> **Current status:** **Kobee Studio 1.4.1 is the current stable release**, tested with **KiCad 10 on macOS and Windows**. It uses KiCad's supported IPC plug-in method. Save your PCB before applying new artwork.
-> Linux uses the same plug-in package, but still needs full UI and artwork validation, so it is not recommended yet for anything critical. If you test on Linux, bug reports, screenshots, and board files are very welcome.
+> **1.5.x development:** The current development candidate is **1.5.20**, prepared for testing on **KiCad 10**. It adds font management, imported graphics and PNG tracing, flexible connector pitches, placement anchors, variable labels, Project Data and board tools. Read the [1.5.x update](https://coreybusuttil.com/blog/kobee-studio-1-5-20/) and [development manual](https://coreybusuttil.com/kobeestudio/docs/development/overview/).
+>
+> **Public install:** Kobee Studio is already in **KiCad's official plugin repository**. As checked on 5 November 2026, its newest version is **1.4.1 stable**. A development version number in this README is not a claim that a 1.5.x package is already published. Check PCM or [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases) for the available version.
+>
+> Stable 1.4.1 has macOS and Windows validation. The 1.5.20 development checks are on macOS; Windows/Linux visual acceptance and final fabrication-view checks remain. Save your PCB and use copies when testing development builds.
 
-## Quick install
+## Quick install — official KiCad repository
 
-Install the stable release through KiCad's Plugin and Content Manager:
+1. From KiCad's main Project Manager window, open **Plugin and Content Manager**.
+2. Select **KiCad official repository**, choose **Refresh**, and search for **Kobee Studio**.
+3. Select the offered compatible version, choose **Install**, then **Apply Pending Changes**.
+4. Open a saved board in PCB Editor and launch **Tools → External Plugins → Kobee Studio: Create PCB Artwork**.
 
-```text
-https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/main/repository.json
-```
+**No custom repository URL is required for the preferred route.** If the default repository was removed, use **Manage… → + menu → Add Default Repository**. Check the actual version table: 1.4.1 is currently stable; 1.5.x publication is separate.
 
-1. Copy the stable repository URL above.
-2. In KiCad, open **Plugin and Content Manager → Manage repositories**, choose **Add**, paste the URL, and save.
-3. Refresh the catalogue, find **Kobee Studio 1.4.1**, and choose **Install**.
-
-For troubleshooting, ZIP installation, testing builds and platform details, see
-the [full installation instructions](#install-kobee-studio--kicad-10).
+The [complete install guide](https://coreybusuttil.com/kobeestudio/docs/getting-started/install/) also covers optional custom stable/testing catalogues, release ZIPs, updates and troubleshooting.
 
 If you want the backstory, I wrote a short post about outgrowing KiBuzzard and
 starting Kobee Studio: [I outgrew KiBuzzard, so I built a KiCad PCB graphics plugin](https://kobee.com.au/news/i-outgrew-kibuzzard-kobee-studio).
@@ -48,11 +47,25 @@ arrays, connector overlays, machine-readable codes and multilayer artwork.
 
 ## Why?
 
-The goal of **Kobee Studio** is to create a complete toolkit for PCB graphics, bringing together text, labels, icons, connector overlays, branding, artwork and reusable design systems into a single, seamless workflow, all while keeping everything fully editable inside KiCad.
+I’m building Kobee Studio because I like making boards and want their labels, symbols and small visual details to be easier to make and revise.
 
-Kobee Studio began as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)** by Greg Davill, originally created to add features and workflow improvements I wanted for my own PCB design process. Since then, it has evolved far beyond its origins, with significant new functionality, much finer control over generated graphics, and support for KiCad's modern API, positioning it for KiCad 11 and beyond.
+It started as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)** by Greg Davill. That text-to-label workflow was a useful starting point; I kept building around connector legends, component callouts, machine-readable marks and reusable artwork. KiBuzzard deserves the credit for the foundation.
 
-The long-term vision is for Kobee Studio to become the go-to graphics toolkit for KiCad, a single plugin that provides everything needed to create beautiful, consistent and professional looking PCBs without leaving the editor.
+If you found this while looking for a KiBuzzard alternative, the [practical comparison](https://coreybusuttil.com/kobeestudio/docs/reference/kibuzzard-comparison/) explains the shared roots, differences and migration checks. A simple label workflow may already be enough for your boards.
+
+## What’s being developed in 1.5.x
+
+The reviewed 1.5.20 candidate includes:
+
+- System-font activation and searchable Google Fonts, face previews, offline reuse and missing-font repair.
+- Reusable SVG graphics, PNG tracing, transforms and personal/project libraries.
+- More connector pitches, component presets and nine placement anchors.
+- Independent underline/overline controls and optional subscript/superscript text formatting.
+- Project-variable templates, Project Data fields and revision checkpoints with explicit KiCad synchronization.
+- Styled designators and scoped board cleanup tools, with selection and undo checks.
+- Preview, geometry, placement and dialog-lifecycle hardening.
+
+These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md), the [development branch](https://github.com/mrcpuddington/kobeestudio/tree/DEV) and the [development manual](https://coreybusuttil.com/kobeestudio/docs/development/overview/) for scope and validation limits.
 
 ## What’s in 1.4.1
 
@@ -69,9 +82,9 @@ The long-term vision is for Kobee Studio to become the go-to graphics toolkit fo
 | QR codes and barcodes         | Generate fabrication-minded QR and Code 128 artwork with optional readable text.                       |
 | Layer control                 | Generate artwork on front/back silkscreen, copper and solder-mask layers.                              |
 
-Everything lands as an ordinary, editable KiCad footprint. Kobee Studio never changes the electrical footprint underneath it.
+Artwork tools generate ordinary, editable KiCad footprints separate from electrical components. Development Board Tools can explicitly alter native reference visibility or silkscreen; review their scope and use a board copy before applying them.
 
-Need a hand while you work? Use **Need help?** in the top-right of the editor to open the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs) for installation, tutorials and practical guidance.
+Need a hand? The [complete manual](https://coreybusuttil.com/kobeestudio/docs/) covers installation, artwork tools, settings and troubleshooting. The released app’s **Need help?** button also opens its documentation hub.
 
 ## Features
 
@@ -181,34 +194,31 @@ I've started to create a more robust **[Roadmap](https://github.com/mrcpuddingto
 
 Kobee Studio is a KiCad plugin, not a footprint library.
 
-### Preferred: install through KiCad PCM
+### Preferred: KiCad's official plugin repository
 
-The preferred installation method is KiCad's Plugin and Content Manager. It
-keeps the package metadata, updates and version history connected to the
-Kobee Studio catalogue.
+Kobee Studio is included in the official catalogue. From KiCad's main window, open **Plugin and Content Manager**, select **KiCad official repository**, refresh, find **Kobee Studio**, choose the offered version and **Install**, then **Apply Pending Changes**.
 
-1. Open KiCad's **Plugin and Content Manager**.
-2. Open **Manage repositories**, choose **Add**, and add the stable catalogue:
+There is no custom URL to paste for this route. The official version table lists each package's compatibility and channel. It currently offers **1.4.1 stable** as the newest version; a 1.5.x candidate must be published and pass the separate catalogue update process before it appears there.
 
-   ```text
-   https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/main/repository.json
-   ```
+### Alternative: custom stable catalogue
 
-3. Save the repository list and refresh the package catalogue.
-4. Find **Kobee Studio**, select version **1.4.1**, and choose **Install**.
+If you want to use the Kobee-maintained stable stream, add this optional URL through **Manage repositories → Add**, save and refresh:
 
-If you previously added an older Kobee Studio repository URL, remove it before
-adding the stable URL above. Keep the testing repository separate so stable
-users do not accidentally install development builds.
+```text
+https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/main/repository.json
+```
 
-To try current beta builds, add the testing catalogue using the same instructions:
+Choose the intended version, then install/update and apply pending changes. Avoid duplicate old manual installations or obsolete catalogue URLs that make it unclear which copy KiCad is loading.
+
+### Alternative: custom testing catalogue
+
+For deliberately selected testing builds, use:
 
 ```text
 https://raw.githubusercontent.com/mrcpuddington/mrcpuddington-kicad-repository/testing/repository.json
 ```
 
-The testing catalogue is intentionally a rolling channel and may contain
-pre-release builds that have not had the same validation as stable releases.
+Check the version and release notes actually offered. This is a rolling stream and is separate from the official repository; adding it does not create a package that has not been published yet.
 
 ### Other option: install the ZIP manually
 
@@ -219,7 +229,7 @@ Do not unzip it.
 
 1. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
 2. Select the downloaded ZIP and approve the install.
-3. Open a board in PCB Editor, then choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
+3. Apply pending changes if shown, then open a board in PCB Editor and choose **Tools → External Plugins → Kobee Studio: Create PCB Artwork**. The Kobee Studio toolbar button can also be enabled from PCB Editor's **Preferences/Settings → Action Plugins** page.
 
 If the toolbar button does not appear:
 
@@ -227,12 +237,12 @@ If the toolbar button does not appear:
 2. Open PCB Editor's **Preferences/Settings → Action Plugins** page and make sure **Show Button** is enabled for **Create PCB Artwork**.
 3. Use **Refresh Plugins**, then restart PCB Editor.
 
-More installation help is available in the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
+More installation help is available in the [Kobee Studio docs](https://coreybusuttil.com/kobeestudio/docs/).
 
 ### Testing releases
 
 Kobee Studio testing releases are built and published by the release workflow.
-Install them from the testing PCM repository or the attached release asset;
+When published, install them from the testing PCM repository or the matching attached release asset;
 there is no local package-build step for testers.
 
 ### Platform support
@@ -247,7 +257,7 @@ there is no local package-build step for testers.
 
 ## Help and contributing
 
-For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
+For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://coreybusuttil.com/kobeestudio/docs/).
 
 Bug reports, ideas and pull requests are always welcome through GitHub. If you build something cool with Kobee Studio, I'd genuinely love to see it.
 
