@@ -12,7 +12,7 @@
   <a href="#install-kobee-studio--kicad-10"><strong>↓ Skip to install instructions</strong></a>
 </p>
 
-> **1.5.x development:** The current development candidate is **1.5.20**, prepared for testing on **KiCad 10**. It adds font management, imported graphics and PNG tracing, flexible connector pitches, placement anchors, variable labels, Project Data and board tools. Read the [1.5.x update](https://coreybusuttil.com/blog/kobee-studio-1-5-20/) and [development manual](https://coreybusuttil.com/kobeestudio/docs/development/overview/).
+> **Upcoming 1.5 release:** The current candidate is **1.5.20**, prepared for testing on **KiCad 10**. It adds font management, imported graphics and PNG tracing, flexible connector pitches, placement anchors, variable labels, Project Data and board tools. Read the [1.5.x update](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs).
 >
 > **Public install:** Kobee Studio is already in **KiCad's official plugin repository**. As checked on 5 November 2026, its newest version is **1.4.1 stable**. A development version number in this README is not a claim that a 1.5.x package is already published. Check PCM or [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases) for the available version.
 >
@@ -27,7 +27,7 @@
 
 **No custom repository URL is required for the preferred route.** If the default repository was removed, use **Manage… → + menu → Add Default Repository**. Check the actual version table: 1.4.1 is currently stable; 1.5.x publication is separate.
 
-The [complete install guide](https://coreybusuttil.com/kobeestudio/docs/getting-started/install/) also covers optional custom stable/testing catalogues, release ZIPs, updates and troubleshooting.
+The [complete install guide](https://kobee.com.au/tutorials/kobee-studio-install) also covers optional custom stable/testing catalogues, release ZIPs, updates and troubleshooting.
 
 If you want the backstory, I wrote a short post about outgrowing KiBuzzard and
 starting Kobee Studio: [I outgrew KiBuzzard, so I built a KiCad PCB graphics plugin](https://kobee.com.au/news/i-outgrew-kibuzzard-kobee-studio).
@@ -51,7 +51,7 @@ I’m building Kobee Studio because I like making boards and want their labels, 
 
 It started as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)** by Greg Davill. That text-to-label workflow was a useful starting point; I kept building around connector legends, component callouts, machine-readable marks and reusable artwork. KiBuzzard deserves the credit for the foundation.
 
-If you found this while looking for a KiBuzzard alternative, the [practical comparison](https://coreybusuttil.com/kobeestudio/docs/reference/kibuzzard-comparison/) explains the shared roots, differences and migration checks. A simple label workflow may already be enough for your boards.
+If you found this while looking for a KiBuzzard alternative, the [practical comparison](https://kobee.com.au/tutorials/kobee-studio-kibuzzard-comparison) explains the shared roots, differences and migration checks. A simple label workflow may already be enough for your boards.
 
 ## What’s being developed in 1.5.x
 
@@ -65,7 +65,7 @@ The reviewed 1.5.20 candidate includes:
 - Styled designators and scoped board cleanup tools, with selection and undo checks.
 - Preview, geometry, placement and dialog-lifecycle hardening.
 
-These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md), the [development branch](https://github.com/mrcpuddington/kobeestudio/tree/DEV) and the [development manual](https://coreybusuttil.com/kobeestudio/docs/development/overview/) for scope and validation limits.
+These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md), the [development branch](https://github.com/mrcpuddington/kobeestudio/tree/DEV) and the [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for scope and validation limits.
 
 ## What’s in 1.4.1
 
@@ -84,7 +84,7 @@ These are **development/testing features**, not additions to the stable 1.4.1 pa
 
 Artwork tools generate ordinary, editable KiCad footprints separate from electrical components. Development Board Tools can explicitly alter native reference visibility or silkscreen; review their scope and use a board copy before applying them.
 
-Need a hand? The [complete manual](https://coreybusuttil.com/kobeestudio/docs/) covers installation, artwork tools, settings and troubleshooting. The released app’s **Need help?** button also opens its documentation hub.
+Need a hand? The [complete manual](https://kobee.com.au/tutorials/kobee-studio-docs) covers installation, artwork tools, settings and troubleshooting. The released app’s **Need help?** button also opens its documentation hub.
 
 ## Features
 
@@ -237,7 +237,7 @@ If the toolbar button does not appear:
 2. Open PCB Editor's **Preferences/Settings → Action Plugins** page and make sure **Show Button** is enabled for **Create PCB Artwork**.
 3. Use **Refresh Plugins**, then restart PCB Editor.
 
-More installation help is available in the [Kobee Studio docs](https://coreybusuttil.com/kobeestudio/docs/).
+More installation help is available in the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
 
 ### Testing releases
 
@@ -257,7 +257,7 @@ there is no local package-build step for testers.
 
 ## Help and contributing
 
-For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://coreybusuttil.com/kobeestudio/docs/).
+For installation help, tutorials and practical Kobee Studio guides, visit the [Kobee Studio docs](https://kobee.com.au/tutorials/kobee-studio-docs).
 
 Bug reports, ideas and pull requests are always welcome through GitHub. If you build something cool with Kobee Studio, I'd genuinely love to see it.
 
