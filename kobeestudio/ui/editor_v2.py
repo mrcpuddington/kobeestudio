@@ -89,6 +89,7 @@ from .main_dialog import (
     MATCH_MAIN_TYPEFACE,
     MODE_DEFAULTS,
     OPENING_LABELS,
+    OPENING_SHAPE_LABELS,
     PIN_SIDE_TO_LABEL_SIDE,
     PRESET_BY_ID,
     PRESET_ID_TO_LABEL,
@@ -145,7 +146,7 @@ MEASUREMENT_SETTING_KEYS = frozenset(
         "ComponentMinWidthCtrl", "ComponentTextGapCtrl", "ComponentWidthCtrl",
         "CornerRadiusCtrl", "FeatureSizeCtrl", "HeaderCrossSizeCtrl",
         "HeaderLabelOuterPaddingCtrl", "HeaderLabelPaddingCtrl", "HeaderLeadingPaddingCtrl",
-        "HeaderOpeningEndPaddingCtrl", "HeaderPadClearanceCtrl", "HeaderPinOuterPaddingCtrl",
+        "HeaderOpeningEndPaddingCtrl", "HeaderOpeningCornerRadiusCtrl", "HeaderPadClearanceCtrl", "HeaderPinOuterPaddingCtrl",
         "HeaderPinToLabelGapCtrl", "HeaderTrailingPaddingCtrl", "HeightCtrl", "IconGapCtrl",
         "IconHeightCtrl", "MachineCodeBarHeightCtrl", "MachineCodeCaptionHeightCtrl",
         "MachineCodeContentGapCtrl", "MachineCodeContentHeightCtrl", "MachineCodeFramePaddingCtrl",
@@ -1645,8 +1646,10 @@ class ToolPage(wx.Panel):
             opening = self._card("Opening & spacing")
             grid = self._grid(opening)
             self._add(grid, "HeaderOpeningChoice", "Opening", self.choice(OPENING_LABELS, "Continuous plug opening"))
+            self._add(grid, "HeaderOpeningShapeChoice", "Opening shape", self.choice(OPENING_SHAPE_LABELS, "Rounded rectangle"))
+            self._add(grid, "HeaderOpeningCornerRadiusCtrl", "Opening corner radius (mm)", self.spin(0, 100, 0.5, 0.1))
             self._add(grid, "HeaderPadClearanceCtrl", "Pin / opening width (mm)", self.spin(0.1, 100, 2.0, 0.1))
-            self._add(grid, "HeaderOpeningEndPaddingCtrl", "Opening end pad (mm)", self.spin(0, 100, 0, 0.1))
+            self._add(grid, "HeaderOpeningEndPaddingCtrl", "Opening end pad (mm)", self.spin(-100, 100, 0, 0.1))
             self._add(grid, "HeaderLeadingPaddingCtrl", "Pin 1 end pad (mm)", self.spin(0, 100, 0.3, 0.1))
             self._add(grid, "HeaderTrailingPaddingCtrl", "Far end pad (mm)", self.spin(0, 100, 0.3, 0.1))
             self._add(grid, "HeaderLabelPaddingCtrl", "Label row padding (mm)", self.spin(0, 20, 0.3, 0.1))
@@ -2099,6 +2102,12 @@ class StudioEditorDialog(wx.Dialog):
     @staticmethod
     def _normalise_loaded_settings(params):
         params = dict(params)
+        if (
+            params.get("_LoadedFootprintSettings")
+            and params.get("StudioModeChoice") == "2.54 mm Pin Header"
+            and "HeaderOpeningShapeChoice" not in params
+        ):
+            params["HeaderOpeningShapeChoice"] = "Pill"
         if "HeaderPinSideChoice" not in params and "HeaderLabelSideChoice" in params:
             params["HeaderPinSideChoice"] = {
                 "Above": "Bottom",
@@ -2799,6 +2808,8 @@ class StudioEditorDialog(wx.Dialog):
                     label_side=PIN_SIDE_TO_LABEL_SIDE[side],
                     pad_clearance_mm=float(settings.get("HeaderPadClearanceCtrl", 2.0)),
                     opening_mode=OPENING_LABELS.get(settings.get("HeaderOpeningChoice"), "continuous"),
+                    opening_shape=OPENING_SHAPE_LABELS.get(settings.get("HeaderOpeningShapeChoice"), "rounded_rectangle"),
+                    opening_corner_radius_mm=float(settings.get("HeaderOpeningCornerRadiusCtrl", 0.5)),
                     opening_end_padding_mm=float(settings.get("HeaderOpeningEndPaddingCtrl", 0)),
                     leading_padding_mm=float(settings.get("HeaderLeadingPaddingCtrl", 0.3)),
                     trailing_padding_mm=float(settings.get("HeaderTrailingPaddingCtrl", 0.3)),

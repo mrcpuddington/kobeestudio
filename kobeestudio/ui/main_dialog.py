@@ -127,6 +127,10 @@ OPENING_LABELS = {
     "Continuous plug opening": "continuous",
     "Individual pin openings": "individual",
 }
+OPENING_SHAPE_LABELS = {
+    "Rounded rectangle": "rounded_rectangle",
+    "Pill": "pill",
+}
 PRESET_LABELS = {"Custom label": None}
 PRESET_LABELS.update({preset.display_name: preset for preset in LABEL_PRESETS})
 PRESET_ID_TO_LABEL = {preset.preset_id: preset.display_name for preset in LABEL_PRESETS}
@@ -220,6 +224,8 @@ STUDIO_DEFAULTS = {
     "HeaderPinSideChoice": "Left",
     "HeaderPadClearanceCtrl": 2.0,
     "HeaderOpeningChoice": "Continuous plug opening",
+    "HeaderOpeningShapeChoice": "Rounded rectangle",
+    "HeaderOpeningCornerRadiusCtrl": 0.5,
     "HeaderOpeningEndPaddingCtrl": 0.0,
     "HeaderLeadingPaddingCtrl": 0.3,
     "HeaderTrailingPaddingCtrl": 0.3,
@@ -580,7 +586,9 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderPinSideChoice = wx.Choice(header_parent, choices=("Top", "Bottom"))
         self.m_HeaderPadClearanceCtrl = self._double_control(header_parent, 0.1, 100.0, 2.0, 0.1, 2)
         self.m_HeaderOpeningChoice = wx.Choice(header_parent, choices=tuple(OPENING_LABELS.keys()))
-        self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.0, 0.1, 2)
+        self.m_HeaderOpeningShapeChoice = wx.Choice(header_parent, choices=tuple(OPENING_SHAPE_LABELS.keys()))
+        self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_detail_parent, -100.0, 100.0, 0.0, 0.1, 2)
+        self.m_HeaderOpeningCornerRadiusCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.5, 0.1, 2)
         self.m_HeaderLabelPaddingCtrl = self._double_control(header_detail_parent, 0.0, 20.0, 0.3, 0.1, 2)
         self.m_HeaderPinOuterPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.3, 0.1, 2)
         self.m_HeaderPinToLabelGapCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.3, 0.1, 2)
@@ -598,6 +606,7 @@ class MainDialog(UpstreamDialog):
             ("Pin 1 position", self.m_HeaderPin1Choice),
             ("Pins on", self.m_HeaderPinSideChoice),
             ("Artwork opening", self.m_HeaderOpeningChoice),
+            ("Opening shape", self.m_HeaderOpeningShapeChoice),
             ("Connector width (mm)", self.m_HeaderPadClearanceCtrl),
             ("Pin 1 end outer padding (mm)", self.m_HeaderLeadingPaddingCtrl),
             ("Far end outer padding (mm)", self.m_HeaderTrailingPaddingCtrl),
@@ -607,6 +616,7 @@ class MainDialog(UpstreamDialog):
         header_detail_grid = wx.GridSizer(0, 4, 4, 8)
         for label, control in (
             ("Opening end extension (mm)", self.m_HeaderOpeningEndPaddingCtrl),
+            ("Opening corner radius (mm)", self.m_HeaderOpeningCornerRadiusCtrl),
             ("Label row end padding (mm)", self.m_HeaderLabelPaddingCtrl),
             ("Pin-side outer padding (mm)", self.m_HeaderPinOuterPaddingCtrl),
             ("Pin-to-label gap (mm)", self.m_HeaderPinToLabelGapCtrl),
@@ -619,7 +629,7 @@ class MainDialog(UpstreamDialog):
             "Reserved connector width; also the cut width when an opening is enabled."
         )
         self.m_HeaderOpeningEndPaddingCtrl.SetToolTip(
-            "Extend a continuous opening this far beyond the first and last pin."
+            "Extend a continuous opening beyond the first and last pin; negative values shorten it."
         )
         self.m_HeaderLabelPaddingCtrl.SetToolTip(
             "Padding past the first and last label along the pin row."
@@ -846,7 +856,9 @@ class MainDialog(UpstreamDialog):
             "HeaderPinSideChoice": self.m_HeaderPinSideChoice,
             "HeaderPadClearanceCtrl": self.m_HeaderPadClearanceCtrl,
             "HeaderOpeningChoice": self.m_HeaderOpeningChoice,
+            "HeaderOpeningShapeChoice": self.m_HeaderOpeningShapeChoice,
             "HeaderOpeningEndPaddingCtrl": self.m_HeaderOpeningEndPaddingCtrl,
+            "HeaderOpeningCornerRadiusCtrl": self.m_HeaderOpeningCornerRadiusCtrl,
             "HeaderLeadingPaddingCtrl": self.m_HeaderLeadingPaddingCtrl,
             "HeaderTrailingPaddingCtrl": self.m_HeaderTrailingPaddingCtrl,
             "HeaderLabelPaddingCtrl": self.m_HeaderLabelPaddingCtrl,
@@ -2369,6 +2381,12 @@ class MainDialog(UpstreamDialog):
             and "HeaderOpeningChoice" not in params
         ):
             params["HeaderOpeningChoice"] = "Continuous plug opening"
+        if (
+            params.get("_LoadedFootprintSettings")
+            and params.get("StudioModeChoice") == "2.54 mm Pin Header"
+            and "HeaderOpeningShapeChoice" not in params
+        ):
+            params["HeaderOpeningShapeChoice"] = "Pill"
         for key in STUDIO_DEFAULTS:
             if key in params:
                 self._loaded_studio_settings[key] = params[key]
@@ -2478,6 +2496,10 @@ class MainDialog(UpstreamDialog):
                     opening_mode=OPENING_LABELS[
                         self.m_HeaderOpeningChoice.GetStringSelection()
                     ],
+                    opening_shape=OPENING_SHAPE_LABELS[
+                        self.m_HeaderOpeningShapeChoice.GetStringSelection()
+                    ],
+                    opening_corner_radius_mm=self.m_HeaderOpeningCornerRadiusCtrl.GetValue(),
                     opening_end_padding_mm=self.m_HeaderOpeningEndPaddingCtrl.GetValue(),
                     leading_padding_mm=self.m_HeaderLeadingPaddingCtrl.GetValue(),
                     trailing_padding_mm=self.m_HeaderTrailingPaddingCtrl.GetValue(),
