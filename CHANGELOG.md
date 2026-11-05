@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+The development line is currently versioned **1.5.20** and prepared for testing. These notes do not announce a published package. KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://coreybusuttil.com/blog/kobee-studio-1-5-20/) and [development manual](https://coreybusuttil.com/kobeestudio/docs/development/overview/) for context.
+
+- Follow-up hardening: ignore late background results after dialogs close,
+  stop timers throughout the dialog tree, preserve unsaved artwork forms and
+  project drafts across Settings/library rebuilds, keep appearance consistent
+  until reopening, and allow preference saves when optional Project Data UI
+  cannot load.
+- Added responsive font columns, scrollable asset/backup pages, and button
+  sizing that follows changing action labels, readable native group headings,
+  and placement-button repainting when preview validation succeeds.
+- Fixed a Variables status-message formatting exception and made the test
+  runner fail on otherwise-unhandled wx event-handler exceptions.
+- Added nine placement anchors with an origin marker in the preview, independent
+  overline and underline controls, and optional KiCad-style `_{...}` / `^{...}`
+  text formatting. Scoped `~{...}` and `!{...}` decorate individual text groups.
+- Fixed hidden footprint fields with invalid zero text dimensions, which
+  prevented native KiCad position edits from being saved. New artwork and
+  artwork regenerated through Kobee now use valid field dimensions.
+- Compacted inverted artwork across scanline corners, splits and joins without
+  changing its material coverage. The 32-pin native-edit regression case drops
+  from 3,912 footprint polygons to 379, eliminating its reproduced edit stall.
+- Guarded transactions on KiCad 10.0.0–10.0.6 when Schematic Editor is open to
+  avoid upstream crash #24966; close Schematic Editor or upgrade before retrying.
+- Improved compact-window navigation, scrollable Settings, font-list browsing,
+  keyboard library selection, preview validation, and cleanup rollback. CI and
+  release checks now run the complete suite with a native wx runtime.
+- Fixed PCM ZIP creation for resources restored with pre-1980 timestamps.
+- Fixed IPC polygon serialization so KiCad receives real point geometry rather
+  than empty polygon shells, and made designator geometry plus native-reference
+  visibility one atomic source-footprint update.
+- Added a final Labels → Variables tab for reusable global/project multi-line
+  templates that preview `.kicad_pro` values while retaining native `${NAME}`
+  expressions in KiCad footprint text for dynamic resolution.
+- Made the Designators editor track KiCad's selection automatically and keep
+  Apply visible in every Designators section.
+- Gave bulk designator footprints unique identities and verify their committed
+  geometry before hiding any native reference field.
+- Added a searchable Google Fonts library with selectable faces, offline installed fonts, verified downloads, and missing-face recovery.
+- Added global/project graphics and component preset libraries, safe broad SVG import, live PNG tracing, and transformable imported-graphic artwork.
+- Generalized connector overlays across common pitches and custom pitch values while preserving existing 2.54 mm artwork.
+- Added transactional KiCad Board Tools and External Plugin actions for designator generation/removal and safe two-sided footprint silkscreen cleanup.
+- Added a main-window, selection-aware designator editor with live first-reference preview, selected/whole-board scopes, partial-IPC rollback checks, all-semantic-field cleanup, and idempotent exact-anchor updates.
+- Bundled the complete Google Fonts catalog, retained actual family licence files, and added repair of missing faces without changing saved renderer identities.
+- Added lazy Google Font face previews rendered through the PCB polygon pipeline, with a bounded offline cache reused by installation so browsing never loads the whole catalog or downloads a face twice.
+- Added searchable graphics, four-corner rotated transforms, synchronized aspect-locked dimensions, and reopenable asynchronous PNG tracing.
+- Added live custom-pitch limits with correct millimetre/mil conversion and extended numeric wheel guards to every new dialog.
+- Fixed responsive editor resizing and prevented mouse-wheel scrolling from changing numeric inputs on macOS and Windows.
+
 ## 1.4.1 - 2026-08-09
 
 - Hardened the KiCad 10 IPC editor on Windows by removing re-entrant control events and silencing renderer output that could block KiCad's captured process stream.
