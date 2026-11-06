@@ -259,36 +259,30 @@ class IpcArtworkPlacement:
         start_interactive_move: bool = True,
     ):
         api = self._api()
-        footprint = self.build_footprint(artwork, payload, output_layer, output_layers=output_layers)
         if old_footprint is not None:
-            # KiCad matches the top-level item by UUID, but preserving the
-            # existing footprint definition identity avoids replacing an
-            # edited board item with a logically new shell that can momentarily
-            # drop out of the workspace on some edit paths.
+            # Replacing an artwork is a delete followed by a fresh placement.
+            # board.update_items() on a rebuilt footprint definition crashes the
+            # PCB editor on KiCad 10.0.6 (access violation inside the commit) and
+            # silently drops the item when the previous definition id is not
+            # copied, so the update path does not use it at all.
+            removal = self.session.begin_commit()
             try:
-                footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
+                self.session.board.remove_items(old_footprint)
+                self.session.commit(removal, "Remove Kobee Studio artwork")
             except Exception:
-                pass
-            footprint.position = old_footprint.position
-            footprint.orientation = old_footprint.orientation
-            # KiCad updates board items by UUID. Preserve the selected
-            # footprint's identity so this is a true in-place replacement.
-            footprint.proto.id.CopyFrom(old_footprint.id)
-            try:
-                footprint.locked = old_footprint.locked
-            except Exception:
-                pass
+                self.session.discard(removal)
+                raise
 
+        footprint = self.build_footprint(artwork, payload, output_layer, output_layers=output_layers)
+        # Position and orientation are deliberately not copied from the old item:
+        # a footprint created with a non-zero position keeps only a handful of its
+        # polygon outlines inside KiCad, which shows up as missing artwork. The
+        # replacement is positioned by the interactive move after the commit, the
+        # same way a new artwork is placed.
         transaction = self.session.begin_commit()
         try:
-            if old_footprint is not None:
-                created = self.session.board.update_items(footprint)
-            else:
-                created = self.session.board.create_items(footprint)
-            self.session.commit(
-                transaction,
-                "Update Kobee Studio artwork" if old_footprint is not None else "Place Kobee Studio artwork",
-            )
+            created = self.session.board.create_items(footprint)
+            self.session.commit(transaction, "Place Kobee Studio artwork")
         except Exception:
             self.session.discard(transaction)
             raise
