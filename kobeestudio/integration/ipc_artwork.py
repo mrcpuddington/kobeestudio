@@ -300,6 +300,14 @@ class IpcArtworkPlacement:
 
     def start_interactive_move(self, placed: Any) -> None:
         """Attach a committed footprint after the plugin modal has closed."""
+        # Skip the move when the item is no longer on the board. A stale ID lands
+        # in KiCad's failure path for no reason, and the replacement is already
+        # committed at the right place in that case.
+        try:
+            if not list(self.session.board.get_items_by_id([placed.id])):
+                return
+        except Exception:
+            pass
         try:
             self.session.board.add_to_selection(placed)
         except Exception:
