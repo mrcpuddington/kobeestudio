@@ -443,7 +443,7 @@ class IpcMigrationTests(unittest.TestCase):
             session.board.messages,
         )
 
-    def test_updated_ipc_artwork_keeps_existing_position_without_interactive_move(self):
+    def test_updated_ipc_artwork_replaces_old_item_with_a_fresh_one(self):
         artwork = StudioArtwork(
             filled_polygons=((Point(-1.0, -1.0), Point(1.0, -1.0), Point(0.0, 1.0)),),
             strokes=(),
@@ -465,15 +465,28 @@ class IpcMigrationTests(unittest.TestCase):
             "F.SilkS",
             old_footprint=old,
         )
+        # The old item is removed first and the replacement is created in a second
+        # commit; both are separate undo steps.
+        self.assertIsNotNone(placed)
+        self.assertEqual(
+            [
+                ("remove", old),
+                ("push", session.board.commit, "Remove Kobee Studio artwork"),
+                ("push", session.board.commit, "Place Kobee Studio artwork"),
+                ("select", placed),
+            ],
+            session.board.messages,
+        )
+        self.assertEqual([placed], session.board.created)
+        self.assertEqual([], session.board.updated)
         self.assertEqual([], session.board.moved)
-        self.assertEqual([], session.board.created)
-        self.assertEqual([placed], session.board.updated)
-        self.assertEqual("existing-footprint-id", placed.id.value)
-        self.assertEqual("existing-definition-id", placed.definition.proto.id.value)
-        self.assertTrue(placed.locked)
-        self.assertNotIn(("remove", old), session.board.messages)
+        # Identity and placement belong to the new item, nothing is copied over
+        # from the old one (a copied position makes KiCad drop the polygons).
+        self.assertEqual("placed-footprint-id", placed.id.value)
+        self.assertEqual("definition-id", placed.definition.proto.id.value)
         self.assertEqual("position", placed.position)
         self.assertEqual("orientation", placed.orientation)
+        self.assertFalse(placed.locked)
 
     def test_new_ipc_artwork_can_defer_move_until_modal_is_closed(self):
         artwork = StudioArtwork(

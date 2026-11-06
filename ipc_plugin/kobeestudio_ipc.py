@@ -89,7 +89,6 @@ def main() -> int:
                 document=dialog.artwork.document,
                 feature=feature,
             )
-            is_new = dialog.updateFootprint is None
             placed = placement.place(
                 dialog.artwork,
                 payload,
@@ -98,7 +97,10 @@ def main() -> int:
                 old_footprint=dialog.updateFootprint,
                 start_interactive_move=False,
             )
-            pending_move = placed if is_new else None
+            # Replacements are placed the same way as new artwork: the commit
+            # produces the item at the origin, so it needs the interactive move
+            # afterwards to end up where the mouse is.
+            pending_move = placed
             dialog.EndModal(wx.ID_OK)
 
         geometry = TextGeometry()

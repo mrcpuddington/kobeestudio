@@ -4,6 +4,10 @@
 
 The development line is currently versioned **1.5.20** and prepared for testing. These notes do not announce a published package. KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for context.
 
+- Editing an existing artwork no longer goes through `board.update_items()`:
+  the old item is removed and the replacement is placed in a second commit
+  without a copied position, which fixes the editor crash and the missing
+  polygons when updating artwork.
 - Follow-up hardening: ignore late background results after dialogs close,
   stop timers throughout the dialog tree, preserve unsaved artwork forms and
   project drafts across Settings/library rebuilds, keep appearance consistent
