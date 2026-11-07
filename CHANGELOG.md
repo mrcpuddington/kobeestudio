@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-The development line is currently versioned **1.5.20** and prepared for testing. These notes do not announce a published package. KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for context.
+The development line is currently versioned **1.5.20**. Testing builds are distributed through [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases). KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for context.
+
+- Added a Windows KiCad 10.0.6 workaround that verifies a replacement artwork
+  footprint before removing the original in the same undoable operation.
+- Prefilled connector overlays from the net names and geometry of a selected
+  straight, evenly spaced row of numbered pads.
+- Added square and rounded-square individual pin openings. Older overlays
+  retain their round pin openings.
+- Fixed Data Health incorrectly flagging a valid refreshed Google Fonts catalogue
+  as oversized, while retaining bounded catalogue and individual-record checks.
 
 - Follow-up hardening: ignore late background results after dialogs close,
   stop timers throughout the dialog tree, preserve unsaved artwork forms and
