@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.5.20 - 2026-11-07
 
-The development line is currently versioned **1.5.20**. Testing builds are distributed through [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases). KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for context.
+1.5.20 is the current stable release for KiCad 10. The release ZIP is available
+through GitHub. KiCad's official catalog follows its separate review process.
+See the [release notes](docs/releases/1.5.20-notes.md) and
+[GitHub release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.5.20).
 
 - Added a Windows KiCad 10.0.6 workaround that verifies a replacement artwork
   footprint before removing the original in the same undoable operation.

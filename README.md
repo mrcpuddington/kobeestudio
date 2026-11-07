@@ -12,11 +12,9 @@
   <a href="#install-kobee-studio--kicad-10"><strong>↓ Skip to install instructions</strong></a>
 </p>
 
-> **Upcoming 1.5 release:** The current candidate is **1.5.20**, prepared for testing on **KiCad 10**. It adds font management, imported graphics and PNG tracing, flexible connector pitches, placement anchors, variable labels, Project Data and board tools. Read the [1.5.x update](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs).
+> **Current stable release · 1.5.20 for KiCad 10.** Install the ZIP from [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.5.20) using **Plugin and Content Manager → Install from File**.
 >
-> **Public install:** Kobee Studio is already in **KiCad's official plugin repository**. As checked on 5 November 2026, its newest version is **1.4.1 stable**. A development version number in this README is not a claim that a 1.5.x package is already published. Check PCM or [GitHub Releases](https://github.com/mrcpuddington/kobeestudio/releases) for the available version.
->
-> Stable 1.4.1 has macOS and Windows validation. The 1.5.20 development checks are on macOS; Windows/Linux visual acceptance and final fabrication-view checks remain. Save your PCB and use copies when testing development builds.
+> KiCad's official catalog lists **1.4.1** while the 1.5.20 update goes through KiCad's review and catalog refresh.
 
 ## Quick install — official KiCad repository
 
@@ -25,7 +23,7 @@
 3. Select the offered compatible version, choose **Install**, then **Apply Pending Changes**.
 4. Open a saved board in PCB Editor and launch **Tools → External Plugins → Kobee Studio: Create PCB Artwork**.
 
-**No custom repository URL is required for the preferred route.** If the default repository was removed, use **Manage… → + menu → Add Default Repository**. Check the actual version table: 1.4.1 is currently stable; 1.5.x publication is separate.
+If the default repository was removed, use **Manage… → + menu → Add Default Repository**. Use **Install from File** to install 1.5.20 while the catalog update is pending.
 
 The [complete install guide](https://kobee.com.au/tutorials/kobee-studio-install) also covers optional custom stable/testing catalogues, release ZIPs, updates and troubleshooting.
 
@@ -53,9 +51,7 @@ It started as a fork of **[KiBuzzard](https://github.com/gregdavill/KiBuzzard)**
 
 If you found this while looking for a KiBuzzard alternative, the [practical comparison](https://kobee.com.au/tutorials/kobee-studio-kibuzzard-comparison) explains the shared roots, differences and migration checks. A simple label workflow may already be enough for your boards.
 
-## What’s being developed in 1.5.x
-
-The reviewed 1.5.20 candidate includes:
+## What’s new in 1.5.20
 
 - System-font activation and searchable Google Fonts, face previews, offline reuse and missing-font repair.
 - Reusable SVG graphics, PNG tracing, transforms and personal/project libraries.
@@ -65,9 +61,9 @@ The reviewed 1.5.20 candidate includes:
 - Styled designators and scoped board cleanup tools, with selection and undo checks.
 - Preview, geometry, placement and dialog-lifecycle hardening.
 
-These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md) and the [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for scope and validation limits.
+See the [release notes](docs/releases/1.5.20-notes.md) for compatibility and validation details and the [illustrated manual](https://kobee.com.au/tutorials/kobee-studio-docs) for workflows.
 
-## What’s in 1.4.1
+## Core artwork tools
 
 | Capability                    | What it does                                                                                           |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -82,7 +78,7 @@ These are **development/testing features**, not additions to the stable 1.4.1 pa
 | QR codes and barcodes         | Generate fabrication-minded QR and Code 128 artwork with optional readable text.                       |
 | Layer control                 | Generate artwork on front/back silkscreen, copper and solder-mask layers.                              |
 
-Artwork tools generate ordinary, editable KiCad footprints separate from electrical components. Development Board Tools can explicitly alter native reference visibility or silkscreen; review their scope and use a board copy before applying them.
+Artwork tools generate ordinary, editable KiCad footprints separate from electrical components. Board Tools can alter native reference visibility or silkscreen. Review their scope before applying them.
 
 Need a hand? The [complete manual](https://kobee.com.au/tutorials/kobee-studio-docs) covers installation, artwork tools, settings and troubleshooting. The released app’s **Need help?** button also opens its documentation hub.
 
@@ -106,7 +102,7 @@ Generate artwork on:
 
 Generate configurable connector overlays in seconds.
 
-Current support: 2.54 mm single-row headers
+Connector Overlay supports single-row connectors with standard and custom pitches.
 
 Features: Automatic pin labels, Configurable plug clearance, optional openings
 
@@ -198,7 +194,7 @@ Kobee Studio is a KiCad plugin, not a footprint library.
 
 Kobee Studio is included in the official catalogue. From KiCad's main window, open **Plugin and Content Manager**, select **KiCad official repository**, refresh, find **Kobee Studio**, choose the offered version and **Install**, then **Apply Pending Changes**.
 
-There is no custom URL to paste for this route. The official version table lists each package's compatibility and channel. It currently offers **1.4.1 stable** as the newest version; a 1.5.x candidate must be published and pass the separate catalogue update process before it appears there.
+The official version table lists each package's compatibility and channel. Use the GitHub ZIP below for 1.5.20 while KiCad reviews the catalog update.
 
 ### Alternative: custom stable catalogue
 
@@ -222,10 +218,8 @@ Check the version and release notes actually offered. This is a rolling stream a
 
 ### Other option: install the ZIP manually
 
-Use this route when KiCad cannot reach a repository, or when you need to test a
-specific release asset. Download `Kobee-Studio-1.4.1-pcm.zip` from the [Kobee
-Studio 1.4.1 release](https://github.com/mrcpuddington/kobeestudio/releases/tag/v1.4.1).
-Do not unzip it.
+Download the [Kobee Studio 1.5.20 PCM ZIP](https://github.com/mrcpuddington/kobeestudio/releases/download/v1.5.20/Kobee-Studio-1.5.20-pcm.zip)
+and select the ZIP directly in KiCad.
 
 1. Open KiCad's **Plugin and Content Manager** and choose **Install from File…**.
 2. Select the downloaded ZIP and approve the install.
@@ -249,9 +243,9 @@ there is no local package-build step for testers.
 
 | Platform | KiCad version | Status                                           |
 | -------- | ------------- | ------------------------------------------------ |
-| macOS    | KiCad 10      | 1.4.1 tested working stable release              |
-| Windows  | KiCad 10      | 1.4.1 tested working stable release              |
-| Linux    | KiCad 10      | Install path documented; full validation planned |
+| macOS    | KiCad 10      | 1.5.20 tested in PCB Editor on KiCad 10.0.5       |
+| Windows  | KiCad 10      | 1.4.1 tested in PCB Editor, 1.5.20 visual checks pending |
+| Linux    | KiCad 10      | 1.5.20 CI passed, PCB Editor visual checks pending |
 
 ---
 
