@@ -17,6 +17,8 @@ def main():
     import wx
 
     app = wx.App(False)
+    # Headless runners have no user to dismiss wx's default log dialog.
+    wx.Log.SetActiveTarget(wx.LogStderr())
     # Fail assertions as test errors instead of opening a modal native dialog
     # that can block a CI worker indefinitely.
     app.SetAssertMode(wx.APP_ASSERT_EXCEPTION)

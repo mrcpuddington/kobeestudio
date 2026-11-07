@@ -27,7 +27,8 @@ from kobeestudio.core.pin_header import PinHeaderSpec
 from kobeestudio.core.studio_artwork import TextVectorizer, render_header_artwork, render_label_artwork, serialize_artwork
 from kobeestudio.core.text_geometry import TextGeometry
 from kobeestudio.core.transforms import fit_preview_polygons, preview_polygons
-from kobeestudio.integration.kicad_compatibility import KiCadCompatibility
+if pcbnew is not None:
+    from kobeestudio.integration.kicad_compatibility import KiCadCompatibility
 
 
 @unittest.skipIf(pcbnew is None, "requires KiCad's embedded Python")

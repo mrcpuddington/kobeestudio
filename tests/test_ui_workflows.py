@@ -177,15 +177,22 @@ class EditorWorkflowTests(unittest.TestCase):
 
     def test_modal_close_stops_timers_and_discards_pending_results(self):
         dialog = self.make_settings()
+        def close_when_modal():
+            if dialog.IsModal():
+                dialog.EndModal(wx.ID_CANCEL)
+            else:
+                close_timer.Start()
+
+        close_timer = wx.CallLater(25, close_when_modal)
         try:
             dialog._font_preview_timer.StartOnce(60000)
             before = dialog.font_status.GetLabel()
-            wx.CallAfter(dialog.EndModal, wx.ID_CANCEL)
             self.assertEqual(wx.ID_CANCEL, dialog.ShowModal())
             self.assertFalse(dialog._font_preview_timer.IsRunning())
             dialog._font_catalog_finished([], None)
             self.assertEqual(before, dialog.font_status.GetLabel())
         finally:
+            close_timer.Stop()
             dialog.Destroy()
 
     def test_optional_project_data_failure_does_not_break_saving_preferences(self):

@@ -3398,6 +3398,9 @@ class StudioEditorDialog(AsyncDialog):
                         params["_LoadedFootprintSettings"] = True
                         self._editing_existing = True
                         return self._normalise_loaded_settings(params), footprint
+            except ModuleNotFoundError as error:
+                if error.name != "pcbnew":
+                    wx.LogError(traceback.format_exc())
             except Exception:
                 wx.LogError(traceback.format_exc())
         defaults = mode_defaults("Label")
