@@ -14,6 +14,8 @@ from kobeestudio.core.svg_symbols import (
     discover_bundled_symbols,
     format_symbol_reference,
     parse_symbol_reference,
+    svg_import_repair_advice,
+    svg_polygons_from_root,
     symbol_catalog_for_context,
     validate_svg_bytes,
 )
@@ -116,6 +118,20 @@ class SvgSafetyTests(unittest.TestCase):
         svg = b'''<svg xmlns="http://www.w3.org/2000/svg"><defs id="metadata"/>
             <rect x="1" y="2" width="10" height="8" rx="2"/></svg>'''
         self.assertIsNotNone(validate_svg_bytes(svg, require_renderable=True))
+
+    def test_common_export_metadata_local_use_and_skew_are_supported(self):
+        svg = b'''<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <metadata>Created by an editor</metadata>
+            <defs><path id="mark" d="M0 0 L4 0 L4 4 L0 4 Z"/></defs>
+            <use xlink:href="#mark" x="2" y="3" transform="skewX(8)"/>
+        </svg>'''
+        root = validate_svg_bytes(svg, require_renderable=True)
+        self.assertTrue(svg_polygons_from_root(root))
+
+    def test_open_filled_paths_are_repaired_with_export_advice(self):
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0 L10 0 L10 10 L0 10"/></svg>'
+        self.assertIsNotNone(validate_svg_bytes(svg, require_renderable=True))
+        self.assertIn("repaired open SVG paths", svg_import_repair_advice(svg))
 
 
 class CustomAssetStoreTests(unittest.TestCase):

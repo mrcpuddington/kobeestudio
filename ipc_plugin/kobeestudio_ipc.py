@@ -24,6 +24,7 @@ from kobeestudio.core.text_geometry import TextGeometry
 from kobeestudio.integration.ipc_artwork import IpcArtworkPlacement
 from kobeestudio.integration.ipc_session import IpcSession, unique_client_name
 from kobeestudio.integration.platform_branding import (
+    activate_application,
     configure_application_branding,
     configure_process_identity,
     configure_window_branding,
@@ -84,14 +85,19 @@ def main(startup_action=None) -> int:
                 feature = {
                     "kind": "variable_label",
                     "template": settings.get("VariableTemplateText", ""),
+                    "rendered_value": settings.get("MultiLineText", ""),
                 }
                 payload = build_footprint_payload(
                     settings,
                     document=dialog.artwork.document,
                     feature=feature,
                 )
-                placed = placement.place_variable_text(
-                    settings,
+                # Variables are resolved for the current project and then
+                # placed through the ordinary Kobee artwork path. That gives
+                # them the same filled/inverted knockout containers as a
+                # normal label, instead of limiting them to native text.
+                placed = placement.place(
+                    dialog.artwork,
                     payload,
                     dialog.output_layer,
                     output_layers=dialog.output_layers,
@@ -134,6 +140,7 @@ def main(startup_action=None) -> int:
 
         geometry = TextGeometry()
         _trace("constructing editor")
+        resume_state = None
         while True:
             dialog = MainDialog(
                 None,
@@ -143,6 +150,8 @@ def main(startup_action=None) -> int:
                 editor_session=session,
                 build_label="IPC",
             )
+            if resume_state is not None and hasattr(dialog, "restore_session_state"):
+                dialog.restore_session_state(resume_state)
             _trace("editor constructed")
             configure_window_branding(dialog, BRAND_ICON, wx)
             app.SetTopWindow(dialog)
@@ -151,10 +160,28 @@ def main(startup_action=None) -> int:
                     return
                 if dialog.IsIconized():
                     dialog.Iconize(False)
+                # On macOS, wx.Raise alone cannot bring this separate IPC
+                # helper process ahead of another application.
+                activate_application()
+                app.SetTopWindow(dialog)
                 dialog.Show(True)
                 dialog.Raise()
                 dialog.SetFocus()
                 dialog.RequestUserAttention(wx.USER_ATTENTION_INFO)
+                # Cocoa occasionally ignores Raise while the KiCad click is
+                # still the active event. A brief top-most pulse makes the
+                # newly shown dialog reliably surface without leaving it as a
+                # permanently floating palette.
+                if sys.platform == "darwin" and not getattr(dialog, "_kobee_front_pulse", False):
+                    dialog._kobee_front_pulse = True
+                    dialog.ToggleWindowStyle(wx.STAY_ON_TOP)
+
+                    def clear_front_pulse():
+                        if dialog and not dialog.IsBeingDeleted() and getattr(dialog, "_kobee_front_pulse", False):
+                            dialog.ToggleWindowStyle(wx.STAY_ON_TOP)
+                            dialog._kobee_front_pulse = False
+
+                    wx.CallLater(450, clear_front_pulse)
 
             singleton.attach(lambda: wx.CallAfter(focus_existing_dialog))
             _trace("showing editor")
@@ -168,8 +195,13 @@ def main(startup_action=None) -> int:
                 elif startup_action in ("remove-designators", "remove-silkscreen"):
                     dialog._select_tool("Cleanup")
                     wx.CallAfter(dialog.run_board_cleanup, "designators" if startup_action == "remove-designators" else "silkscreen", "selected")
+                # The IPC helper is a separate macOS application.  Queue the
+                # activation after the modal window exists so Kobee opens in
+                # front of PCB Editor, not behind it.
+                wx.CallAfter(focus_existing_dialog)
                 dialog.ShowModal()
                 restart_requested = bool(getattr(dialog, "restart_requested", False))
+                resume_state = getattr(dialog, "restart_state", None)
             finally:
                 dialog.Destroy()
             if not restart_requested:

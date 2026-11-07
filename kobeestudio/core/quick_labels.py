@@ -128,7 +128,23 @@ class QuickLabelStore:
         label = QuickLabel(
             preset_id or "custom_{}".format(uuid.uuid4().hex), text, category, str(symbol_id).strip(), symbol_variant, self.scope
         )
-        _atomic_json(self.root / (label.preset_id + ".json"), label.to_dict())
+        destination = self.root / (label.preset_id + ".json")
+        if destination.exists() or destination.is_symlink():
+            try:
+                if destination.is_symlink() or not destination.is_file():
+                    raise ValueError("not a regular file")
+                payload = json.loads(destination.read_text(encoding="utf-8"))
+                existing = QuickLabel(
+                    str(payload["preset_id"]), str(payload["text"]), str(payload["category"]),
+                    str(payload.get("symbol_id", "")), str(payload.get("symbol_variant", "default")), str(payload["scope"]),
+                )
+                if payload.get("schema_version") != QUICK_LABEL_SCHEMA_VERSION or existing.preset_id != label.preset_id or existing.scope != self.scope:
+                    raise ValueError("schema or identifier does not match")
+            except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(
+                    "Refusing to replace an unreadable quick label; back it up from Data health first: {}".format(error)
+                ) from error
+        _atomic_json(destination, label.to_dict())
         return label
 
     def delete(self, preset_id: str) -> None:

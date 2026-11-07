@@ -1,0 +1,16 @@
+{
+  "zipIntegrity": "passed",
+  "version": "1.5.20",
+  "status": "testing",
+  "sourceFilesMatched": 441,
+  "runtimeFiles": 430,
+  "runtimeFingerprint": "26f55d58e4b16fc08208dbaa41a898cc37af35014af6e42f01caad0672f82c5a",
+  "archiveBytes": 2711208,
+  "sha256": "f300f20829e38a937c170936a269ae513e01d47348e2e1f141c7f10504446e51",
+  "changed_runtime_since311": [
+    "kobeestudio/core/data_health.py"
+  ],
+  "publicArtifactVerified": false,
+  "installedVia": "KiCad PCM Install from File: public 1.4.1 to rebuilt testing 1.5.20; fresh app launch, old-artwork update and Data Health visually retested",
+  "installedFilesystemComparison": "Not performed; source/archive comparison covers the local ZIP"
+}

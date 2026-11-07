@@ -118,13 +118,20 @@ def _custom_ends(
     height: float,
     start_cap: str,
     end_cap: str,
+    feature_size: float = 0.0,
     segments_per_cap: int = 12,
 ) -> Polygon:
     """Build a horizontal tag with two independently styled ends."""
     half_width = width / 2.0
     half_height = height / 2.0
     radius = min(half_height, half_width)
-    feature = min(height * 0.34, width / 2.0)
+    # A custom feature size gives tags and multipart separators an explicit,
+    # predictable slant/chamfer depth. Keep the historical proportion when it
+    # was not set in an older profile.
+    feature = min(
+        feature_size if feature_size > 0 else height * 0.34,
+        width / 2.0,
+    )
 
     def join_x(style: str) -> float:
         return radius if style == "rounded" else feature if style in ("chamfered", "point") else 0.0
@@ -179,7 +186,14 @@ def _custom_ends(
     start_bottom = Point(-half_width + start_inset, half_height)
     if points[-1] != start_bottom:
         points.append(start_bottom)
-    for point in tuple(Point(-point.x, point.y) for point in reversed(right_cap(start_cap))):
+    # Mirroring a diagonal cap reverses its screen-facing slash direction.
+    # Swap the stored skew ID on the left edge so selecting one skew style for
+    # both ends produces parallel edges (// or \\), rather than a chevron.
+    mirrored_start_cap = {
+        "skew_forward": "skew_back",
+        "skew_back": "skew_forward",
+    }.get(start_cap, start_cap)
+    for point in tuple(Point(-point.x, point.y) for point in reversed(right_cap(mirrored_start_cap))):
         if point != points[-1]:
             points.append(point)
 
@@ -353,7 +367,13 @@ def shape_contour(shape: str, size: Size, style: ShapeStyle) -> Polygon:
     elif shape == "pill":
         polygon = _rounded_rectangle(width, height, min(width, height) / 2.0)
     elif shape == "custom_ends":
-        polygon = _custom_ends(width, height, style.start_cap, style.end_cap)
+        polygon = _custom_ends(
+            width,
+            height,
+            style.start_cap,
+            style.end_cap,
+            style.feature_size_mm,
+        )
     elif shape == "custom_long_edges":
         polygon = _custom_long_edges(
             width,

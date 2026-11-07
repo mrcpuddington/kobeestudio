@@ -1,0 +1,72 @@
+{
+  "unrelatedVariablesPreserved": true,
+  "syncedVariables": {
+    "KOBEE_APPROVED_BY": "",
+    "KOBEE_CHANGE_SUMMARY": "",
+    "KOBEE_GLOBAL_COMPANY_NAME": "",
+    "KOBEE_GLOBAL_COMPANY_WEBSITE": "",
+    "KOBEE_HARDWARE_VERSION": "1.5.20",
+    "KOBEE_ISSUED_BY": "",
+    "KOBEE_ISSUE_DATE": "2026-11-06",
+    "KOBEE_PROJECT_BOARD_NAME": "Disposable test board",
+    "KOBEE_PROJECT_PCB_PART_NUMBER": "",
+    "KOBEE_PROJECT_PROJECT_NAME": "Kobee GUI acceptance",
+    "KOBEE_PROJECT_PROJECT_NUMBER": "",
+    "KOBEE_REVISION": "A",
+    "KOBEE_STATUS": "Draft"
+  },
+  "record": {
+    "active_revision_id": "c2bb177a-fbc0-42b2-8222-0f8f695b1ac7",
+    "excluded_reusable_field_ids": [],
+    "last_synced_at": "2026-11-06T15:33:50Z",
+    "local_project_fields": [],
+    "local_revision_fields": [],
+    "managed_variable_names": [
+      "KOBEE_APPROVED_BY",
+      "KOBEE_CHANGE_SUMMARY",
+      "KOBEE_GLOBAL_COMPANY_NAME",
+      "KOBEE_GLOBAL_COMPANY_WEBSITE",
+      "KOBEE_HARDWARE_VERSION",
+      "KOBEE_ISSUED_BY",
+      "KOBEE_ISSUE_DATE",
+      "KOBEE_PROJECT_BOARD_NAME",
+      "KOBEE_PROJECT_PCB_PART_NUMBER",
+      "KOBEE_PROJECT_PROJECT_NAME",
+      "KOBEE_PROJECT_PROJECT_NUMBER",
+      "KOBEE_REVISION",
+      "KOBEE_STATUS"
+    ],
+    "project_values": {
+      "default_board_name": "Disposable test board",
+      "default_pcb_part_number": "",
+      "default_project_name": "Kobee GUI acceptance",
+      "default_project_number": ""
+    },
+    "revision_draft": {
+      "default_approved_by": "",
+      "default_change_summary": "",
+      "default_hardware_version": "1.5.20",
+      "default_issue_date": "2026-11-06",
+      "default_issued_by": "",
+      "default_revision": "A",
+      "default_status": "Draft"
+    },
+    "revisions": [
+      {
+        "created_at": "2026-11-06T15:33:49Z",
+        "revision_id": "c2bb177a-fbc0-42b2-8222-0f8f695b1ac7",
+        "values": {
+          "default_approved_by": "",
+          "default_change_summary": "",
+          "default_hardware_version": "1.5.20",
+          "default_issue_date": "2026-11-06",
+          "default_issued_by": "",
+          "default_revision": "A",
+          "default_status": "Draft"
+        }
+      }
+    ],
+    "schema_version": 1,
+    "sync_pending": false
+  }
+}

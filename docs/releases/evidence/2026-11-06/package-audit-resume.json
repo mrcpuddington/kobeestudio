@@ -1,0 +1,11 @@
+{
+  "zipIntegrity": "passed",
+  "version": "1.5.20",
+  "status": "testing",
+  "sourceFilesMatched": 441,
+  "archiveBytes": 2711038,
+  "sha256": "346674e9708049c287b4602d0db8e7594c4d34ccd88f87f80b4a40c64d8cb1b5",
+  "publicArtifactVerified": false,
+  "installedVia": "KiCad PCM Install from File; launched and missing-font repair visually retested",
+  "installedFilesystemComparison": "Unavailable: macOS Documents privacy denied terminal reads; package/source comparison above is of the local ZIP"
+}

@@ -10,17 +10,48 @@ import zipfile
 from pathlib import Path
 
 
-_ALLOWED_PREFIXES = ("assets/v1/", "profiles/v1/", "labels/v1/", "fonts/v1/", "component-presets/v1/", "reference-templates/v1/", "variable-templates/v1/")
+_ALLOWED_PREFIXES = ("assets/v1/", "profiles/v1/", "labels/v1/", "fonts/v1/", "component-presets/v1/", "reference-templates/v1/", "variable-templates/v1/", "project-data/v1/", "recovery/v1/")
 _MAX_FILES = 10000
 _MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
+_MAX_SINGLE_FILE_BYTES = 64 * 1024 * 1024
+_MAX_COMPRESSION_RATIO = 200
 
 
 def _allowed(relative: str) -> bool:
     return relative == "preferences.json" or relative.startswith(_ALLOWED_PREFIXES)
 
 
+def _validated_members(archive: zipfile.ZipFile):
+    """Validate archive bounds before extracting a single byte."""
+    infos = archive.infolist()
+    files = [info for info in infos if not info.is_dir()]
+    if len(files) > _MAX_FILES or sum(info.file_size for info in files) > _MAX_UNCOMPRESSED_BYTES:
+        raise ValueError("Library archive is too large")
+    safe = []
+    for info in files:
+        if info.file_size > _MAX_SINGLE_FILE_BYTES:
+            raise ValueError("Library archive contains an oversized file")
+        if info.file_size and (not info.compress_size or info.file_size > info.compress_size * _MAX_COMPRESSION_RATIO):
+            raise ValueError("Library archive has an unsafe compression ratio")
+        relative = Path(info.filename)
+        if relative.is_absolute() or ".." in relative.parts or not _allowed(relative.as_posix()):
+            raise ValueError("Library archive contains an invalid path")
+        safe.append((info, relative))
+    return safe
+
+
+def _target_without_symlink_parent(root: Path, relative: Path) -> Path:
+    """Avoid writing through a pre-existing symlink during merge import."""
+    current = root
+    for part in relative.parts[:-1]:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("Library destination contains a symlinked folder")
+    return root / relative
+
+
 def export_library(source_root: Path, destination: Path) -> int:
-    """Write custom assets, labels, profiles, and preferences to a portable zip."""
+    """Write portable user data, including reusable Project Data fields, to a zip."""
     source_root, destination = Path(source_root), Path(destination)
     files = []
     for path in sorted(source_root.rglob("*")) if source_root.exists() else ():
@@ -50,20 +81,10 @@ def import_library(source: Path, destination_root: Path) -> int:
     """Merge an exported library without overwriting existing local files."""
     source, destination_root = Path(source), Path(destination_root)
     with zipfile.ZipFile(str(source), "r") as archive:
-        infos = archive.infolist()
-        if len(infos) > _MAX_FILES or sum(info.file_size for info in infos) > _MAX_UNCOMPRESSED_BYTES:
-            raise ValueError("Library archive is too large")
-        safe = []
-        for info in infos:
-            relative = Path(info.filename)
-            if info.is_dir():
-                continue
-            if relative.is_absolute() or ".." in relative.parts or not _allowed(relative.as_posix()):
-                raise ValueError("Library archive contains an invalid path")
-            safe.append((info, relative))
+        safe = _validated_members(archive)
         copied = 0
         for info, relative in safe:
-            target = destination_root / relative
+            target = _target_without_symlink_parent(destination_root, relative)
             if target.exists():
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -77,27 +98,17 @@ def restore_library(source: Path, destination_root: Path) -> int:
     """Replace the portable library contents from a validated archive.
 
     The caller must obtain an explicit confirmation: existing preferences,
-    assets, profiles, and quick labels are moved aside before replacement, so
+    assets, profiles, reusable Project Data fields, and quick labels are moved aside before replacement, so
     an interrupted write can restore the prior library rather than half-merge
     unrelated records.
     """
     source, destination_root = Path(source), Path(destination_root)
     destination_root.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(str(source), "r") as archive:
-        infos = archive.infolist()
-        if len(infos) > _MAX_FILES or sum(info.file_size for info in infos) > _MAX_UNCOMPRESSED_BYTES:
-            raise ValueError("Library archive is too large")
-        safe = []
-        for info in infos:
-            relative = Path(info.filename)
-            if info.is_dir():
-                continue
-            if relative.is_absolute() or ".." in relative.parts or not _allowed(relative.as_posix()):
-                raise ValueError("Library archive contains an invalid path")
-            safe.append((info, relative))
+        safe = _validated_members(archive)
         staging = Path(tempfile.mkdtemp(prefix=".library-restore-", dir=str(destination_root.parent)))
         backup = destination_root.parent / ".library-backup-{}".format(uuid.uuid4())
-        roots = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "preferences.json")
+        roots = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "project-data", "recovery", "preferences.json")
         try:
             for info, relative in safe:
                 target = staging / relative
@@ -135,7 +146,7 @@ def reset_library(destination_root: Path) -> None:
     """Remove all mutable library data, leaving the bundled defaults intact."""
     destination_root = Path(destination_root)
     destination_root.mkdir(parents=True, exist_ok=True)
-    names = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "preferences.json")
+    names = ("assets", "profiles", "labels", "fonts", "component-presets", "reference-templates", "variable-templates", "project-data", "recovery", "preferences.json")
     tombstone = destination_root.parent / ".library-reset-{}".format(uuid.uuid4())
     try:
         tombstone.mkdir()

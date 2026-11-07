@@ -5,6 +5,7 @@ from kobeestudio.integration.platform_branding import (
     APP_NAME,
     APP_USER_MODEL_ID,
     APP_VENDOR,
+    activate_application,
     configure_application_branding,
     configure_process_identity,
     configure_window_branding,
@@ -121,6 +122,9 @@ class PlatformBrandingTests(unittest.TestCase):
         shell = _Shell32()
         self.assertFalse(configure_process_identity("darwin", shell))
         self.assertEqual([], shell.identifiers)
+
+    def test_activation_is_a_safe_noop_off_macos(self):
+        self.assertFalse(activate_application("linux"))
 
     def test_application_names_are_branded(self):
         app = _App()

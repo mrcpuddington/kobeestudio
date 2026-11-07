@@ -49,7 +49,7 @@ need to build an install ZIP locally.
 
 1. Checks out the commit.
 2. Sets up Python 3.11.
-3. Runs the focused IPC and platform tests.
+3. Runs the complete test suite with wxPython under Xvfb.
 4. Builds the PCM ZIP.
 5. Verifies that the ZIP metadata matches the source metadata.
 6. Uploads the ZIP as a short-lived Actions artifact.
@@ -72,8 +72,10 @@ Open **Actions → Publish Kobee Studio package → Run workflow** and enter:
 - `release_name`: an optional friendly title.
 
 The worker checks out that exact ref, runs the tests, builds the ZIP, validates
-the version/status, creates a GitHub pre-release with the ZIP attached, and
-updates the `testing` branch of the PCM catalogue.
+the version/status, prepares an official KiCad metadata draft as an Actions
+artifact, creates a GitHub pre-release with the ZIP attached, and updates the
+`testing` branch of the PCM catalogue. It uses the curated notes from
+`docs/releases/<version>-notes.md` when present, otherwise generated notes.
 
 The testing PCM repository is intended for invited testers or for your own
 KiCad installation. Add its `repository.json` URL to KiCad, refresh PCM, and
@@ -149,3 +151,45 @@ by you is the package users receive.
 
 The publish worker now handles GitHub Release creation, ZIP upload, and the
 matching testing/stable PCM catalogue update.
+
+## Updating the official KiCad catalog
+
+The custom PCM catalog above and KiCad's default catalog are separate delivery
+routes. The official catalog currently includes Kobee Studio 1.4.1, 1.4.0 and
+1.3.4. Submit an update to
+[`kicad/addons/metadata`](https://gitlab.com/kicad/addons/metadata), changing
+`packages/com.github.mrcpuddington.kobeestudio/metadata.json`. Preserve existing
+versions and their checksums. The public-facing `kicad/addons/repository` is
+generated; it is not the merge-request target.
+
+Use the [1.5.20 preparation checklist](releases/1.5.20-preparation.md) for the
+current testing candidate. A metadata draft does not publish a package, submit
+a GitLab merge request or approve a release.
+
+After publishing the intended artifact, download that exact ZIP and run:
+
+```bash
+python3 tools/prepare_kicad_submission.py \
+  --archive /path/to/Kobee-Studio-1.5.20-pcm.zip \
+  --release-tag v1.5.20-beta.1 \
+  --verify-download
+```
+
+The default output is `pcm/build/official-submission/`. It contains the package
+path to copy into a GitLab fork, a merge-request draft, the upstream snapshot and
+a readiness record. Offline preparation can use `--upstream-metadata <file>`;
+refresh upstream before submission. Without `--verify-download`, the readiness
+record explicitly leaves public availability unverified. A failed verification
+returns a nonzero exit status and leaves the draft marked unverified.
+
+Run the official repository's validator, push the metadata-only branch to your
+fork, and install/update from its temporary PCM repository. Then submit the
+merge request. For stable distribution, finish the manual acceptance checks,
+prepare the stable package and use its exact `v1.5.20` tag and checksum. Do this
+before adding 1.5.20 to the official catalog: published archives are immutable,
+and the preparation tool refuses to replace an existing upstream version with
+different bytes. Rebuilding in Actions can change the ZIP checksum, so always
+regenerate the submission from the actual released file.
+
+See the [official submission/update guide](https://dev-docs.kicad.org/en/addons/)
+and [repository workflow](https://gitlab.com/kicad/addons/metadata/-/blob/main/README.md).

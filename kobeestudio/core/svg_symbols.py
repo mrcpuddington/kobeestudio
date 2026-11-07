@@ -37,9 +37,13 @@ _SAFE_TAGS = frozenset(
     (
         "svg", "g", "path", "polygon", "polyline", "rect", "circle", "ellipse", "line",
         "title", "desc", "defs", "clipPath", "mask", "linearGradient", "radialGradient", "stop",
+        # These authoring/export elements carry no executable content. They
+        # are ignored or expanded into static geometry below so ordinary
+        # Illustrator, Inkscape, and Figma exports do not fail needlessly.
+        "metadata", "namedview", "style", "symbol", "switch", "use",
     )
 )
-_RENDERABLE_TAGS = frozenset(("svg", "g", "path", "polygon", "polyline", "line", "rect", "circle", "ellipse", "title", "desc", "defs"))
+_RENDERABLE_TAGS = _SAFE_TAGS
 _FORBIDDEN_ATTRIBUTE_PREFIXES = ("on",)
 _URL_ATTRIBUTES = frozenset(("href", "xlink:href", "src"))
 
@@ -104,7 +108,16 @@ def validate_svg_bytes(data: bytes, require_renderable: bool = False, allow_stro
             value = str(raw_value).strip().lower()
             if lower_name.startswith(_FORBIDDEN_ATTRIBUTE_PREFIXES):
                 raise ValueError("SVG event attributes are not allowed")
-            if lower_name in _URL_ATTRIBUTES or "url(" in value or value.startswith(("http:", "https:", "data:", "file:")):
+            if lower_name in _URL_ATTRIBUTES:
+                # A local #id is used by standard <use> exports. Everything
+                # else could fetch or embed data and remains prohibited.
+                if not value.startswith("#"):
+                    raise ValueError("SVG assets cannot reference external or embedded resources")
+            elif "url(" in value:
+                match = re.fullmatch(r"url\(\s*['\"]?#[-\w:.]+['\"]?\s*\)", value)
+                if match is None:
+                    raise ValueError("SVG assets cannot reference external or embedded resources")
+            elif value.startswith(("http:", "https:", "data:", "file:")):
                 raise ValueError("SVG assets cannot reference external or embedded resources")
     if require_renderable:
         svg_polygons_from_root(root, allow_strokes=allow_strokes)
@@ -142,7 +155,7 @@ def _transform(value: Optional[str]) -> Matrix:
     if not value:
         return result
     position = 0
-    pattern = re.compile(r"(matrix|translate|scale|rotate)\s*\(([^)]*)\)")
+    pattern = re.compile(r"(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)")
     for match in pattern.finditer(value):
         if value[position:match.start()].strip(" ,\t\r\n"):
             raise ValueError("Unsupported SVG transform")
@@ -162,6 +175,10 @@ def _transform(value: Optional[str]) -> Matrix:
                 operation = _multiply(_multiply((1, 0, 0, 1, cx, cy), rotation), (1, 0, 0, 1, -cx, -cy))
             else:
                 operation = rotation
+        elif name == "skewX" and len(values) == 1:
+            operation = (1.0, 0.0, math.tan(math.radians(values[0])), 1.0, 0.0, 0.0)
+        elif name == "skewY" and len(values) == 1:
+            operation = (1.0, math.tan(math.radians(values[0])), 0.0, 1.0, 0.0, 0.0)
         else:
             raise ValueError("Invalid SVG {} transform".format(name))
         result = _multiply(result, operation)
@@ -247,7 +264,38 @@ class _FlatteningPen:
 
     def endPath(self) -> None:
         if self.current:
-            raise ValueError("SVG symbol paths must be closed and filled")
+            # Design tools frequently emit a visually filled outline without
+            # the final Z command. For PCB graphics it is safe to repair that
+            # omission by joining the final point to the start point. A two
+            # point path still cannot form a filled region and remains an
+            # actionable error rather than silently inventing a shape.
+            if len(self.current) < 3:
+                raise ValueError(
+                    "SVG path has fewer than three points; outline strokes or export it as a filled path"
+                )
+            if self.current[-1] == self.current[0]:
+                self.current.pop()
+            self.polygons.append(self.current)
+            self.current = None
+
+
+def svg_import_repair_advice(data: Union[str, bytes]) -> str:
+    """Describe harmless repair applied to common open filled-path exports."""
+    try:
+        raw = data.encode("utf-8") if isinstance(data, str) else data
+        root = ET.fromstring(raw)
+    except (ET.ParseError, TypeError, ValueError):
+        return ""
+    for element in root.iter():
+        if _local_name(element.tag) != "path":
+            continue
+        path_data = (element.get("d") or "").strip()
+        if path_data and not re.search(r"[zZ]\s*$", path_data):
+            return (
+                "Kobee repaired open SVG paths by closing them for this import. "
+                "For best fidelity, export outlined, closed filled paths from your design tool."
+            )
+    return ""
 
 
 def _parse_path(data: str) -> List[List[Tuple[float, float]]]:
@@ -435,17 +483,56 @@ def _element_polygons(element: ET.Element) -> List[List[Tuple[float, float]]]:
 def svg_polygons_from_root(root: ET.Element, allow_strokes: bool = False) -> Tuple[Polygon, ...]:
     polygons: List[Polygon] = []
     point_count = 0
+    elements_by_id = {
+        element.get("id"): element
+        for element in root.iter()
+        if element.get("id")
+    }
+    active_references = set()
 
-    def visit(element: ET.Element, parent_matrix: Matrix, inherited_fill: Optional[str]) -> None:
+    def visit(
+        element: ET.Element,
+        parent_matrix: Matrix,
+        inherited_fill: Optional[str],
+        from_reference: bool = False,
+    ) -> None:
         nonlocal point_count
         tag = _local_name(element.tag)
         # Inkscape commonly emits an empty <defs> block even when no reusable
         # geometry is present. Definitions are never visible artwork and must
         # not be rendered merely because they contain a supported primitive.
-        if tag == "defs":
+        if tag in (
+            "defs", "metadata", "namedview", "style", "title", "desc",
+            "clipPath", "mask", "linearGradient", "radialGradient", "stop",
+        ):
             return
         matrix = _multiply(parent_matrix, _transform(element.get("transform")))
         fill = _style_value(element, "fill", inherited_fill)
+        if tag == "use":
+            reference = (
+                element.get("href")
+                or element.get("{http://www.w3.org/1999/xlink}href")
+                or ""
+            ).strip()
+            if not reference.startswith("#"):
+                raise ValueError("SVG use elements must reference a local #id")
+            target_id = reference[1:]
+            target = elements_by_id.get(target_id)
+            if target is None:
+                raise ValueError("SVG use references an unknown id: {}".format(target_id))
+            if target_id in active_references:
+                raise ValueError("SVG use references cannot be circular")
+            x = float(element.get("x", "0"))
+            y = float(element.get("y", "0"))
+            active_references.add(target_id)
+            try:
+                visit(target, _multiply(matrix, (1.0, 0.0, 0.0, 1.0, x, y)), fill, True)
+            finally:
+                active_references.remove(target_id)
+            return
+        # A <symbol> is definition-only until a local <use> references it.
+        if tag == "symbol" and not from_reference:
+            return
         if tag in ("path", "polygon", "polyline", "line", "rect", "circle", "ellipse"):
             stroke = (_style_value(element, "stroke") or "none").strip().lower()
             stroke_width = float(_style_value(element, "stroke-width", "1") or "1")
@@ -468,7 +555,7 @@ def svg_polygons_from_root(root: ET.Element, allow_strokes: bool = False) -> Tup
                 if len(polygon) >= 3:
                     polygons.append(polygon)
         for child in element:
-            visit(child, matrix, fill)
+            visit(child, matrix, fill, from_reference)
 
     visit(root, _IDENTITY, "black")
     if not polygons:
@@ -494,20 +581,28 @@ def _stroke_svg_contours(raw_contours, matrix: Matrix, width: float, close: bool
     return tuple(result)
 
 
+def svg_canvas_bounds(root: ET.Element, polygons: Sequence[Polygon]) -> Tuple[Point, Point]:
+    """Return the authored SVG canvas bounds, falling back to drawn geometry.
+
+    Graphic import uses this same canvas when it calculates the aspect-locked
+    height and when it later renders the embedded SVG. Keeping those two
+    stages aligned prevents a viewBox export from being stretched on board.
+    """
+    view_box = _numbers(root.get("viewBox"))
+    if view_box:
+        if len(view_box) != 4 or view_box[2] <= 0 or view_box[3] <= 0:
+            raise ValueError("SVG symbol viewBox must contain x, y, positive width, and positive height")
+        return Point(view_box[0], view_box[1]), Point(view_box[0] + view_box[2], view_box[1] + view_box[3])
+    return polygon_bounds(polygons)
+
+
 @lru_cache(maxsize=128)
 def _svg_geometry(path_text: str, modified_ns: int, byte_size: int, allow_strokes: bool = False):
     """Cache immutable geometry while still invalidating replaced SVG files."""
     path = Path(path_text)
     root = validate_svg_bytes(_read_svg(path), require_renderable=True, allow_strokes=allow_strokes)
     polygons = svg_polygons_from_root(root, allow_strokes=allow_strokes)
-    view_box = _numbers(root.get("viewBox"))
-    if view_box:
-        if len(view_box) != 4 or view_box[2] <= 0 or view_box[3] <= 0:
-            raise ValueError("SVG symbol viewBox must contain x, y, positive width, and positive height")
-        minimum = Point(view_box[0], view_box[1])
-        maximum = Point(view_box[0] + view_box[2], view_box[1] + view_box[3])
-    else:
-        minimum, maximum = polygon_bounds(polygons)
+    minimum, maximum = svg_canvas_bounds(root, polygons)
     return polygons, minimum, maximum
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
@@ -82,80 +83,96 @@ class BoardToolsService:
         footprints = self.footprints(scope); usable = tuple(item for item in footprints if not getattr(item, "locked", False) and not _is_generated(item))
         return usable, len(footprints) - len(usable)
 
+    @contextmanager
+    def _transaction(self, footprints):
+        originals = []
+        for footprint in footprints:
+            items = tuple(footprint.definition.items)
+            fields = items + tuple(
+                getattr(footprint, name, None)
+                for name in ("reference_field", "value_field", "datasheet_field", "description_field")
+            )
+            visibility = tuple((field, field.visible) for field in fields if hasattr(field, "visible"))
+            originals.append((footprint, items, visibility))
+        # Run host compatibility checks before changing even the local wrappers.
+        transaction = self.session.begin_commit()
+        try:
+            yield transaction
+        except Exception as error:
+            for footprint, items, visibility in originals:
+                footprint.definition.items = list(items)
+                for field, visible in visibility:
+                    field.visible = visible
+            try:
+                self.session.discard(transaction)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    "KiCad could not confirm rollback after {}. Inspect the board before retrying: {}"
+                    .format(error, rollback_error)
+                ) from error
+            raise
+
     def remove_designators(self, scope: str) -> BoardToolResult:
         footprints, skipped = self.eligible(scope)
-        if not footprints: return BoardToolResult(0, skipped)
+        if not footprints:
+            return BoardToolResult(0, skipped)
         source_ids = {_id_text(item) for item in footprints}
         generated = []
         for item in self.board.get_footprints():
-            payload = _metadata(item); feature = payload.get("feature", {}) if isinstance(payload, Mapping) else {}
+            payload = _metadata(item)
+            feature = payload.get("feature", {}) if isinstance(payload, Mapping) else {}
             if isinstance(feature, Mapping) and feature.get("kind") == "designator_label" and str(feature.get("source_footprint_id", "")) in source_ids:
                 generated.append(item)
         embedded_removed = 0
-        for footprint in footprints:
-            embedded_ids = set(_embedded_designator_ids(footprint))
-            retained = []
-            for item in footprint.definition.items:
-                item_id = str(getattr(getattr(item, "id", None), "value", ""))
-                if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME:
-                    embedded_removed += 1
-                elif item_id and item_id in embedded_ids:
-                    embedded_removed += 1
-                else:
-                    retained.append(item)
-            footprint.definition.items = retained
-            footprint.reference_field.visible = False
-        transaction = self.session.begin_commit()
-        try:
+        with self._transaction(footprints) as transaction:
+            for footprint in footprints:
+                embedded_ids = set(_embedded_designator_ids(footprint))
+                retained = []
+                for item in footprint.definition.items:
+                    if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME or _id_text(item) in embedded_ids:
+                        embedded_removed += 1
+                    else:
+                        retained.append(item)
+                footprint.definition.items = retained
+                footprint.reference_field.visible = False
             updated = self.board.update_items(footprints)
             _require_updated(updated, footprints, "footprint")
-            if generated: self.board.remove_items(generated)
+            if generated:
+                self.board.remove_items(generated)
             self.session.commit(transaction, "Remove footprint designators")
-        except Exception:
-            self.session.discard(transaction); raise
         return BoardToolResult(len(footprints), skipped, len(generated) + embedded_removed)
 
     def remove_silkscreen(self, scope: str) -> BoardToolResult:
         footprints, skipped = self.eligible(scope)
-        if not footprints: return BoardToolResult(0, skipped)
-        front, back = self._silk_layers(); silk_layers = {front, back, "F.SilkS", "B.SilkS"}; removed = 0
-        for footprint in footprints:
-            # Keep legacy embedded designators as well as the new movable
-            # designator footprints.  Removing component silkscreen must not
-            # imply removal of a separately chosen reference marker.
-            embedded_designator_ids = set(_embedded_designator_ids(footprint))
-            semantic_fields = tuple(
-                field for field in (
-                    getattr(footprint, "reference_field", None), getattr(footprint, "value_field", None),
-                    getattr(footprint, "datasheet_field", None), getattr(footprint, "description_field", None),
-                ) if field is not None
-            )
-            for field in semantic_fields:
-                if getattr(field, "layer", None) in silk_layers: field.visible = False
-            retained = []
-            for item in footprint.definition.items:
-                if getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME:
-                    retained.append(item)
-                    continue
-                item_id = str(getattr(getattr(item, "id", None), "value", ""))
-                if item_id and item_id in embedded_designator_ids:
-                    retained.append(item)
-                    continue
-                if getattr(item, "layer", None) not in silk_layers: retained.append(item); continue
-                if hasattr(item, "visible") and hasattr(item, "name"):
-                    item.visible = False; retained.append(item)
-                elif type(item).__name__ in ("BoardText", "BoardTextBox", "BoardShape", "BoardSegment", "BoardArc", "BoardCircle", "BoardRectangle", "BoardPolygon", "BoardBezier"):
-                    removed += 1
-                else:
-                    retained.append(item)
-            footprint.definition.items = retained
-        transaction = self.session.begin_commit()
-        try:
+        if not footprints:
+            return BoardToolResult(0, skipped)
+        front, back = self._silk_layers()
+        silk_layers = {front, back, "F.SilkS", "B.SilkS"}
+        removed = 0
+        with self._transaction(footprints) as transaction:
+            for footprint in footprints:
+                embedded_ids = set(_embedded_designator_ids(footprint))
+                for name in ("reference_field", "value_field", "datasheet_field", "description_field"):
+                    field = getattr(footprint, name, None)
+                    if field is not None and getattr(field, "layer", None) in silk_layers:
+                        field.visible = False
+                retained = []
+                for item in footprint.definition.items:
+                    if (getattr(item, "name", "") == DESIGNATOR_METADATA_FIELD_NAME
+                            or _id_text(item) in embedded_ids
+                            or getattr(item, "layer", None) not in silk_layers):
+                        retained.append(item)
+                    elif hasattr(item, "visible") and hasattr(item, "name"):
+                        item.visible = False
+                        retained.append(item)
+                    elif type(item).__name__ in ("BoardText", "BoardTextBox", "BoardShape", "BoardSegment", "BoardArc", "BoardCircle", "BoardRectangle", "BoardPolygon", "BoardBezier"):
+                        removed += 1
+                    else:
+                        retained.append(item)
+                footprint.definition.items = retained
             updated = self.board.update_items(footprints)
             _require_updated(updated, footprints, "footprint")
             self.session.commit(transaction, "Remove footprint silkscreen")
-        except Exception:
-            self.session.discard(transaction); raise
         return BoardToolResult(len(footprints), skipped, removed)
 
     @staticmethod

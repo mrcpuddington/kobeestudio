@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Fixed Data Health incorrectly flagging a valid refreshed Google Fonts catalogue
+  as oversized, while retaining bounded catalogue and individual-record checks.
+
+- Follow-up hardening: ignore late background results after dialogs close,
+  stop timers throughout the dialog tree, preserve unsaved artwork forms and
+  project drafts across Settings/library rebuilds, keep appearance consistent
+  until reopening, and allow preference saves when optional Project Data UI
+  cannot load.
+- Added responsive font columns, scrollable asset/backup pages, and button
+  sizing that follows changing action labels, readable native group headings,
+  and placement-button repainting when preview validation succeeds.
+- Fixed a Variables status-message formatting exception and made the test
+  runner fail on otherwise-unhandled wx event-handler exceptions.
+- Added nine placement anchors with an origin marker in the preview, independent
+  overline and underline controls, and optional KiCad-style `_{...}` / `^{...}`
+  text formatting. Scoped `~{...}` and `!{...}` decorate individual text groups.
+- Fixed hidden footprint fields with invalid zero text dimensions, which
+  prevented native KiCad position edits from being saved. New artwork and
+  artwork regenerated through Kobee now use valid field dimensions.
+- Compacted inverted artwork across scanline corners, splits and joins without
+  changing its material coverage. The 32-pin native-edit regression case drops
+  from 3,912 footprint polygons to 379, eliminating its reproduced edit stall.
+- Guarded transactions on KiCad 10.0.0–10.0.6 when Schematic Editor is open to
+  avoid upstream crash #24966; close Schematic Editor or upgrade before retrying.
+- Improved compact-window navigation, scrollable Settings, font-list browsing,
+  keyboard library selection, preview validation, and cleanup rollback. CI and
+  release checks now run the complete suite with a native wx runtime.
+- Fixed PCM ZIP creation for resources restored with pre-1980 timestamps.
 - Fixed IPC polygon serialization so KiCad receives real point geometry rather
   than empty polygon shells, and made designator geometry plus native-reference
   visibility one atomic source-footprint update.

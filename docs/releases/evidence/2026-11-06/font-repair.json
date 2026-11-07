@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-11-06T22:13:54.596232+00:00",
+  "fileRestored": true,
+  "identityFieldsPreserved": {
+    "face_id": true,
+    "renderer_name": true,
+    "family": true,
+    "weight": true,
+    "style": true
+  },
+  "fontSha256": "6e8279a181364146cec5630a7209c67ccd2538aec198c03c43f51b7bc57ffcaf",
+  "storedHashMatches": true,
+  "licenceRetained": true,
+  "previewVisuallyVerified": true,
+  "catalogueRefreshFamilies": 1959,
+  "originalFontCopiesRetainedInDisposableFixture": true,
+  "note": "Redownloaded font bytes and source/hash metadata may differ from the earlier Google face; renderer identity remains stable."
+}

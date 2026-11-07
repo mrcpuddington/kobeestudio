@@ -9,7 +9,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
-from ..core.shape_geometry import Point, Polygon, polygon_bounds
+from ..core.composition import ShapeObject
+from ..core.shape_geometry import Point, Polygon, polygon_bounds, shape_contour
 from ..core.studio_artwork import StudioArtwork, StrokePath
 from ..core.transforms import SUPPORTED_OUTPUT_LAYERS, is_bottom
 from .ipc_session import IpcSession, IpcUnavailableError
@@ -95,10 +96,24 @@ def selected_artwork(selection: Sequence[Any]):
             payload = decode_metadata(value)
         except (TypeError, ValueError, json.JSONDecodeError):
             return None
+        if not isinstance(payload, Mapping):
+            return None
         settings = payload.get("legacy_settings", {})
         if not isinstance(settings, Mapping):
             return None
         loaded = dict(settings)
+        feature = payload.get("feature", {})
+        # Variable labels must always reopen through the Variables editor.
+        # Early IPC builds recorded the variable expression under feature
+        # metadata but did not always include StudioTool in legacy settings.
+        # Retain the original ${...} expression so the preview can resolve it
+        # against the active project and placement stays live in KiCad.
+        if isinstance(feature, Mapping) and feature.get("kind") == "variable_label":
+            template = feature.get("template")
+            if isinstance(template, str) and template.strip():
+                loaded["VariableTemplateText"] = template
+            loaded["StudioTool"] = "Variables"
+            loaded["StudioModeChoice"] = "Label"
         loaded["_LoadedFootprintSettings"] = True
         return loaded, footprint
     return None
@@ -136,6 +151,21 @@ class IpcArtworkPlacement:
 
     def __init__(self, session: IpcSession):
         self.session = session
+
+    def _discard_or_report_unknown_state(self, transaction, operation_error: Exception) -> None:
+        """Discard a failed edit without hiding an unconfirmed rollback.
+
+        If KiCad has disconnected, ``drop_commit`` can fail too.  In that
+        case the board may or may not contain part of the operation, so the
+        caller must not present it as a normal failed placement.
+        """
+        try:
+            self.session.discard(transaction)
+        except Exception as discard_error:
+            raise IpcUnavailableError(
+                "KiCad rejected the operation and Kobee could not confirm its rollback. "
+                "Check the board, then reopen it before retrying: {}".format(discard_error)
+            ) from operation_error
 
     @staticmethod
     def _api():
@@ -179,6 +209,22 @@ class IpcArtworkPlacement:
     def _owner_layer(api, output_layer: str):
         layer = api["BoardLayer"]
         return layer.BL_B_Cu if is_bottom(output_layer) else layer.BL_F_Cu
+
+    def _configure_hidden_field(self, api, field, output_layer, size_mm=1.0):
+        # Zero-sized protobuf defaults are accepted by CreateItems, but KiCad's
+        # native Footprint Properties dialog cannot save them (even hidden
+        # fields). Keep every field valid so changing X/Y needs no repairs.
+        field.layer = self._layer(api, output_layer)
+        field.visible = False
+        field.text.attributes.size = api["Vector2"].from_xy_mm(size_mm, size_mm)
+        field.text.attributes.stroke_width = api["from_mm"](size_mm * 0.15)
+
+    def _configure_standard_fields(self, api, footprint, output_layer):
+        for attribute, name in (("reference_field", "Reference"), ("value_field", "Value"),
+                                ("datasheet_field", "Datasheet"), ("description_field", "Description")):
+            field = getattr(footprint, attribute)
+            field.name = name
+            self._configure_hidden_field(api, field, output_layer)
 
     @staticmethod
     def _artwork_origin(artwork: StudioArtwork, output_layer: str) -> Point:
@@ -248,7 +294,7 @@ class IpcArtworkPlacement:
         metadata.name = METADATA_FIELD_NAME
         metadata.layer = self._layer(api, output_layer)
         metadata.text.value = encode_metadata(payload)
-        metadata.visible = False
+        self._configure_hidden_field(api, metadata, output_layer, size_mm=0.1)
         definition.add_item(metadata)
 
         owner_target = next((layer for layer in layers if not is_bottom(layer)), layers[0])
@@ -262,6 +308,7 @@ class IpcArtworkPlacement:
         footprint.value_field.name = "Value"
         footprint.value_field.text.value = "Kobee Studio"
         footprint.value_field.visible = False
+        self._configure_standard_fields(api, footprint, output_layer)
         return footprint
 
     def build_variable_footprint(
@@ -270,6 +317,7 @@ class IpcArtworkPlacement:
         payload: Mapping[str, Any],
         output_layer: str,
         output_layers: Optional[Sequence[str]] = None,
+        container_artwork: Optional[StudioArtwork] = None,
     ):
         """Build a footprint containing native KiCad ``${VARIABLE}`` text.
 
@@ -302,6 +350,38 @@ class IpcArtworkPlacement:
         stroke_mm = max(0.01, float(settings.get("NativeStrokeWidthCtrl", 0.18)))
 
         for layer in layers:
+            # Keep the variable itself as native KiCad text. The optional
+            # container is an outlined Kobee graphic, sized from the current
+            # preview, so changing a project variable never turns the text
+            # into stale static polygons.
+            if container_artwork is not None:
+                shape = next(
+                    (
+                        item
+                        for item in container_artwork.document.objects
+                        if isinstance(item, ShapeObject)
+                        and item.object_id == "shape.background"
+                    ),
+                    None,
+                )
+                if shape is not None:
+                    contour = shape_contour(
+                        shape.shape,
+                        shape.size,
+                        container_artwork.document.style.shape,
+                    )
+                    outline = StudioArtwork(
+                        (),
+                        (StrokePath(contour, max(0.01, container_artwork.document.style.shape.border_thickness_mm)),),
+                        (),
+                        container_artwork.document,
+                    )
+                    for primitive in artwork_polygons(
+                        outline,
+                        layer,
+                        offset=self._artwork_offset(container_artwork, layer),
+                    ):
+                        definition.add_item(self._polygon_item(api, primitive, layer))
             text = api["BoardText"]()
             text.value = raw_text
             text.layer = self._layer(api, layer)
@@ -326,7 +406,7 @@ class IpcArtworkPlacement:
         metadata.name = METADATA_FIELD_NAME
         metadata.layer = self._layer(api, output_layer)
         metadata.text.value = encode_metadata(payload)
-        metadata.visible = False
+        self._configure_hidden_field(api, metadata, output_layer, size_mm=0.1)
         definition.add_item(metadata)
 
         owner_target = next((layer for layer in layers if not is_bottom(layer)), layers[0])
@@ -340,6 +420,7 @@ class IpcArtworkPlacement:
         footprint.value_field.name = "Value"
         footprint.value_field.text.value = "Kobee Studio variable label"
         footprint.value_field.visible = False
+        self._configure_standard_fields(api, footprint, output_layer)
         return footprint
 
     def place_variable_text(
@@ -348,11 +429,16 @@ class IpcArtworkPlacement:
         payload: Mapping[str, Any],
         output_layer: str,
         output_layers: Optional[Sequence[str]] = None,
+        container_artwork: Optional[StudioArtwork] = None,
         old_footprint: Optional[Any] = None,
         start_interactive_move: bool = True,
     ):
         footprint = self.build_variable_footprint(
-            settings, payload, output_layer, output_layers=output_layers
+            settings,
+            payload,
+            output_layer,
+            output_layers=output_layers,
+            container_artwork=container_artwork,
         )
         if old_footprint is not None:
             try:
@@ -373,14 +459,16 @@ class IpcArtworkPlacement:
                 created = self.session.board.update_items(footprint)
             else:
                 created = self.session.board.create_items(footprint)
+            if len(created or ()) != 1:
+                raise RuntimeError("KiCad did not retain the artwork; the operation was rolled back")
             self.session.commit(
                 transaction,
                 "Update Kobee Studio variable label"
                 if old_footprint is not None else
                 "Place Kobee Studio variable label",
             )
-        except Exception:
-            self.session.discard(transaction)
+        except Exception as error:
+            self._discard_or_report_unknown_state(transaction, error)
             raise
 
         placed = created[0] if created else None
@@ -429,12 +517,14 @@ class IpcArtworkPlacement:
                 created = self.session.board.update_items(footprint)
             else:
                 created = self.session.board.create_items(footprint)
+            if len(created or ()) != 1:
+                raise RuntimeError("KiCad did not retain the artwork; the operation was rolled back")
             self.session.commit(
                 transaction,
                 "Update Kobee Studio artwork" if old_footprint is not None else "Place Kobee Studio artwork",
             )
-        except Exception:
-            self.session.discard(transaction)
+        except Exception as error:
+            self._discard_or_report_unknown_state(transaction, error)
             raise
 
         placed = created[0] if created else None
@@ -535,12 +625,12 @@ class IpcArtworkPlacement:
             originals.append((source, original_items, original_visibility))
 
         sources = tuple(source for source, _generated, _existing, _retained in plans)
+        transaction = self.session.begin_commit()
         for source, _generated, _existing, retained in plans:
             source.definition.items = retained
             source.reference_field.visible = False
         new_designators = tuple(generated for _source, generated, existing, _retained in plans if existing is None)
         updated_designators = tuple(generated for _source, generated, existing, _retained in plans if existing is not None)
-        transaction = self.session.begin_commit()
         try:
             updated_sources = tuple(self.session.board.update_items(sources) or ())
             if len(updated_sources) != len(sources):
@@ -577,7 +667,7 @@ class IpcArtworkPlacement:
             for source, items, visible in originals:
                 source.definition.items = items
                 source.reference_field.visible = visible
-            self.session.discard(transaction)
+            self._discard_or_report_unknown_state(transaction, error)
             raise RuntimeError(
                 "Designators were not changed because KiCad could not retain the replacement geometry: {}".format(error)
             ) from error

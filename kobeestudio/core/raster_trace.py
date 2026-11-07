@@ -41,16 +41,16 @@ class RasterTraceResult:
 
 def _pillow():
     try:
-        from PIL import Image, ImageFilter
+        from PIL import Image, ImageFilter, ImageOps
     except ImportError as error:
         raise RuntimeError("PNG conversion requires Pillow; recreate the KiCad plugin environment") from error
-    return Image, ImageFilter
+    return Image, ImageFilter, ImageOps
 
 
 def trace_png_bytes(data: bytes, settings: RasterTraceSettings = RasterTraceSettings()) -> RasterTraceResult:
     if not isinstance(data, bytes) or not data or len(data) > MAX_PNG_BYTES:
         raise ValueError("PNG must be between 1 byte and 20 MiB")
-    Image, ImageFilter = _pillow()
+    Image, ImageFilter, ImageOps = _pillow()
     try:
         image = Image.open(io.BytesIO(data))
         if image.width * image.height > MAX_PNG_PIXELS:
@@ -96,7 +96,10 @@ def trace_png_bytes(data: bytes, settings: RasterTraceSettings = RasterTraceSett
            'width="{mw}mm" height="{mh}mm"><g fill="#000">{paths}</g></svg>').format(
         w=width, h=height, mw=settings.width_mm, mh=height * mm_per_pixel, paths="".join(paths)
     ).encode("utf-8")
-    preview = io.BytesIO(); mask.convert("L").save(preview, format="PNG")
+    # The board-facing preview uses black for material that will actually be
+    # placed. PIL's binary mask does the inverse (true pixels are white),
+    # which made the former black/white swap look ineffective to users.
+    preview = io.BytesIO(); ImageOps.invert(mask.convert("L")).save(preview, format="PNG")
     return RasterTraceResult(svg, preview.getvalue(), (width, height), settings)
 
 

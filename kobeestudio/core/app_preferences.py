@@ -15,6 +15,11 @@ from .measurement_units import MeasurementUnit
 
 PREFERENCES_SCHEMA_VERSION = 1
 APPEARANCE_CHOICES = ("system", "light", "dark")
+DEFAULT_FAVOURITE_FONT_NAMES = (
+    "FreddySpark-Regular",
+    "UbuntuMono-B",
+    "mplus-1mn-medium",
+)
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -41,6 +46,10 @@ class AppPreferences:
     measurement_unit: MeasurementUnit = MeasurementUnit.MILLIMETRES
     hidden_symbol_ids: Tuple[str, ...] = ()
     hidden_label_ids: Tuple[str, ...] = ()
+    favourite_font_names: Tuple[str, ...] = DEFAULT_FAVOURITE_FONT_NAMES
+    # System fonts are intentionally opt-in. A workstation can expose
+    # hundreds of faces, so discovery must not flood every typeface picker.
+    enabled_system_font_names: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         appearance = str(self.appearance).strip().lower()
@@ -48,7 +57,10 @@ class AppPreferences:
             raise ValueError("Appearance must be system, light, or dark")
         object.__setattr__(self, "appearance", appearance)
         object.__setattr__(self, "measurement_unit", MeasurementUnit.parse(self.measurement_unit))
-        for field in ("hidden_symbol_ids", "hidden_label_ids"):
+        for field in (
+            "hidden_symbol_ids", "hidden_label_ids", "favourite_font_names",
+            "enabled_system_font_names",
+        ):
             raw = getattr(self, field)
             if isinstance(raw, str):
                 raise ValueError("{} must be a list of ids".format(field))
@@ -65,6 +77,8 @@ class AppPreferences:
             "measurement_unit": self.measurement_unit.value,
             "hidden_symbol_ids": list(self.hidden_symbol_ids),
             "hidden_label_ids": list(self.hidden_label_ids),
+            "favourite_font_names": list(self.favourite_font_names),
+            "enabled_system_font_names": list(self.enabled_system_font_names),
         }
 
     @classmethod
@@ -76,6 +90,10 @@ class AppPreferences:
             measurement_unit=MeasurementUnit.parse(payload.get("measurement_unit", "mm")),
             hidden_symbol_ids=tuple(payload.get("hidden_symbol_ids", ())),
             hidden_label_ids=tuple(payload.get("hidden_label_ids", ())),
+            favourite_font_names=tuple(
+                payload.get("favourite_font_names", DEFAULT_FAVOURITE_FONT_NAMES)
+            ),
+            enabled_system_font_names=tuple(payload.get("enabled_system_font_names", ())),
         )
 
 
@@ -84,18 +102,32 @@ class AppPreferencesStore:
         self.root = Path(data_root) if data_root is not None else user_data_root()
         self.path = self.root / "preferences.json"
 
-    def load(self) -> AppPreferences:
-        if self.path.is_symlink() or not self.path.is_file():
+    def load_strict(self) -> AppPreferences:
+        """Load preferences or explain why an existing record is unusable."""
+        if self.path.is_symlink():
+            raise ValueError("Application preferences must be a regular file, not a symlink")
+        if not self.path.exists():
             return AppPreferences()
+        if not self.path.is_file():
+            raise ValueError("Application preferences path is not a regular file")
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            raise ValueError("Application preferences must be a JSON object")
+        return AppPreferences.from_dict(payload)
+
+    def load(self) -> AppPreferences:
+        """Keep the app usable, while preserving an unreadable source file."""
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(payload, Mapping):
-                return AppPreferences()
-            return AppPreferences.from_dict(payload)
+            return self.load_strict()
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return AppPreferences()
 
     def save(self, preferences: AppPreferences) -> None:
         if not isinstance(preferences, AppPreferences):
             raise TypeError("preferences must be AppPreferences")
+        # Do not turn a corrupt external file into a clean default merely by
+        # opening Settings and pressing Save.  Data Health can first back it
+        # up; removing/recovering it is an explicit user action.
+        if self.path.exists() or self.path.is_symlink():
+            self.load_strict()
         _atomic_json(self.path, preferences.to_dict())

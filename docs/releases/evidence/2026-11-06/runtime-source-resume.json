@@ -1,0 +1,1727 @@
+{
+  "runtimeFiles": 430,
+  "fingerprint": "46f495cfc1168788dfce38756e2c18fc334e14594fd63069d7c4255fb0a50366",
+  "fingerprintFormat": "SHA256 of concatenated path + NUL + file SHA256 + newline, in recorded order",
+  "files": [
+    {
+      "path": "kobeestudio/__init__.py",
+      "sha256": "c08b4d12c629a9bf8e3a492b01e6aade3b14c977d0ce0c8e22df594463916b14"
+    },
+    {
+      "path": "kobeestudio/core/__init__.py",
+      "sha256": "b9e51341ee876813b2268f3b5239411529dbb48ac779aebbd5694a95e2ebc20e"
+    },
+    {
+      "path": "kobeestudio/core/app_preferences.py",
+      "sha256": "59845e5c173fbad6cafc956d9162631c86e67f224030b4704294fdd313d9fd65"
+    },
+    {
+      "path": "kobeestudio/core/component_callout.py",
+      "sha256": "64db1e726967bd31dca4ab275ad717371163d38858ea9b58b97cdd94713073f3"
+    },
+    {
+      "path": "kobeestudio/core/component_presets.py",
+      "sha256": "d9639348830fe4f9c3440bc7ecd2521351b6cf91de4d4843bd96a9476463004a"
+    },
+    {
+      "path": "kobeestudio/core/composition.py",
+      "sha256": "96d94c48782db1ea5e20fb6751e819e895eaadd541999b702cb3f7e1e46118f8"
+    },
+    {
+      "path": "kobeestudio/core/data_health.py",
+      "sha256": "f18e90ac07f6a086469b5f2e5996c71349bf82e05ac503f47f92e920a6ed1820"
+    },
+    {
+      "path": "kobeestudio/core/data_paths.py",
+      "sha256": "924634f45ba535c0281871af7fa140095b3c83e182c01fa59f12488cec823899"
+    },
+    {
+      "path": "kobeestudio/core/font_library.py",
+      "sha256": "ef10df751863800f6e1feb678ffd8c75780e77cb1f08f3957f5a78f98372bce7"
+    },
+    {
+      "path": "kobeestudio/core/footprint_generation.py",
+      "sha256": "b5818f491f1504f079c2d8ebb3090e7fcf80464c091e584d0d9fba1931c60543"
+    },
+    {
+      "path": "kobeestudio/core/icon_catalog.py",
+      "sha256": "b7f4be158289fef781d995e484ade9ca2b8cc1d37148ee2c39953a828ae5d6ba"
+    },
+    {
+      "path": "kobeestudio/core/legacy_adapter.py",
+      "sha256": "f1813274c739a5c8e5e3613c4ca4a4c460e540097a6b9416d7db474960f4f973"
+    },
+    {
+      "path": "kobeestudio/core/library_archive.py",
+      "sha256": "8b5674ac367dfd153f6675e3b5028a5b6c1797438286cedf938b0a6c5a94e425"
+    },
+    {
+      "path": "kobeestudio/core/machine_codes.py",
+      "sha256": "bdb1823850055a5d903823809760fc5162c194da3659cf8f7ebb5107dac5bc99"
+    },
+    {
+      "path": "kobeestudio/core/measurement_units.py",
+      "sha256": "a273db55472595b6513ceef0e2bb6e57218c09781dfd9f5dd0e759d7e78ebdf3"
+    },
+    {
+      "path": "kobeestudio/core/pin_header.py",
+      "sha256": "2a2989a2361f6652dbd950af5c617e4d90c11956026ef5a739a685ef6a35b555"
+    },
+    {
+      "path": "kobeestudio/core/project_data.py",
+      "sha256": "cf93d3ca3c67588365ee6fd4099b7df4685c65458b52f0fa488c5a84c403f47e"
+    },
+    {
+      "path": "kobeestudio/core/quick_labels.py",
+      "sha256": "20cce3a4e15d5f6ad80dbe531e90d166710e2cb6805b20d2b4b7f275fa662c7a"
+    },
+    {
+      "path": "kobeestudio/core/raster_trace.py",
+      "sha256": "ff90f4efc223b3b0ce37b9579928af837f731a8d05adc5e83f785e02082d455a"
+    },
+    {
+      "path": "kobeestudio/core/settings_profiles.py",
+      "sha256": "e00b054d37eb76096f817c2f007c67dbfaa68d4823eacbd72c56f0826d9a54ea"
+    },
+    {
+      "path": "kobeestudio/core/shape_geometry.py",
+      "sha256": "24c4171a1b1c98bb2e822475417736ea342a0bc262ae4c871430eef123edd443"
+    },
+    {
+      "path": "kobeestudio/core/studio_artwork.py",
+      "sha256": "a13107103f34210fa984d8b7cb08ac36d9a7290dc8c9741fac19145cdc430edc"
+    },
+    {
+      "path": "kobeestudio/core/svg_symbols.py",
+      "sha256": "08fd1b0e221e07659ac53775bc61529c0912c3bbc344a65a72606d1f5f380268"
+    },
+    {
+      "path": "kobeestudio/core/text_formatting.py",
+      "sha256": "3960bcad4c95e96576934646100243a1a63bc1bb509b90e2c9320e09738b77d5"
+    },
+    {
+      "path": "kobeestudio/core/text_geometry.py",
+      "sha256": "b1f8fd0b406091f020beef693080a2880dc8ca139d72bd5e7a3b703399d24489"
+    },
+    {
+      "path": "kobeestudio/core/transforms.py",
+      "sha256": "296d03eda1789f81e175cd51f44c934105f3970db3db1bf9cabff30f5c326310"
+    },
+    {
+      "path": "kobeestudio/core/variable_templates.py",
+      "sha256": "ea926cb8b14669045e597964fcf89c52175254d5c71af34ca951d1534e9039a5"
+    },
+    {
+      "path": "kobeestudio/fonts/FreddySpark-Regular.ttf",
+      "sha256": "34e4ea5fe6e917637721e939229aebe1e53f6e9627343f429dbebd72e834df79"
+    },
+    {
+      "path": "kobeestudio/fonts/UbuntuMono-B.ttf",
+      "sha256": "11f15c3a6bbd998a8695fdefb3475931c3789aa035d7546f2efe78e83b352f6b"
+    },
+    {
+      "path": "kobeestudio/fonts/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/fonts/mplus-1mn-medium.ttf",
+      "sha256": "95f07f0e340432556cfdfcc9ed92663225fe3336e0a9c259098d41097b90c786"
+    },
+    {
+      "path": "kobeestudio/integration/__init__.py",
+      "sha256": "6feab4b0553f730baaf75cba746b5644d7eeaf863d9d1fa6e8940b0bc8609797"
+    },
+    {
+      "path": "kobeestudio/integration/board_tools.py",
+      "sha256": "e2af6c743b3afd6a53adf48ca2842670737275aacecfe3c1d1f44bd393b21682"
+    },
+    {
+      "path": "kobeestudio/integration/ipc_artwork.py",
+      "sha256": "4d5cc5213d8589a869db7d27d6a35c3aace71c39c4e99d397587f8677e70e260"
+    },
+    {
+      "path": "kobeestudio/integration/ipc_session.py",
+      "sha256": "3bf250c1cb75c567f576a83bb945e67cac0a56fe64c6d84e438be1cd52e013ae"
+    },
+    {
+      "path": "kobeestudio/integration/kicad_compatibility.py",
+      "sha256": "96c772ea23b4b75e4047a94ddfa39e796379811f20cf056b58e812f8d0e636b2"
+    },
+    {
+      "path": "kobeestudio/integration/platform_branding.py",
+      "sha256": "7c7dc5ed98197b88e485473f94099786805df1db1e143ebd61d382a9b295dd4a"
+    },
+    {
+      "path": "kobeestudio/plugin.py",
+      "sha256": "41b43f3e5aedf8a604971ca21b44127ebff5b456c883fab78e6757f21e29c2e3"
+    },
+    {
+      "path": "kobeestudio/rendering/__init__.py",
+      "sha256": "5a07d526aa88f990595e04336a597dffbaa08e7f4a48de69a148de480abf82aa"
+    },
+    {
+      "path": "kobeestudio/rendering/buzzard.py",
+      "sha256": "21054ba0d9c81e11b64d901eb09529fd3876d5c56ccff047955b956a7a71f5ef"
+    },
+    {
+      "path": "kobeestudio/resources/NOTICE.md",
+      "sha256": "c2efabc806162b0a5fbcaa571742a85e4ec03b293d890a340965ee8aa1a1f2b7"
+    },
+    {
+      "path": "kobeestudio/resources/ReferenceImages/RemoveDesignatorAfter.png",
+      "sha256": "86e760dccc1229b3d4dc38f28c2d22606b91b17efa8833f6402e74f5a7bf788e"
+    },
+    {
+      "path": "kobeestudio/resources/ReferenceImages/RemoveDesignatorBefore.png",
+      "sha256": "329606b70cd346728af516d4f10e721176881294fd9b194ae40c70b934e78af0"
+    },
+    {
+      "path": "kobeestudio/resources/ReferenceImages/RemoveSilkscreenAfter.png",
+      "sha256": "fd15690b5212bebe54b9cabe5f6a900a268df1d6796dc73d62c880f0b05d84c7"
+    },
+    {
+      "path": "kobeestudio/resources/ReferenceImages/RemoveSilkscreenBefore.png",
+      "sha256": "329606b70cd346728af516d4f10e721176881294fd9b194ae40c70b934e78af0"
+    },
+    {
+      "path": "kobeestudio/resources/google_fonts_catalog.json",
+      "sha256": "df1423f8257a8ca372f6c897578047d72d0d3748a016611d0239700b75cd8313"
+    },
+    {
+      "path": "kobeestudio/resources/kobee-bee.png",
+      "sha256": "97e69a6912d1ac57e8b48ee6bbe950853526931f03b78408e7b2974342e229e0"
+    },
+    {
+      "path": "kobeestudio/resources/kobee-studio-app-icon.png",
+      "sha256": "577f1c00e5a2dc316f207846e2009e6e57bd6ce3aaeb1fe5651fe039a4d4728e"
+    },
+    {
+      "path": "kobeestudio/resources/kobee-studio-platform-icon.png",
+      "sha256": "c43a906d8ad9f981973f39aa334317fe5aa9e85ccac212f27f07dc3accbb5776"
+    },
+    {
+      "path": "kobeestudio/resources/labels/README.md",
+      "sha256": "28cfad88725a1a695492113faed6045b056cd44f728cf5883172d03d54a7edc5"
+    },
+    {
+      "path": "kobeestudio/resources/labels/builtin.json",
+      "sha256": "8332745fcd4a9c082d96f7cff6f452d18ce6b6621c77e9ec98d5e979ac3c7fff"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/README.md",
+      "sha256": "a7d8e0aa8565b0ca5102ed44bdd54df5fabb1e028c2219bf15a712de39cf9692"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/controls/led--default.svg",
+      "sha256": "f3d89bddd2d337c41c379384030fe60ce5e527b5c61dacdb2390d9af62fe1206"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/controls/light_bulb--default.svg",
+      "sha256": "93e8025097c9ce5fb81ec640d335d58ff07eb041a9e98caaa1b43f511d4a92e1"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/controls/power_button--default.svg",
+      "sha256": "b5f764cbff74d2f10867cd6f48bad9939994637463b2b1a9adb47755a04fe994"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/controls/push_button--default.svg",
+      "sha256": "24c5518a199e2b5a9a36409fc8e6fdcd8fdcddbc464749dd93cda8992eb72dbf"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/controls/reset--default.svg",
+      "sha256": "28ddde4cda2f032d16d7936cfe8892a0a3800e80533b6da452e500c3bd12af1c"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/direction/input--default.svg",
+      "sha256": "36f12e08791621197df0d233ee4e67b2885a52a2bcf8e1a6f8e045533c130313"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/direction/output--default.svg",
+      "sha256": "f557c687194586f6d19e89bdb34d72766844c73fa3cecc9dc0b9513ef6244908"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/battery--default.svg",
+      "sha256": "94e3f050496c51e3d6ae58582d8e23daf9d21d63789302a035bea01f73168da0"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/centre_negative--default.svg",
+      "sha256": "647e5cdb209234decdf17b1fbfe10c04ac99ea61183c661cd62ddb6cf0b25bb7"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/centre_positive--default.svg",
+      "sha256": "6c8e65353ef7280cfb8f0209368b0fb86e36ca37cbd8f034006ab64fe4811662"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/ground--default.svg",
+      "sha256": "b3b6e996ebec0be9da312f831873d28658a99a69b876ee86a4fe9fb2a78009fd"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/lightning--default.svg",
+      "sha256": "9b9e2a8e41c97aefe80c28d2a9c4564119b4d5ebbabbcb1a3772d4133dec0cde"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/negative--default.svg",
+      "sha256": "ca146c5b4344e984a31233adcf176a31cd963821430e88df5dea6893b59af57b"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/electrical/positive--default.svg",
+      "sha256": "31732bf8de3683c3af1ff365c528c0c3b93b96455f5701f6926c452dbf21d617"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/pcb/test_point--default.svg",
+      "sha256": "82023587cef8de0a0c78f783a3f8c859bcee941ff331e3bf9ea90cffb79beb49"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/safety/warning--default.svg",
+      "sha256": "3902236a1c054c3e07b6053c843d7314245102d7367024167c41a5520caf6493"
+    },
+    {
+      "path": "kobeestudio/resources/symbols/safety/warning--rounded.svg",
+      "sha256": "497fa67167818357631b3e7f5b982fe81cc130dc9837db83215eb1ac68cf843f"
+    },
+    {
+      "path": "kobeestudio/ui/__init__.py",
+      "sha256": "f220fac8bda1b11ea4257d9999c822cedc4c7fd1b49d5af4faf8de163f0c5686"
+    },
+    {
+      "path": "kobeestudio/ui/asset_picker.py",
+      "sha256": "063d29cf338249ba12e5941d9a9d2d7e3d265daedd7176f4a069f5a2db74efd9"
+    },
+    {
+      "path": "kobeestudio/ui/async_dialog.py",
+      "sha256": "6b4f2d8da0b0feccc440b10f55ee2362aedb01cb46f8994f25c427cfed27968b"
+    },
+    {
+      "path": "kobeestudio/ui/base/__init__.py",
+      "sha256": "cc7fc1706fe3ef22bad8342b78c3f8992f88430b763821504a95875ce86d4206"
+    },
+    {
+      "path": "kobeestudio/ui/base/compat.py",
+      "sha256": "23e75c6a341b77e81a2ab42e459251e88f7a794becdd0f9a16e3a4c38f264806"
+    },
+    {
+      "path": "kobeestudio/ui/base/dialog.py",
+      "sha256": "9c2e761a6682ac6bc985d06cf6aedf208bd2109d297401a32d2f05da7ab981f7"
+    },
+    {
+      "path": "kobeestudio/ui/base/dialog_text_base.py",
+      "sha256": "ac0dd92db8cffa832d5192b881d22cf339f749dfba3ffcc001c6136c01165a8e"
+    },
+    {
+      "path": "kobeestudio/ui/editor_v2.py",
+      "sha256": "95e0f3a06a538d5acda4933fa8270674bfd6f10634aae907931c55de991c2967"
+    },
+    {
+      "path": "kobeestudio/ui/main_dialog.py",
+      "sha256": "253387f25e3d4f90c15c23a2523b79e18c2d5ab7dbb6091a0d807170a7130dde"
+    },
+    {
+      "path": "kobeestudio/ui/project_data_ui.py",
+      "sha256": "2a146544064977ae4845d6bbc7639e789dfd81026289228c9d9a680288fcf5c8"
+    },
+    {
+      "path": "kobeestudio/ui/settings_dialog.py",
+      "sha256": "d650634bbb3ff9aee0b36424117e2f19b5fc9e8120f0c7ef2f035cbef0e506f6"
+    },
+    {
+      "path": "kobeestudio/ui/single_instance.py",
+      "sha256": "e81dea95138d6b0332371e10041b6064d90980970cb5d25b73ca76f76ee65f5a"
+    },
+    {
+      "path": "kobeestudio/ui/theme.py",
+      "sha256": "39d71c7b53f764b00951a226946e69a8ec06548479ce737b2f63c31dd1162a42"
+    },
+    {
+      "path": "kobeestudio/ui/themed_controls.py",
+      "sha256": "d3a77df4e3ea41f055c97e9d606ff11282791a1cc259f15172af85e2dcb544e2"
+    },
+    {
+      "path": "kobeestudio/vendor/README.md",
+      "sha256": "efd386a88420f45eba85a937d235d9c22e3c275b4a1d17576d12838ccba9f929"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/__init__.py",
+      "sha256": "bda6aba69500f0d1039ba21fa286e8ff10cdbaef8459c94e2de507758314b96a"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/base.py",
+      "sha256": "0d967464ab8c5d31759108f17544480b3947a07b3619f0762e360cf9540058d0"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/codabar.py",
+      "sha256": "5a4ae34989fcce7bcbe8e6384c55d99425f02ecbd0cfd91c1f6b7f5fabaf3d21"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/code128.py",
+      "sha256": "3d02f984b708f2e3402092b75556e8b80e16e9e9ba19bc6e500ce27c1c3396e2"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/code39.py",
+      "sha256": "5c62d53106fbff4c2280782a963da52a7d574106f04edafd578207e7217c4a69"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/ean.py",
+      "sha256": "c169d4167e0ab0d3375cc7cd82ae5b179c30a725adaa71457b9a5291fc360469"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/itf.py",
+      "sha256": "c064a31ef3f0ba22da6e7e6729ab6929b98b39eaa8424f36f31ab3e638cb6a39"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/charsets/upc.py",
+      "sha256": "56d08d7077935972168c35ba6284d55d68ad85d62a367127a3511bb87e33316c"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/codabar.py",
+      "sha256": "804f8335e33ace44e7816882b81a6b8a3c34afb61ea109a99df62085a4248fb6"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/codex.py",
+      "sha256": "c035a5dfb51b1a86dd570ba62326ed827ced6fc44155057be9efc67f1b265b04"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/ean.py",
+      "sha256": "266ff38d4524945cf6b64bf2ef5524ffcdbfdc71a8ac643e8de82bfd8681989d"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/errors.py",
+      "sha256": "66afa2e9a610f420ef3a0c8a9d63433ac8f3494e6175a70e5e9bad1b4c77d440"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/isxn.py",
+      "sha256": "debdede725fe574caa0dd853ca52677b8a273758bb735466d0b0edeced765024"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/itf.py",
+      "sha256": "a124f63c6185a883f26c2b501b255f836aae8effc2a8ee1b48906e5106b1baf0"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/pybarcode.py",
+      "sha256": "b9a841452ce65dcfa1d971eb70bfc558db049ea135589b0840190a5b02955516"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/upc.py",
+      "sha256": "feea7127e5cd28f8d6a0365afd720df266e8c305165970676fa3de9789feefc8"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/version.py",
+      "sha256": "7a3c37b43cdf12160fcdfbe29b336452e5cdf58818cd82ef1652983b7e32e42e"
+    },
+    {
+      "path": "kobeestudio/vendor/barcode/writer.py",
+      "sha256": "203029367744c4420a3c059082a6044bac3eb189b672992488782f01022331c2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/__init__.py",
+      "sha256": "cc3e4ba5fd00721734c6dd3b93721a48d4634bcca19972640d3c565095372cf7"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/__main__.py",
+      "sha256": "6aae44705b52a7e3bb94a25594832490959d5cd92a784183d460c5f801a6e68b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/afmLib.py",
+      "sha256": "2d3e2fc8bf9f4556ef91035f56e0a1a2bd73b1d3819ec88138a70e1a50c1770a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/agl.py",
+      "sha256": "199e6ef5d72a220b858aedfb1a73f77bb07c91a5673d7bc86d0b0a3108cafa11"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cffLib/__init__.py",
+      "sha256": "d34750798ee220c75a784fa4a0f50ee72e039a432f8f6bad7d52085b6bf0f501"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cffLib/specializer.py",
+      "sha256": "ce22026179e88a9bc7395ae23cb0b05a98542ffe277bda557dad6025b581930d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cffLib/width.py",
+      "sha256": "5e14d51cceab2e771212b615bc5d9f9888ba8637ee73f1cbaa36bbdb3adfec61"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/builder.py",
+      "sha256": "566f75499244c525e41d9bd0922c05274484533c921e697c2c7c0142851e0669"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/errors.py",
+      "sha256": "f6f363c46fa8c3ba0798222cc6b2242f29400436eea9e60da8b05f0c3a8c0982"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/geometry.py",
+      "sha256": "dd27324ab47660325aedde4ae7fc4ce58b75fb734257eaf2f2291803957055b2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/table_builder.py",
+      "sha256": "f4dfc2a9ed06356258a1e9066dfe27f8eac9ab8036a4b61b5126b7d0616ff6c3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/colorLib/unbuilder.py",
+      "sha256": "896f84e48dfd5ac57cd8adcd8023b80a3cf09b55aacc6aedca91edf1ea706c73"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/config/__init__.py",
+      "sha256": "f2b120076f8262b372ce3ce6739f604a16df94b2e2fb9be8ad3c2f1dc9dae01c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/__init__.py",
+      "sha256": "0ae73b52095bd274a06ab693c5763927c6d17b39c7e700295b4b9a90deccc9c6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/__main__.py",
+      "sha256": "216084301d23708c687c76fff0dbd52e63415512bd654f1342137a4cd006adf1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/benchmark.py",
+      "sha256": "7634962bf04158f8aac875ba1845fecc98a221c365d432740a97350c40550637"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/cli.py",
+      "sha256": "2d81d5c6b4ffc4a0ae6dc2ce913467e86eb7dc8b5acd8220f1d4124004a18b7b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/cu2qu.py",
+      "sha256": "560cad3de1b6328af3d93d6376ebcc439cdeed459e7720c62d5fe6274e3eb2d2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/errors.py",
+      "sha256": "1de9bb2e4b060ed86dcd5167cc57a1c6a572e31c1095a86ce78eaff07e9d74d4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/cu2qu/ufo.py",
+      "sha256": "d6c1cf6b56d6087cb36ae51e6e0e3528031689e39c8a7e918d31c4030e7c3c8f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/designspaceLib/__init__.py",
+      "sha256": "ae5b33bbfd5d28df2757537ab0f79766990407d56d65220310d9d158bd8bd23f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/designspaceLib/split.py",
+      "sha256": "34a8cbaa7fffaf4c4fe7169c84e3a9666ee7b350eeeb3bcac24c20858374c8a2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/designspaceLib/statNames.py",
+      "sha256": "fe89275b59116605a5f14559312e57924f712ff62e85da2209eae4894905c97b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/designspaceLib/types.py",
+      "sha256": "a1f2bae6a5cd003a9ca65ef323bd8f6b9b34efe726ec6e3588498b555e38f84b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/encodings/MacRoman.py",
+      "sha256": "e37830b862f810c042753076a4a06646b1b3e83912559ab2965cb106ef9a422d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/encodings/StandardEncoding.py",
+      "sha256": "ee302e533b627036b95c9c97229248f52557ca2807ceb85dc6355311495139d4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/encodings/__init__.py",
+      "sha256": "0c90569a85ff1da6aeeea9609af5b27db852ceb5f6a8beb7e919ecec21b4d699"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/encodings/codecs.py",
+      "sha256": "42f5d90b8463a840ac2ebd75bb7208b043a98715d22eee7fa7f27cbf1c970c4a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/__init__.py",
+      "sha256": "8e522bbb6821c6f6f51e10b925ed810978c52661509582a9aeea2b3e8cf706f4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/__main__.py",
+      "sha256": "0dfd8f03a2d7c276bdf2549788bed1e1ab3f6447560889377a048ce70ec6a6f3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/ast.py",
+      "sha256": "f8666d1d8c241c709c9b172ac835bc832d8198ee5354caba338b872590282d12"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/builder.py",
+      "sha256": "0a40c44c1f1bcd92cad7d9b39f5159acba2ef198e5c2586c468b8d934cda4a7a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/error.py",
+      "sha256": "4ead9d6549423b22df8d3af7aa26ec4f683db7e4bf2447fa6ca832357e79a021"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/lexer.py",
+      "sha256": "9ffc8885662e43dd02515f04c91edd6354ec77cc10c2ed40f0834eaef806d8ab"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/location.py",
+      "sha256": "257cc7a86579e841dd72af36dc0c00e6868ad3985fff5c925a949c6e8df3182d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/lookupDebugInfo.py",
+      "sha256": "b16bdf11988bf4cf493d51fbfdf645feb4a2ecca70a0b6a0a190923f658b2927"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/parser.py",
+      "sha256": "93f7720704371568d56332ef126d1094f7f82a022216ef8f9d5c675ad28ee261"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/feaLib/variableScalar.py",
+      "sha256": "ed605b487d02b18f950c3cf0148eab3e5e1fa1b92104649439c2093e73b100fe"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/fontBuilder.py",
+      "sha256": "dbe9b7531b3d9b037cd4ed5c9ff0d0a0f15c78215178501fee57b55f536aa8d3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/help.py",
+      "sha256": "1823e5dd692007a75a6a0e8de32a1c54b3cd19ec8276263176c5201ddd187e48"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/__init__.py",
+      "sha256": "707877e6c01ea8e8e01cb1c087651586e947d666a0e0bfc1c9fd0fd43fb9be3b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/__main__.py",
+      "sha256": "bc3e7e6e17a87a8b5b42446715083b9dac0251e0ca4e6475b2ac7705c21852dd"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/base.py",
+      "sha256": "0d30ac324c6afeefce10111168fbe73e7c135573d6f2ad49cfaf32f6a391afd8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/cmap.py",
+      "sha256": "99ff234e9de145811857c058b7adfeafb1abe012fbcd92094e8a18c9d0d1898f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/layout.py",
+      "sha256": "4131a87d050ca0e13ed196f567d61fbd75efe49f03115cf04403da2f2d7b939a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/options.py",
+      "sha256": "51a722ac7194060405188f276810857cbfc9c2c57454ff9413fc296085e391a8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/tables.py",
+      "sha256": "d0a5aeb61f4b5f08b97658c089c5c5d2999d328e87cf94277262e84e10f7fd03"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/unicode.py",
+      "sha256": "2b5535b88737dceb1e15ab3f299255a071e3df6df6d9fcd15da74f9087f0a1f6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/merge/util.py",
+      "sha256": "c6f3f73fe3a9a58a13ab585d651d4ff2e941d62b638ef0ae2f29f7de7113dc4b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/__init__.py",
+      "sha256": "0c90569a85ff1da6aeeea9609af5b27db852ceb5f6a8beb7e919ecec21b4d699"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/arrayTools.py",
+      "sha256": "4469b78a48dde409f15ad98f26f9333c9492e7d7a9ac94392bb793ad3fa9596c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/bezierTools.py",
+      "sha256": "ac91559bca81069a7680c6d78cd73cb02b27bf404208267e66576076720a2552"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/classifyTools.py",
+      "sha256": "1b35e411a16d54ca83c68895274e6c50740a5dc1561e9424f6ced1c4bd543242"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/cliTools.py",
+      "sha256": "77ed54de8909003c4ee65151b32e870543235b3dcae9f55fe99710db7098b857"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/configTools.py",
+      "sha256": "5f9d543a5eb6c02183aaff4709d731f93e528b13eb231623f088eed1eb729985"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/cython.py",
+      "sha256": "80ee6a1ca64f47e7e20a9d190fe058beb3a9c6c781ec52ecfebe48443d7ece1b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/dictTools.py",
+      "sha256": "2faf6c347ec354a126acb384346cc6bfe6fbab01f629451e5f5e1fb656b320a1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/eexec.py",
+      "sha256": "e47339637463229e3cc948ac055d4427336a7e7b9af24b2ea4bca1b4317b9b18"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/encodingTools.py",
+      "sha256": "a0fc8860287e51b4675f18879eabb03854a2135d1898a9b5640a4af29bda3b72"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/etree.py",
+      "sha256": "762620608f6e9ac22e98d21ac83908337a2bec6cdeecf05065a93fa603c39a2d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/filenames.py",
+      "sha256": "93fcc440a3f9de01937ac95ea93ce74ef6e7cf655157e5cecc7e5abed4e92575"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/fixedTools.py",
+      "sha256": "11d0ab87550aafd5cebe7aaf3ddbfb5fe6cc2d34218297160712cfef5d340212"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/intTools.py",
+      "sha256": "affa0c24eb7a23ecba4ef091079f31d8d16a8e2f2b6c24130d2e69f9284af9fb"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/loggingTools.py",
+      "sha256": "cfd54d0b35600f9ee160887a43ac2518db1a7f5ec0824f666de75a9912ba14fe"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/macCreatorType.py",
+      "sha256": "e3b0e2f3c1d1544eed7640c5d570209c312e640972ed18064c8c5af67c1b4f90"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/macRes.py",
+      "sha256": "d90be20128675f6ec2f9bb44fa58cb5e674bb9640883687cd6640c82e6958c52"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/plistlib/__init__.py",
+      "sha256": "f5c346845cf7ec2cf338dae11d1cf658222da99386fa013e11bf07b23439118e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/plistlib/py.typed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/psCharStrings.py",
+      "sha256": "1a32568209279b6e649d93d7d5f59235b2cd3cda1216ec03c002aae77a67b9e3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/psLib.py",
+      "sha256": "3010d1e0980cc4c85bdbccb7bae726bb0d7f097b75f5a428c337d0b261113e80"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/psOperators.py",
+      "sha256": "a33a30c973a375d64f99bef8deea6f31c14b3fea1ea20cafd45df2ba33a48284"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/py23.py",
+      "sha256": "68f542114cff75e820c0b0427934ac71c5fa42025abd9aaf755b6e869ceb3ef0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/roundTools.py",
+      "sha256": "7bca7b4e58f4dd0eb7cc9fd7050db7f2accdd5c939e25f9f91264452fffa76fa"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/sstruct.py",
+      "sha256": "1da40f0b68cabc6f5b76e4386bcedd73872b7285f937d9c4ac879728bafdac71"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/symfont.py",
+      "sha256": "efec6f695e8fd7e3f166553e8060c107143a04b31ec769422d293efe70dbf30d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/testTools.py",
+      "sha256": "85ffe5b39ee774925f8e5400c4419e68f8f761a5d0af996ec0f9e194b8d1c820"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/textTools.py",
+      "sha256": "9bc0f5979f9bbf0fb299390e2f41015799a296f6ffc810cf3e8bdd543a992646"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/timeTools.py",
+      "sha256": "af431fe1d92687b1531d0db5cd541f3ff26a78d66f6226ee6f9a7d18ff86221e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/transform.py",
+      "sha256": "2fd292eb896062e88aaa20bfd11cb2141321ab891bc0fe81bf8ffbbd580649e0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/treeTools.py",
+      "sha256": "b4b5a4c320c779950f54e18d9c9783e0f9fbc766d07997adc0929a1005b62763"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/vector.py",
+      "sha256": "76cf5ea165614bf5bb61069c37478063fa16304b8b940f7e70904c184244a5b9"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/visitor.py",
+      "sha256": "cb51c70a3616216b8b96e5fabd5f9026c5fb031ccf3be73cabde07689b0a0d1e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/xmlReader.py",
+      "sha256": "45902d561ce11aa3eed4ad87480807acf595b4bd76ab0335ee18faa901a3f6b1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/misc/xmlWriter.py",
+      "sha256": "13c090900fe1ffe246987672948c25ddb262ca13dcf9109f44bdc4c5017ce9d0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/mtiLib/__init__.py",
+      "sha256": "b714f05f47ff5a810eab3e659474599aa6bb9a026f1081409ddbdc1bd225e7fb"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/mtiLib/__main__.py",
+      "sha256": "74a04249ed7faa404f1fa3d25667d7981fef1fe81787da48c1b14cde20219843"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/__init__.py",
+      "sha256": "0f695e516fb782c5133857096060b5f1e741623209f34e2eb78aa2b49616b1a4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/builder.py",
+      "sha256": "0159d59344860e3a5011a2b4dd845fb98358c2ff45788bf520112c969dee3d0a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/builder.py.sketch",
+      "sha256": "a1068783796cd54dd8e6ac45a10d494698e1a7dab9e1b0c83bcb07c2a6a69e8d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/error.py",
+      "sha256": "72d86e841b8ec196299132e2e6014fba95319179021def8bfd882413b375c022"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/maxContextCalc.py",
+      "sha256": "9773de47d4ab873093c0c46e473a46c41649cc85a9a64d6152a1afe9bdfef801"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/optimize/__init__.py",
+      "sha256": "514411a4d90753645ccc246df86cfbb0489813d010abd0472d76443b2bec9d7e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/optimize/__main__.py",
+      "sha256": "183adfb82945292a1ea78b460fed57fc0eb92508767dc6e28abd7805e7e9aed3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/otlLib/optimize/gpos.py",
+      "sha256": "09cabaf8236bb115f20cce9a9ebad4b46e85e620ca31ede330be10ec4bb0da0f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/__init__.py",
+      "sha256": "0c90569a85ff1da6aeeea9609af5b27db852ceb5f6a8beb7e919ecec21b4d699"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/areaPen.py",
+      "sha256": "1222202a37bbb48940d09998b1c306a5eb938f4fba217d6fa9600d48e1430acb"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/basePen.py",
+      "sha256": "949f76caf21e458fb629af043ef754b0e65b3446b67c5ee3170422c89b8f4ed2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/boundsPen.py",
+      "sha256": "3297db38ed8dbe17030aac09f344b4db41b2ec8c8994e1f5a30237ddcf084222"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/cairoPen.py",
+      "sha256": "c2eb8e275a900d2b7f2b7cec70cda7ba44721d94d9330333cc25c28ab7eafea4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/cocoaPen.py",
+      "sha256": "fc2bc227f15dfb7fba4837258f208b8d29d4a3728a0bd22a14f6de97d9d39aa4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/cu2quPen.py",
+      "sha256": "a1f780f9c3af8d4c82df599af8e35e60dfbf3f6de06cd26e2687dacd242673dc"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/filterPen.py",
+      "sha256": "c3270a3f71104e4262ad34127a6e26390166803ebf03345f29dc1beb4e08192c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/freetypePen.py",
+      "sha256": "32c223970bdde78a90a127b77eaa869b867286b8508b7fbd07a5f5cafe7f2ae4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/hashPointPen.py",
+      "sha256": "99e51a29130d11cc3eaebbe34b1720f86e085359c8b032e2c2fa4b781da32123"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/momentsPen.py",
+      "sha256": "12ce756d182c0ba660f598c8f8279569f68e82d763fa76657911f9a81c938bd0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/perimeterPen.py",
+      "sha256": "07d9f3ce647e0c906b90c526b16f953c40df457acb10dde59b405bbd2db7db70"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/pointInsidePen.py",
+      "sha256": "28cc611a0c7fc3a89e546727d8fe58dc9bb0a239afc9efff61a9cee7cd02b838"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/pointPen.py",
+      "sha256": "0bcc4d4a445b48b2058e260ba9590e30ba3399baf31c0448e2b0d5857a9f69d3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/qtPen.py",
+      "sha256": "f57169938f7b8c34874f4197924e220e4ef4146fbf3771badc7b3269e770ada8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/quartzPen.py",
+      "sha256": "528b59cd92b2682029fc996787752dd75feae4cefef376f10fe03b5f0ed9e90b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/recordingPen.py",
+      "sha256": "0ea97e1c60db869d5710838d295dc80c5459de92d862734c181712c2a1154a40"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/reportLabPen.py",
+      "sha256": "0638ebc50fbe98ac9dcfc8f0b7e5cc5870e5fecb48051040d74a775d405daf1f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/reverseContourPen.py",
+      "sha256": "e4f9b14bacab7d0b23dc18f809646a9e0c9a44045b969b4d030073cb219c1976"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/roundingPen.py",
+      "sha256": "f1145c7ddb35d0b46c40682148cc0eafec49c69987f17938db703554f9a22082"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/statisticsPen.py",
+      "sha256": "769a5e99eb5fe176fdd235cf17364885c4c1003713ed6073b3782906ae12141c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/svgPathPen.py",
+      "sha256": "268fe7dbfb1c79b5b9110701995e8c5239ffbd903b8ab254c914b5bc02f48936"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/t2CharStringPen.py",
+      "sha256": "194311bcda5796245a407265ae61ba818f182bea89723f5938ca75c950887dd1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/teePen.py",
+      "sha256": "ee6677d8bdcd41eaa99dc72a3c9a649b68b87a3871aa1ca3f11fbce279371307"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/transformPen.py",
+      "sha256": "fc9a1fe5d4034d53e35ca9484e563f198a1a29cde113944b2224529be6ab82dc"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/ttGlyphPen.py",
+      "sha256": "e26b9759d2a528c76a044eac4d713337e63d33c8af48e3e5a04c4b59e461be34"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/pens/wxPen.py",
+      "sha256": "3d8730abd19dc6bc684927263b98597a13c00a116eb1bcce86dc4d657fc846b3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/subset/__init__.py",
+      "sha256": "2a35dddc5e5893ef7343675b1a770937864db8d4220b7c215623d0f4f6baaad8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/subset/__main__.py",
+      "sha256": "382ae6c566fbe48dfd7661329c18d322f7a220e2162dc8efd7b60023d5ee1964"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/subset/cff.py",
+      "sha256": "c406f40892df36fa51082a5cfb806f39159db4315805f9e421d3077750305da0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/subset/svg.py",
+      "sha256": "4b8c1f103c712bb546f6932d8cc44234af8dede5ebb5f66210cf572c5a467805"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/subset/util.py",
+      "sha256": "f525c561be447fd679f2e5e660f0908a5f01da2dd0eda141ff57c50c54a9a5d5"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/svgLib/__init__.py",
+      "sha256": "20608bc126d4f232e1aba1c8daf49d3d080db3acc3522e7bef84e05f93025cf6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/svgLib/path/__init__.py",
+      "sha256": "3c553bddf4bb1e4e70db6b3b70a8d254357231e373deb89d0bdfb0f5e60af46b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/svgLib/path/arc.py",
+      "sha256": "2a2a3ddc0eabece3db5176837dda01ab2388a67e6f5a955d61d2231cc41f4129"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/svgLib/path/parser.py",
+      "sha256": "487fa22b77fae2ee5750696a399432e8440153f1e48fab4358476c4c67b52273"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/svgLib/path/shapes.py",
+      "sha256": "5da389c32ddabf158ae2ca83429e0c4d9f71d9f95aec62d034fe4415435cf7c4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/t1Lib/__init__.py",
+      "sha256": "a4f567e5c4ca7d0b1ff46a5620bbe804a1400ae40cb1d1d35ad125648372bd66"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/tfmLib.py",
+      "sha256": "50c6e433bdc95d12554bdb7607e049735deb4a322669606ecc2a1e84bc07161b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/__init__.py",
+      "sha256": "4cdb6ed4bfb722da71c35984d2234a3cff1b98f04edbf737849ff502f68fcd6f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/macUtils.py",
+      "sha256": "a33355a08776784c5810f478618ac1df5b270471f0e4d3cdbdb6b6a65fe7b165"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/removeOverlaps.py",
+      "sha256": "8d9b82952f54e8cca73b513edb480b4ef5a0a1cae2c2ab1a2df953c92d0c83f4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/scaleUpem.py",
+      "sha256": "3a572be9f4e10bc78af4336840c11455e185259ed3098316701131bd4baefc1b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/sfnt.py",
+      "sha256": "51f9b23a46e0c2440cc29f2abd245bf09a4dec2c91504af4b58ec2709d6bf48b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/standardGlyphOrder.py",
+      "sha256": "d4383bd5046e86a3edcfbc949e49ea56780730bb949910a4522f6f219fd555f0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/B_A_S_E_.py",
+      "sha256": "e31d85ad11354eb277773458b669b2e632d8ecf7532910498a1deef97061c98c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/BitmapGlyphMetrics.py",
+      "sha256": "b132468b76e10c4556d5aa1ed05e845e1711d1b68f169ee1397addf573eb91f3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_B_D_T_.py",
+      "sha256": "7eb863d3b0286de35c18c4d6fa0871d958f76f5fbce55db5ba3713da2ad2bc96"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_B_L_C_.py",
+      "sha256": "4aa315dd1a797ca23a7c8e031f6cce133cb5c61d2863c073d51e10b887ad8f10"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_F_F_.py",
+      "sha256": "b041b2d74b593a11e63ca30c58c5109c715bc633229f0f2c71832d56d1207c6b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_F_F__2.py",
+      "sha256": "b1bd59be7ed24d03b92483118efb7f94c5c343a22cd803b1cbc3fcc40638c8ef"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_O_L_R_.py",
+      "sha256": "f34ecd9795256260a0cf2a7952f997c7b9870e5136fd51bdc90e7f922de090aa"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/C_P_A_L_.py",
+      "sha256": "8290a98d82da3939ec199996528ea5722e2b76e5719bc21e4bc3a064fdddb462"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/D_S_I_G_.py",
+      "sha256": "a8bb3fb05eb6a2d7cc427e8f7b5bffdecd271112521e526de22fe37f46eb2f5d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/D__e_b_g.py",
+      "sha256": "dbfa32eb0c6a1960c399e2e40c2de9eb289000fcfc53dea82549cb0aea795438"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/DefaultTable.py",
+      "sha256": "291c4eac060ca9dd3f6be4c3e2497705dd5e84fb92898cca02beecaaf03c31af"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/E_B_D_T_.py",
+      "sha256": "d0c43e1842b5ef1ecb7d3eeacba0e7282c3aac0896529a8de23e3b6d298cfdbb"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/E_B_L_C_.py",
+      "sha256": "510fccb5c2906260f7008443b9e73cce0caf384274ede8f465ee63f0dcb428e8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/F_F_T_M_.py",
+      "sha256": "2dedeba951ccf5ca8b131a75e4be0756dc812ba68a249809f35a145e0f468599"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/F__e_a_t.py",
+      "sha256": "5e4e550620274f3ddcafba72e69445a0a6cbc61ff0124f53c621b17c1f7319de"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G_D_E_F_.py",
+      "sha256": "c093173eb0fdaa0b6f766f54d152b07e8496febbd05f9341089f6e9654a6620f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G_M_A_P_.py",
+      "sha256": "0f80c2fae2c8b8755a47412b624401ec354951d0f5c641913da656cb8d337c5c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G_P_K_G_.py",
+      "sha256": "3b8613b8c041d8b83cf0a157b75f971a3b68118f8107cfb5c9ceaa91f04001d5"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G_P_O_S_.py",
+      "sha256": "1b6778c964a9d8d98940d4cc5fb96fa82b25ce424fa30278e9e39bf34655b4a3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G_S_U_B_.py",
+      "sha256": "38fe9b327ddf74ffe9de112b20cd98e092dda3e7d8c166dcb37fcc3bd1ba5c23"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G__l_a_t.py",
+      "sha256": "1a2d912cfd4de0702246c6405463d7aee818c77ae98b65912ba01d4aa9f553d8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/G__l_o_c.py",
+      "sha256": "0c3aff90994ee09dff8eef534ee3d9a99c0278d59b8b4131d30d0f42fb58db18"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/H_V_A_R_.py",
+      "sha256": "d52091be55f578ad5eebeb0a9f369af51d0c6c099a09507c5fba6aac2760748d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/J_S_T_F_.py",
+      "sha256": "3107fc286bc9b0dfce6864b365aa51bcab02bfa91562df652c1e8ffbabe02027"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/L_T_S_H_.py",
+      "sha256": "91117e37cc9eeceb584410224476efc55f3ce10f40af95bd48691d519c569ec6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/M_A_T_H_.py",
+      "sha256": "51e27e39b9bd01554f4b4d017dcd7a80fe4ffe6f2c877c69419d30245dc182d9"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/M_E_T_A_.py",
+      "sha256": "e71b713518bcc64dcc3a1c66f25415a7bf0b22798c368e7a5ab52eb8f25aee52"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/M_V_A_R_.py",
+      "sha256": "16cb440022f3eee69c5fcc8e853e0415a1ae3dc8632838a300ccd7c6b25809e9"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/O_S_2f_2.py",
+      "sha256": "30656de767586b6f756e451e6923062d782607b771851c72c9a3330cb8a579f6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/S_I_N_G_.py",
+      "sha256": "13577a631b5b3631c34b424439d6cdc33c6a96ad683a27388d75dcdea1658ec8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/S_T_A_T_.py",
+      "sha256": "b4f6c3ffac786890023aec7c6ca7bfb05964d0f11ab7b6a2667f299d7a141b0b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/S_V_G_.py",
+      "sha256": "e24b26c19b4bf26150c8fb8413e367faf67194d2514af63d0a2f4b1cb029fb4a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/S__i_l_f.py",
+      "sha256": "9acaf25341e7da6b629a0c3707ac1847309ca515e9309c009b1ddf17dca24fb0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/S__i_l_l.py",
+      "sha256": "505ffb6b746e9dc147d8bab630e5a9f3feeb15a44bc591d2cb6c4ec14d8a620e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_B_.py",
+      "sha256": "e223122efd08bd4f078a389c5193b8851e0d678ff5f1de12eaf3c64659233ec7"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_C_.py",
+      "sha256": "4e30ca80674511a2f801f7e8f4c4c89ee54a6d850731ad29257d7ca73818c53d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_D_.py",
+      "sha256": "4a5f1b4a454af70988663867f12322acaee30822ce5e1020e4c9371628c68972"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_J_.py",
+      "sha256": "7459d5b7fec3bcf5dede5ae2e27b86dcd1f05c144c4482caf663bd01a188bc78"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_P_.py",
+      "sha256": "bc35678c71404ffd5d2bd14ea1c235bc8cab4b29d2cf2da6d3489507a5c231e2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_S_.py",
+      "sha256": "5d771078859a3125806d2265eaba894e3ade1b4035062f5812f7b00f46200132"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I_V_.py",
+      "sha256": "a07016ab24a34ea4af6d8e6c456e26a37bf56385a1318b3dc5d5aacf5fb209a9"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I__0.py",
+      "sha256": "59a9fecce877849d4c9c39c3a20a997e30ae53eb4e8b7e20bfa74fdb0846ad9c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I__1.py",
+      "sha256": "663dc7c1fb15e8626678543a4fcfc2963a78c8147bfb925388587bdf73e6f10e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I__2.py",
+      "sha256": "c343e40330542b323d0829e36df7d7743d37835e151e01796532d5f39f0d654e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I__3.py",
+      "sha256": "d2f1aad143cd20122da1348354c766bd2397bc981753bfd06852bdf90abe3ee1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_S_I__5.py",
+      "sha256": "0a32e930166f1a574dba4fb43f291bda6daccfbca185c53108e803c64fa34078"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/T_T_F_A_.py",
+      "sha256": "d6a52054f86e7c50aa56a19cd08653bfba8b15d530874e92ce57a091749031da"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/TupleVariation.py",
+      "sha256": "ea5e0e0a6698434f24ae143debf23b87f7118beac9c7f34c5173831cfc53ef60"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/V_D_M_X_.py",
+      "sha256": "10fa0c452a3d78745c1f269db8edd83297f39d8c5fd1b7fe236d092788d109cc"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/V_O_R_G_.py",
+      "sha256": "01974b75de8d16a178f9072656fe615145ffed800a05eb0338a61cbbbc2f934c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/V_V_A_R_.py",
+      "sha256": "aa8d7b654f26da31297387dc14e199d3b9912ed9123d714e59c6c5b9d6bea030"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/__init__.py",
+      "sha256": "636afd45751274e77ed4e39f2d23ef909e536b625f5141f8c0e3633edaef8ad8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_a_n_k_r.py",
+      "sha256": "6654f80497903830bfccc745ca2a247474ba06f5e9db042038e024bed5dee97c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_a_v_a_r.py",
+      "sha256": "2c4da055a0356dc688280781ad0a0dbe3b65dffb9b9fd33b5c6744c96a602b00"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_b_s_l_n.py",
+      "sha256": "0f5b51a3c4c3014c5e0aa556b1399af6ed95c51cf15240a917ce0bbff872e2b5"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_c_i_d_g.py",
+      "sha256": "39247ae2540cc2c9a4e57d691cccfba5476821d4d578415f4ce64875af749c4e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_c_m_a_p.py",
+      "sha256": "35b15b96efb3399e9b65491804884ae1ab685ee6e8d88fc759748bc6eaabb1ad"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_c_v_a_r.py",
+      "sha256": "b5bbdccfa66c760cffcb36e2de9a5d2e54f91f8a56d00f93dac74a381baf6171"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_c_v_t.py",
+      "sha256": "84f17c3b6d3e11e412604291f9bb4bbe52582736788860987b8318a9d38b1597"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_f_e_a_t.py",
+      "sha256": "a27683f86efc6aac548e147b4c49a88b62dde7c715c40d1cc04b9db8b11954f0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_f_p_g_m.py",
+      "sha256": "e07b4bdba04cce07a86cb777c0bbe0c038e69b6795333969530cc327c98133c2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_f_v_a_r.py",
+      "sha256": "bb9556b03bcadb31ddb7a68838ae86811478bd11c1aa3e9b7255959882ca8339"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_g_a_s_p.py",
+      "sha256": "34185913b8155506894c69b61bb6a545c96276fc434d44c45ea1027a664a873d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_g_c_i_d.py",
+      "sha256": "e155aadaee9cdb564e439fc4279130b595c2fb30f3e9238f6300c34595917330"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_g_l_y_f.py",
+      "sha256": "dd04411ea6eac9c8f691b61fa9600c69255c4b5cd8ebdaa300be7f94db67f33f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_g_v_a_r.py",
+      "sha256": "5e13ef06053089caa6ffa746c6e69cc5470292b118a3999480a1fdc5b38c5976"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_h_d_m_x.py",
+      "sha256": "8a1d7ea9ecedc1292c4f3ab9410d8b1a12fc0bde98ecaa54998beb82c42718d0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_h_e_a_d.py",
+      "sha256": "9681445ab090552bbf48f23ea4440b7e964e07b42bc753583ea9ec17fc2609fe"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_h_h_e_a.py",
+      "sha256": "49eb033a7772f3e060b5ef2a13cc4c9a2022f40461a9a97963f21202262f5a68"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_h_m_t_x.py",
+      "sha256": "e497f7899cc51883dfe48a6935cb04b09a636ab6dd8ae69ac77c0a6a8801189a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_k_e_r_n.py",
+      "sha256": "1b016d041634456ec1c358415b36c435e9ac20513c41283a3a67f18224c94b57"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_l_c_a_r.py",
+      "sha256": "4ac63302ea7f7bc2a0e8b102e2c5c39305cd072dbbf8f0d5f3238ac9a38a8f5c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_l_o_c_a.py",
+      "sha256": "dede6c70a9c484aafa6e635435d11ecaa099534c9c660f1f36cca5e3933373d1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_l_t_a_g.py",
+      "sha256": "a536ed083cbcc9e8177db809597548ce5944d311cc0ad783a69364ba77ddb6c2"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_m_a_x_p.py",
+      "sha256": "78dc32def7d3422f949c7826913c21e837148e11ef416135dfe4d3a1346c2f34"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_m_e_t_a.py",
+      "sha256": "dcbfbc6a1603c61fd7a11b92e16a1547c49e2a9abbd5851d91551a4fdaceff82"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_m_o_r_t.py",
+      "sha256": "da9ecfccf1b374eb45860f85c6f761d0f3b8c91b3aff3fd68d07a07b17990acc"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_m_o_r_x.py",
+      "sha256": "5098416c0de681540ed681a6bbfd9b35753042b7954b3b46f3917d93b0e99a24"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_n_a_m_e.py",
+      "sha256": "b457ad71d5ec728718a4c5df9cd6dcafea93340d5d56e5cbc952543e62025c32"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_o_p_b_d.py",
+      "sha256": "b777aa52464fc9a41b6a112629aaa9edbac335bb783108ded95ab58c1bbe7c47"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_p_o_s_t.py",
+      "sha256": "574ab239f20820ae69fea556ad91ead6a3aa137ddb0847dabee8f24118f63843"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_p_r_e_p.py",
+      "sha256": "a122c837c000fa8d6241fa32881f0dd7bd200eeb06c3f36123db903ff1d6d0ef"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_p_r_o_p.py",
+      "sha256": "dc91c5968209c20f67e1dce87b828ba1b1dcef9a0987a0cb35ee75b1a91fcfc1"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_s_b_i_x.py",
+      "sha256": "f613ad653ea17a4dde36ffa58a2de3e07b93433e459301a74b6d644da4283f61"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_t_r_a_k.py",
+      "sha256": "abb5ca455ae786f9e7429b20ec9fd57b95621f1dda604aca06131a2777547d43"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_v_h_e_a.py",
+      "sha256": "c8310c3c9ea86490fc1c28bc38991d985574a940decb2804634c350dac11887c"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/_v_m_t_x.py",
+      "sha256": "de238f42ba0715af19d433f301e5834c6e72267a54d485a450b8257d5ac1f1af"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/asciiTable.py",
+      "sha256": "d5088b5463d56e4b0333b03e0d1dab6cb97c10ecb395bb4972bf8622915b6d47"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/grUtils.py",
+      "sha256": "48f6bc71d9db992a10e3b9d543d3a187683727ef723abc6db82da7e6c5c88075"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/otBase.py",
+      "sha256": "f2dfe1588234d08589dbc7c2fd6344c5e572c7f23fd094b53984a89f9c705080"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/otConverters.py",
+      "sha256": "1778708caedfd849e6e0fc3ead1d037a02d7033799bb8832d3c255eaa6dafdc9"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/otData.py",
+      "sha256": "4c7ec64f22178f2f57a47a658daca32a69e29c3a88cac8d87ce0b2253a9fca56"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/otTables.py",
+      "sha256": "6d4260e4fd840871b9570c84edf8af7b9d479ef599ba3c022509f013f1ada08d"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/otTraverse.py",
+      "sha256": "3a039a2ca3224919091af35a78e9fb5d3e0e0002acd8fe458e07506f5a840039"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/sbixGlyph.py",
+      "sha256": "63ba4fd2127b9f8b951953fd167896bdf3b87ab5ea921c0102d379e24fb8d5d7"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/sbixStrike.py",
+      "sha256": "f74f990e50109f3e601e49a42d6832d8e0410b6258c9729d4f5e602ecadb0f78"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/table_API_readme.txt",
+      "sha256": "7999514cb5242f373ff4eb77a5d7e1c8c6f76a1534fc88a9c74bd26f33951b2f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/tables/ttProgram.py",
+      "sha256": "fca3b77d6001faa52674ab073f86321648fd56daad0c29bf63f6084f723ec904"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/ttCollection.py",
+      "sha256": "56e8a22816d66ecf7ea2099174027d881504a273f37ea5e32718edc78349df5a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/ttFont.py",
+      "sha256": "a6c79ad891b76a1cedeca0baffcfa574d7c8cbe84e5c839930fa00ebbef09fd8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/ttGlyphSet.py",
+      "sha256": "5acc5c6da7a128a3884861b86ebeb27d4b6a9084d7c1401b824efa36922f6768"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/ttVisitor.py",
+      "sha256": "fed6a1e02e364efe8f9bd41e2cd430c150b1a88e1534402a6026e64e1a7a72f6"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttLib/woff2.py",
+      "sha256": "1dc32b0a77cfde23c887ffd2d408ccad7cf13d6c393e2f7569781bbf7e6bf01e"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ttx.py",
+      "sha256": "bb1e971efed76c42fd06e45534fe356621a1bc2d18bd1fab880430107f532376"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/__init__.py",
+      "sha256": "a032732bc374a95ecab6ebbe1e6a49de930a0d9db84ea59a6c56e2966ef765ae"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/converters.py",
+      "sha256": "6d9a76eefd959acc8612adc8cd0381f54dc2bf57f9781d636d9ba08f96c95b0a"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/errors.py",
+      "sha256": "3d016b693352d0141bd279a931c0ca2a98f9e314728b5e5d6c8c68061c70cbbd"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/etree.py",
+      "sha256": "ac6717b8c7e4e26827d6704248c54fe8202e480379d43ad9330f0f6316e0ac10"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/filenames.py",
+      "sha256": "60fbd6cb1707d079cbbab2b57ce1ff5a0c00b148ba0de5ea496014643d3cd1e4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/glifLib.py",
+      "sha256": "2a3c261e6759fd1f6654a10acc86a084bccb2a751f01c15343ca30de34049098"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/kerning.py",
+      "sha256": "b1ee16617f204c22f2a7655b33cfd04f7e3bc7240574958716ece879ffa2dc26"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/plistlib.py",
+      "sha256": "1189e108c3e66ed9d1baeb4a1cbcc94ef9188b1f349809295d310871d44d5204"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/pointPen.py",
+      "sha256": "fa0651fc4f5069ba986c8d485570a9a498d02f9a89c14701bcee3f067ba36f38"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/utils.py",
+      "sha256": "13b1da846062a9bda4f5b0893ffffc781c3d5f38c30f073c66dfd4530613e4b4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/ufoLib/validators.py",
+      "sha256": "b6a10784382d137221469775b828c16ecf2fa41533d0ad43d5863373696301c3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicode.py",
+      "sha256": "c48edeecd72f1472b4d2f791dca4d6abe71d35cc3ad47df3412c6f488658d9b4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicodedata/Blocks.py",
+      "sha256": "5de3a7aab06554505af17a5c71f3579bd3bc09a90d928f1e0851bd8de87ad804"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicodedata/OTTags.py",
+      "sha256": "c0e3e96ccb0d729fe076f3c57884ed8153274cdf13252340b1511dbbf9ee3d71"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicodedata/ScriptExtensions.py",
+      "sha256": "af36e10842531d2a36800fadac3c826afdebe3befc426e23f500c90dd526cebd"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicodedata/Scripts.py",
+      "sha256": "0c6e4c65dcf7db30b7050cae0e6b66aaa94ba45a861300068ceffae29a087670"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/unicodedata/__init__.py",
+      "sha256": "15f99013e1658e45a7a3098e60c01a9a2295ab0be1401b41695d462416333d31"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/__init__.py",
+      "sha256": "b05fceef98bba4b0703f3b90290449fa9a999316f3ae89eb0d4a4a9b87970960"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/__main__.py",
+      "sha256": "8b65ba206f052772b339fc79c89d530bcb90d5d83c7f11c4e1ecb07c44148607"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/builder.py",
+      "sha256": "babd066b37866f198490d8579313e812dfa6e0880ce9e96f59880a9b2d74ca1f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/cff.py",
+      "sha256": "2562b41935437fc43ac167adf60347dc772a0d87e9980a4bf9de56c890e4f237"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/errors.py",
+      "sha256": "74ca3c7868fbe88ec7e21ac112235b62b1acd89d4ad52c1db14c931e99153ab4"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/featureVars.py",
+      "sha256": "b70a5e5a2e7ab7f0e827b110f4d6cbc798191ae53360dc218aa5506a68095067"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/instancer/__init__.py",
+      "sha256": "f569c71cc40aec03bc057f89d3c52f919cd5b9345095fe85619dbf33fd7bb146"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/instancer/__main__.py",
+      "sha256": "cdf50bc1c3f4d45869952d4895c3203509cbc64e5155f98eba29d68ea7a277e8"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/instancer/featureVars.py",
+      "sha256": "c8064e8d807f1ea0dc747073ecdde937d7bb0d970c28d13954f9f3d16b522ce3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/instancer/names.py",
+      "sha256": "9c139ab8a57df1e648496558a062509f7060cc30b88cbca7b7f45f96b0fb9860"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/instancer/solver.py",
+      "sha256": "8d8f3a4459ef87364acd96b3b17acdad0d180487f1fa5158b138a926ddc248e0"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/interpolatable.py",
+      "sha256": "a24a21ca8b85ec2f35788a92ba6112cdcf86ad4f8e717ecf4c21b83b0b20682f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/interpolate_layout.py",
+      "sha256": "ebf1347d4bbee78ef5b8fea3f97d9472b7fdce64ef79acbfaa0ec2e126e707dc"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/iup.py",
+      "sha256": "22523b4acda99f0f21dea7ad105a07fbe6b1348618911542bb42e06f7985288f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/merger.py",
+      "sha256": "7896a6f5f8fd67c17309d3af2ba938a9ef9b3027dc17b9d6e5be26a4c444c6bd"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/models.py",
+      "sha256": "7e343ec40bac355dc1dbae5a9098da75f3ebd40e4301971cd7ac4a46feb7dd46"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/mutator.py",
+      "sha256": "b7f776751af0762cf6cdf16ec4a5b06a8d617eb173624742246021d5118a0e3f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/mvar.py",
+      "sha256": "fce6696c31fb32265378dfd11cfda08233483fe1f1506d98e4b324e36f3fab7b"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/plot.py",
+      "sha256": "bb1c5194a462184de2e063e707bb672379ed6e5f17e87068d4a8d90ad457d911"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/stat.py",
+      "sha256": "a4db54dc979b9bc1abe6e9ab6c5e711a3e72250722170485a5f78f39c837ef16"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/varLib/varStore.py",
+      "sha256": "5880717092ae128c1f9d05d820182364e5e3f0cab9f16f58737325abfdbf43ef"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/voltLib/__init__.py",
+      "sha256": "659d40b13c755650e7e342aea5c7be7ccde678e5ae832dd166b6815bd2c6fbd3"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/voltLib/ast.py",
+      "sha256": "0186ed560038ab0ada4120f087b2c9802aeec6a8b498fc3aff5a020d38449f8f"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/voltLib/error.py",
+      "sha256": "ef96c6c4306f8783aba665b813ba60aa4bed82af19c1eb728d1b5fedd2d3e734"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/voltLib/lexer.py",
+      "sha256": "423b256889f6605faed63350478562f639fad036d41e473a73a9662c6bf38648"
+    },
+    {
+      "path": "kobeestudio/vendor/fontTools/voltLib/parser.py",
+      "sha256": "2d712e4b05b370ed417c94dbe97389295c18555d4241d451885671cf65b8e339"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/fonttools-LICENSE",
+      "sha256": "6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/fonttools-LICENSE.external",
+      "sha256": "d48762c5842e419b1e354350d5b4774894215b5779486454476dd3341263cf0a"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/kiBuzzard-LICENSE",
+      "sha256": "1932c4d1a25c209f7d196271795829d3d2779fc6eca89593c66ef5f132226b48"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/python-barcode-LICENSE",
+      "sha256": "98c269a2631379689a5716a849a8b7ab8d4a30d34f67e61a8643c8ad5b2de72a"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/qrcode-LICENSE",
+      "sha256": "41ae913dcb22c8ddfb8b7fb9117f276f59c28b3e49bef9a90f9fcc4160e42585"
+    },
+    {
+      "path": "kobeestudio/vendor/licenses/svg2mod-LICENSE",
+      "sha256": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/LUT.py",
+      "sha256": "3635ca3df1d24c56282e51a45e11637f6394abf1060fa9ab772607206ddd35c9"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/__init__.py",
+      "sha256": "d02f23c778031d2278cb27651cdd35cadca2a4d876a4c3b75584bd0e4fa6e285"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/base.py",
+      "sha256": "f49ff52f29c5e5d5c92b5e00cecf17c87258eba15f4e5b9827ae85f198de4ad6"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/compat/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/compat/etree.py",
+      "sha256": "ac4c96440f5032c545bdaffdace76d877440911a453a6905e7d736110338e201"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/compat/png.py",
+      "sha256": "3827b95acba24c8fd44ea9b256a2db70996849b66f80260974c0b39cabcc0823"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/console_scripts.py",
+      "sha256": "9fe6d0e6fa4ab5c8c6df49758e443fab6d874d5e17f8910cc242d17499e8f2f7"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/constants.py",
+      "sha256": "d02b1af1861d790f0d685ad19ade3799a560d763bcf5dfa82a088a01520edace"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/exceptions.py",
+      "sha256": "2f67d9b9838ab1cbdd9fbdab6bec05f06c2caf6641f5e4595aba757f4203c781"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/base.py",
+      "sha256": "8c2adbb78503d597ce0bc8cc1632b77a565f81427b33f16c1ca44c56f8def811"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/pil.py",
+      "sha256": "cb96b7b7a541e209efb132b8792474e181153ff424f36893d4d5cbea314fd634"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/pure.py",
+      "sha256": "07c3c900dbc01cfc9dd43681b400bcdc2b1bdb129b67e7cfe12496bb0d4d36f5"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styledpil.py",
+      "sha256": "442ec9a034be5337b3da737e236c7078fb065f7a980de1e0f187a94f615b3bf3"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/colormasks.py",
+      "sha256": "87c6ac22f40a31346eaba6c5cef6a2660172a1afb6b6abc86ff841e47e57c0cd"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/moduledrawers/__init__.py",
+      "sha256": "324970e528d88866ecd80ca6dfc8f0c2b2add299491b3c0856067efa388e5417"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/moduledrawers/base.py",
+      "sha256": "80b16adb4a74eed0449ac15f8ab10cd7d5d9b2162c68d3f65abd54340909abdd"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/moduledrawers/pil.py",
+      "sha256": "9644fc23cabc3d407f4dd601acfe4397328df14b505be5d0118aa85c15a40fb6"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/styles/moduledrawers/svg.py",
+      "sha256": "f969e012f645f0bc2d4e95a649db74b4367a74ab58ccb72d603358f8c8bb72b7"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/image/svg.py",
+      "sha256": "1b6766bb26d53f77f0920cab145e517d04f776958309897cd0e29ed976a5f205"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/main.py",
+      "sha256": "385eee1c3033d938a1a5ee857ed79fe9f8951f6b69a152797a42c2206e25c890"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/release.py",
+      "sha256": "c098d51249569c04d487c094f3c1c42b285481953d873a65fff499632c8d519a"
+    },
+    {
+      "path": "kobeestudio/vendor/qrcode/util.py",
+      "sha256": "54e1b846b27a4243ecd1f2da6647de330c70c5d2292ac4479ba757be3a3d625e"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/__init__.py",
+      "sha256": "1ba3080b3b31e742ed4b64aebf13023336a98718d6c95f6f7b07aa9d37db27ac"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/cli.py",
+      "sha256": "4aaf500930bfeb3f45cdf69b068755c4a129819757b0dfbd74487c54d075fe14"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/coloredlogger.py",
+      "sha256": "c06c6f3160132a68e275c0ad7a943d25de94bab617d5fcbf3927c64d49ca0e36"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/exporter.py",
+      "sha256": "9ec6cc9fe605e52e16b2dd96b0de33d15b816c144afad61ac7199a64535ea06e"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/importer.py",
+      "sha256": "caaf87701e161ebe81ec320aea311f5d17efa883d7a1a8e08114cdddcbe5f5d8"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/svg/__init__.py",
+      "sha256": "67934135fe410c2be7154d13e2cc9c31b20bf74cdf168d02601c7fba3e16dfa6"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/svg/geometry.py",
+      "sha256": "d2e70e20aabb9428b5e9ed65bc59b5ca46c41915039e97ea742fcca41cc73041"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/svg/svg.py",
+      "sha256": "78a1df9f9fa775c62764164033224f3f05daa94b2273b005fd25e7b9c1a4d6cd"
+    },
+    {
+      "path": "kobeestudio/vendor/svg2mod/svg2mod.py",
+      "sha256": "217dea06fcf96ea0b5a5c81733cfe28066a4549e2b6ba1f3a597d4e487264ae2"
+    },
+    {
+      "path": "kobeestudio/version.py",
+      "sha256": "9967589057f725fccd26dd7898bb590c3086e97aaa23c9faad611f981a6f1256"
+    }
+  ]
+}

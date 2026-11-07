@@ -109,6 +109,28 @@ class PinHeaderTests(unittest.TestCase):
         self.assertAlmostEqual(6.0, extended.size.width - compact.size.width)
         self.assertAlmostEqual(3.0, extended.spec.opening_end_padding_mm)
 
+    def test_connector_cutout_can_switch_between_pill_rounded_and_square_edges(self):
+        pill = layout_pin_header(
+            self.make_spec(3, opening_mode="continuous", opening_shape="pill"),
+            (Size(1.0, 1.0),) * 3,
+        )
+        rounded = layout_pin_header(
+            self.make_spec(
+                3, opening_mode="continuous", opening_shape="rounded_rectangle",
+                opening_corner_radius_mm=0.15,
+            ),
+            (Size(1.0, 1.0),) * 3,
+        )
+        square = layout_pin_header(
+            self.make_spec(3, opening_mode="continuous", opening_shape="rectangle"),
+            (Size(1.0, 1.0),) * 3,
+        )
+        self.assertGreater(len(pill.connector_keepout), len(square.connector_keepout))
+        self.assertGreater(len(rounded.connector_keepout), len(square.connector_keepout))
+        self.assertEqual("pill", pill.spec.opening_shape)
+        self.assertAlmostEqual(0.15, rounded.spec.opening_corner_radius_mm)
+        self.assertEqual("rectangle", square.spec.opening_shape)
+
     def test_each_header_spacing_dimension_has_an_independent_layout_effect(self):
         sizes = (Size(1.0, 1.0),) * 3
         base = self.make_spec(

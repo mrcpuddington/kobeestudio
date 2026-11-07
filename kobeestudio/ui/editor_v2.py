@@ -33,26 +33,41 @@ from ..core.machine_codes import (
 )
 from ..core.measurement_units import MeasurementUnit, from_millimetres, to_millimetres
 from ..core.pin_header import PinHeaderSpec, maximum_pin_label_height
+from ..core.project_data import (
+    ProjectData,
+    ProjectDataCatalog,
+    ProjectDataCatalogStore,
+    ProjectDataConflictError,
+    ProjectDataRecoveryError,
+    ProjectDataStore,
+    generated_variables,
+    merge_kicad_variables,
+)
 from ..core.settings_profiles import SettingsProfileStore, profile_module_for_mode
 from ..core.studio_artwork import (
+    PLACEMENT_ANCHORS,
     TextVectorizer,
     render_component_callout_artwork,
     render_header_artwork,
     render_graphic_artwork,
     render_label_artwork,
+    render_multipart_label_artwork,
     render_machine_code_artwork,
+    with_placement_anchor,
 )
 from ..core.svg_symbols import (
     SvgAssetStore,
     format_symbol_reference,
     parse_symbol_reference,
     render_svg,
+    svg_import_repair_advice,
     symbol_catalog_for_context,
 )
 from ..core.quick_labels import QuickLabelStore
 from ..core.variable_templates import (
     VariableTemplateStore,
     expand_variable_template,
+    multipart_sections,
     validate_variable_template,
     variable_names,
 )
@@ -70,7 +85,9 @@ from ..core.transforms import (
 )
 from ..version import __version__
 from .asset_picker import AssetPickerDialog, icon_picker_items, label_picker_items
-from .settings_dialog import SettingsDialog
+from .async_dialog import AsyncDialog
+from .settings_dialog import PngTraceDialog, SettingsDialog
+from .project_data_ui import ProjectDataPage
 from ..integration.ipc_artwork import IpcArtworkPlacement, METADATA_FIELD_NAME, decode_metadata
 from .theme import apply_native_theme, is_dark_mode, set_appearance_preference
 from .themed_controls import (
@@ -161,6 +178,7 @@ TOOL_DEFINITIONS = (
     # Board Tools family.  This lets the main window own the complete style
     # form and exact live preview without a second modal editor.
     ("board_tools", "Designators", "Label"),
+    ("project_data", "Project Data", "Project Data"),
 )
 
 MEASUREMENT_SETTING_KEYS = frozenset(
@@ -171,7 +189,7 @@ MEASUREMENT_SETTING_KEYS = frozenset(
         "CornerRadiusCtrl", "FeatureSizeCtrl", "HeaderCrossSizeCtrl",
         "HeaderLabelOuterPaddingCtrl", "HeaderLabelPaddingCtrl", "HeaderLeadingPaddingCtrl",
         "HeaderOpeningEndPaddingCtrl", "HeaderPadClearanceCtrl", "HeaderPinOuterPaddingCtrl",
-        "HeaderPinToLabelGapCtrl", "HeaderTrailingPaddingCtrl", "HeightCtrl", "IconGapCtrl",
+        "HeaderPinToLabelGapCtrl", "HeaderTrailingPaddingCtrl", "HeaderCutoutRadiusCtrl", "HeightCtrl", "IconGapCtrl",
         "IconHeightCtrl", "MachineCodeBarHeightCtrl", "MachineCodeCaptionHeightCtrl",
         "MachineCodeContentGapCtrl", "MachineCodeContentHeightCtrl", "MachineCodeFramePaddingCtrl",
         "MachineCodeModuleSizeCtrl", "PaddingBottomCtrl", "PaddingLeftCtrl", "PaddingRightCtrl",
@@ -180,6 +198,11 @@ MEASUREMENT_SETTING_KEYS = frozenset(
         "GraphicWidthCtrl", "GraphicHeightCtrl", "GraphicOffsetXCtrl", "GraphicOffsetYCtrl",
         "HeaderCustomPitchCtrl",
         "NativeTextWidthCtrl", "NativeStrokeWidthCtrl",
+        "MultiPartGapCtrl", "MultiPartSeparatorDepthCtrl",
+        "MultiPartStartLeftPaddingCtrl", "MultiPartStartRightPaddingCtrl",
+        "MultiPartMiddleLeftPaddingCtrl", "MultiPartMiddleRightPaddingCtrl",
+        "MultiPartEndLeftPaddingCtrl", "MultiPartEndRightPaddingCtrl",
+        "OverlineGapCtrl", "OverlineThicknessCtrl",
     )
 )
 
@@ -227,6 +250,66 @@ def _active_board_path(editor_session=None):
         # Project-only storage is optional; a transient board-name API failure
         # must not prevent the editor or global settings from opening.
         return None
+
+
+def _active_project_path(editor_session=None):
+    """Resolve the active saved ``.kicad_pro`` without guessing from UI state.
+
+    KiCad's IPC board wrapper does not reliably expose a board filename, but
+    it does expose the owning Project. Prefer that authoritative document;
+    fall back to a neighbouring project file for the legacy PCB API.
+    """
+    def as_project_file(value, project_name=""):
+        if not value:
+            return None
+        path = Path(str(value)).expanduser()
+        if not path.is_absolute():
+            return None
+        if path.suffix.lower() == ".kicad_pro":
+            return path if path.is_file() else None
+        # kicad-python may return the project directory while exposing the
+        # short project name separately.
+        if not path.suffix and project_name:
+            name = Path(str(project_name)).name
+            if name:
+                candidate = path / (name if name.lower().endswith(".kicad_pro") else name + ".kicad_pro")
+                return candidate if candidate.is_file() else None
+        return None
+
+    try:
+        if editor_session is not None:
+            board = getattr(editor_session, "board", None)
+            get_project = getattr(board, "get_project", None)
+            if callable(get_project):
+                project = get_project()
+                path = as_project_file(
+                    getattr(project, "path", ""), getattr(project, "name", ""),
+                )
+                if path is not None:
+                    return path
+        else:
+            import pcbnew
+
+            board = pcbnew.GetBoard()
+            get_project = getattr(board, "GetProject", None) if board is not None else None
+            if callable(get_project):
+                project = get_project()
+                for method_name in ("GetProjectFullName", "GetProjectFileName"):
+                    method = getattr(project, method_name, None)
+                    if callable(method):
+                        path = as_project_file(method())
+                        if path is not None:
+                            return path
+        board_path = _active_board_path(editor_session)
+        if board_path is not None:
+            candidate = board_path.with_suffix(".kicad_pro")
+            if candidate.is_file():
+                return candidate
+    except Exception:
+        # Falling back to the disabled Project Data page is safer than
+        # associating metadata with an unknown project after an IPC failure.
+        return None
+    return None
 
 
 class BrandedHeader(wx.Panel):
@@ -361,12 +444,12 @@ class KobeeAction(wx.Control):
         self.callback = callback
         self.primary = primary
         self.hovered = False
-        width, height = parent.GetTextExtent(label)
-        self._best_size = wx.Size(width + 30, 36)
         self.SetInitialSize(self._best_size)
         self.SetMinSize(self._best_size)
         self.Bind(wx.EVT_PAINT, self._on_paint)
-        self.Bind(wx.EVT_LEFT_UP, lambda event: self.callback())
+        self.Bind(wx.EVT_LEFT_UP, self._on_click)
+        self.Bind(wx.EVT_SET_FOCUS, lambda event: (self.Refresh(False), event.Skip()))
+        self.Bind(wx.EVT_KILL_FOCUS, lambda event: (self.Refresh(False), event.Skip()))
         self.Bind(wx.EVT_KEY_DOWN, self._on_key)
         self.Bind(wx.EVT_ENTER_WINDOW, self._on_enter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
@@ -374,8 +457,31 @@ class KobeeAction(wx.Control):
     def DoGetBestSize(self):
         return self._best_size
 
+    def SetLabel(self, label):
+        super().SetLabel(str(label))
+        dc = wx.ClientDC(self)
+        dc.SetFont(self.GetFont().Bold())
+        width, _height = dc.GetTextExtent(str(label))
+        self._best_size = wx.Size(width + 30, 36)
+        self.SetMinSize(self._best_size)
+        self.InvalidateBestSize()
+        if self.GetParent().GetSizer():
+            self.GetParent().Layout()
+        self.Refresh(False)
+
+    def _on_click(self, event):
+        if self.IsEnabled():
+            self.SetFocus()
+            self.callback()
+
+    def Enable(self, enable=True):
+        result = super().Enable(enable)
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND if enable else wx.CURSOR_ARROW))
+        self.Refresh(False)
+        return result
+
     def _on_key(self, event):
-        if event.GetKeyCode() in (wx.WXK_SPACE, wx.WXK_RETURN):
+        if self.IsEnabled() and event.GetKeyCode() in (wx.WXK_SPACE, wx.WXK_RETURN):
             self.callback()
         else:
             event.Skip()
@@ -396,14 +502,20 @@ class KobeeAction(wx.Control):
         dc.Clear()
         rect = self.GetClientRect().Deflate(1)
         fill = ACCENT if self.primary else palette["active"]
-        if self.hovered and self.primary:
+        if not self.IsEnabled():
+            fill = palette["subnav"]
+        elif self.hovered and self.primary:
             fill = wx.Colour(246, 189, 32)
         dc.SetPen(wx.Pen(wx.Colour(204, 146, 0) if self.primary else palette["border"]))
         dc.SetBrush(wx.Brush(fill))
         dc.DrawRoundedRectangle(rect, 9)
         dc.SetFont(self.GetFont().Bold())
-        dc.SetTextForeground(ACCENT_TEXT if self.primary else palette["text"])
+        dc.SetTextForeground(palette["muted"] if not self.IsEnabled() else ACCENT_TEXT if self.primary else palette["text"])
         dc.DrawLabel(self.GetLabel(), self.GetClientRect(), wx.ALIGN_CENTER)
+        if self.HasFocus():
+            dc.SetPen(wx.Pen(palette["text"], 1, wx.PENSTYLE_SHORT_DASH))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            dc.DrawRoundedRectangle(self.GetClientRect().Deflate(4), 6)
 
 
 class SettingsCard(wx.Panel):
@@ -482,6 +594,12 @@ class RoundedTextField(wx.Panel):
     def SetMaxLength(self, length):
         self.editor.SetMaxLength(int(length))
 
+    def SetHint(self, value):
+        """Expose wx.TextCtrl's placeholder API through the rounded wrapper."""
+        setter = getattr(self.editor, "SetHint", None)
+        if callable(setter):
+            setter(str(value))
+
     def ShowEnd(self):
         self.editor.ShowPosition(self.editor.GetLastPosition())
 
@@ -494,6 +612,11 @@ class RoundedTextField(wx.Panel):
         # Do not recurse through the wrapper's handlers from a native Windows
         # text callback. Queue one command event for the normal wx event loop.
         wx.PostEvent(self, command)
+        # Do not swallow the original native event. Some Cocoa text-edit
+        # paths dispatch it before the queued wrapper event, which otherwise
+        # makes live previews appear to update only after another control is
+        # used.
+        event.Skip()
 
     def _on_paint(self, event):
         palette = _palette()
@@ -819,6 +942,7 @@ class PreviewCanvas(wx.Panel):
         self._rotation_handle = None
         self._preview_scale = 1.0
         self._preview_centre = (0.0, 0.0)
+        self._anchor = None
         self._cache = ((), (), ())
         self._size_timer = wx.Timer(self)
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -837,6 +961,7 @@ class PreviewCanvas(wx.Panel):
         self._guides = tuple(tuple(poly) for poly in guides)
         self._layer = layer
         self._error = error
+        self._anchor = None
         self._rebuild_cache()
         self.Refresh(False)
 
@@ -1057,6 +1182,14 @@ class PreviewCanvas(wx.Panel):
                     colour = ACCENT if index == 0 else wx.Colour(145, 145, 145)
                     dc.SetPen(wx.Pen(colour, 1, wx.PENSTYLE_SHORT_DASH))
                     dc.DrawLines(points + [points[0]])
+            if self._anchor is not None:
+                anchor = self._world_to_device(self._anchor)
+                x, y = round(anchor.x), round(anchor.y)
+                dc.SetPen(wx.Pen(ACCENT, 1))
+                dc.SetBrush(wx.TRANSPARENT_BRUSH)
+                dc.DrawCircle(x, y, 4)
+                dc.DrawLine(x - 8, y, x + 8, y)
+                dc.DrawLine(x, y - 8, x, y + 8)
             if self._transform_handler is not None and self._transform_corners:
                 dc.SetPen(wx.Pen(ACCENT,1,wx.PENSTYLE_SHORT_DASH)); dc.SetBrush(wx.TRANSPARENT_BRUSH)
                 points=[wx.Point(round(item.x),round(item.y)) for item in self._transform_corners]
@@ -1115,7 +1248,7 @@ class ToolPage(wx.Panel):
         self.SetSizer(self.root)
         self.section_bar = wx.Panel(self)
         self.section_bar.SetBackgroundColour(_palette()["subnav"])
-        self.section_bar.SetMinSize(wx.Size(126, -1))
+        self.section_bar.SetMinSize(wx.Size(138, -1))
         self.section_sizer = wx.BoxSizer(wx.VERTICAL)
         self.section_bar.SetSizer(self.section_sizer)
         self.section_sizer.AddSpacer(12)
@@ -1285,6 +1418,8 @@ class ToolPage(wx.Panel):
     def _section_for_card(self, title):
         if title in ("Content", "Presentation", "Variable template"):
             return "Basics"
+        if title == "Multipart label":
+            return "Sections"
         if title == "Container":
             return "Container"
         if title == "Opening & spacing":
@@ -1293,6 +1428,8 @@ class ToolPage(wx.Panel):
             return "Safe zone"
         if title == "Typography & spacing":
             return "Typography"
+        if title == "Native text & spacing":
+            return "Text & spacing"
         if title == "Text details":
             return "Advanced"
         if title == "Array":
@@ -1347,6 +1484,7 @@ class ToolPage(wx.Panel):
         numeric = isinstance(control, (wx.SpinCtrl, wx.SpinCtrlDouble, ThemedSpinCtrl, ThemedSpinCtrlDouble))
         grid.Add(control, 0 if numeric else 1, (wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL) if numeric else wx.EXPAND)
         self.controls[key] = control
+        control.SetName(label)
         self.field_widgets[key] = (field_label, control)
         if key in MEASUREMENT_SETTING_KEYS:
             self._measurement_labels[key] = label
@@ -1363,6 +1501,12 @@ class ToolPage(wx.Panel):
         ):
             try:
                 control.Bind(event_type, self.dialog.on_control_changed)
+            except Exception:
+                pass
+        editor = getattr(control, "editor", None)
+        if editor is not None:
+            try:
+                editor.Bind(wx.EVT_TEXT, self.dialog.on_control_changed)
             except Exception:
                 pass
 
@@ -1570,7 +1714,7 @@ class ToolPage(wx.Panel):
         self.dialog.request_preview()
         event.Skip()
 
-    def _build_container(self, shapes):
+    def _build_container(self, shapes, *, outline_only=False):
         box = self._card("Container")
         self._container_card = self._active_parent
         grid = self._grid(box)
@@ -1600,7 +1744,13 @@ class ToolPage(wx.Panel):
             "Shape",
             self.choice(base_shapes, self._last_standard_shape),
         )
-        self._add(grid, "ShapeVariantChoice", "Appearance", self.segmented(VARIANT_LABELS, "Inverted fill"))
+        appearances = ("Outline",) if outline_only else VARIANT_LABELS
+        self._add(
+            grid,
+            "ShapeVariantChoice",
+            "Appearance",
+            self.segmented(appearances, "Outline" if outline_only else "Inverted fill"),
+        )
         self._add(grid, "CornerRadiusCtrl", "Corner radius (mm)", self.spin(0, 100, 0.2, 0.05))
         self._add(grid, "BorderThicknessCtrl", "Outline width (mm)", self.spin(0.01, 10, 0.2, 0.05))
         self._add(grid, "FeatureSizeCtrl", "Feature size (mm)", self.spin(0, 100, 0.75, 0.1))
@@ -1724,9 +1874,23 @@ class ToolPage(wx.Panel):
         inline = self.controls["inlineFormatTextbox"].GetValue()
         self._set_field_visible("UnderlineThicknessCtrl", underline)
         self._set_field_visible("UnderlineGapCtrl", underline)
+        if "OverlineCheckbox" in self.controls:
+            overline = self.controls["OverlineCheckbox"].GetValue()
+            self._set_field_visible("OverlineThicknessCtrl", overline)
+            self._set_field_visible("OverlineGapCtrl", overline)
         self._set_field_visible("lineoverStyleChoice", inline)
         self._set_field_visible("lineoverThicknessCtrl", inline)
+        if hasattr(self, "formatting_hint"):
+            self.formatting_hint.Show(inline)
         self._schedule_layout()
+
+    def _add_formatting_hint(self, box):
+        self.formatting_hint = wx.StaticText(
+            self._active_parent,
+            label="D_{0} subscript · V^{2} superscript\n~{RESET} overline · !{text} underline",
+        )
+        self.formatting_hint.Wrap(260)
+        box.Add(self.formatting_hint, 0, wx.EXPAND | wx.TOP, 10)
 
     def _on_text_details_changed(self, event):
         self._update_text_details_ui()
@@ -1741,6 +1905,12 @@ class ToolPage(wx.Panel):
             == "Continuous plug opening"
         )
         self._set_field_visible("HeaderOpeningEndPaddingCtrl", continuous)
+        cutout_choice = self.controls.get("HeaderCutoutEdgeChoice")
+        self._set_field_visible(
+            "HeaderCutoutRadiusCtrl",
+            cutout_choice is not None
+            and cutout_choice.GetStringSelection() == "Rounded rectangle cutout",
+        )
         self._schedule_layout()
 
     def _on_header_opening_changed(self, event):
@@ -1789,17 +1959,40 @@ class ToolPage(wx.Panel):
         font_dir = Path(__file__).resolve().parents[1] / "fonts"
         bundled = tuple(sorted(path.stem for path in font_dir.iterdir() if path.suffix.lower() in (".ttf", ".otf")))
         installed = tuple(face.renderer_name for face in self.dialog.font_store.list())
-        return bundled + installed
+        enabled_system = set(self.dialog.preferences.enabled_system_font_names)
+        system = tuple(
+            name for name in self.dialog.system_font_names
+            if name in enabled_system and name not in bundled and name not in installed
+        )
+        return bundled + installed + system
 
     def _font_labels(self):
         font_dir = Path(__file__).resolve().parents[1] / "fonts"
         bundled = tuple(sorted(path.stem for path in font_dir.iterdir() if path.suffix.lower() in (".ttf", ".otf")))
         faces = self.dialog.font_store.list()
-        self._font_renderer_by_label = dict(
+        installed = tuple(face.renderer_name for face in faces)
+        enabled_system = set(self.dialog.preferences.enabled_system_font_names)
+        system = tuple(
+            name for name in self.dialog.system_font_names
+            if name in enabled_system and name not in bundled and name not in installed
+        )
+        entries = (
             [("Built-in · {}".format(name), name) for name in bundled]
+            + [("System font · {}".format(name), name) for name in system]
             + [("My Google Fonts · {}".format(face.display_name), face.renderer_name) for face in faces]
         )
-        self._font_label_by_renderer = {renderer: label for label, renderer in self._font_renderer_by_label.items()}
+        favourites = set(self.dialog.preferences.favourite_font_names)
+        favourite_entries = [
+            ("★ " + label, renderer)
+            for label, renderer in entries if renderer in favourites
+        ]
+        ordinary_entries = [
+            (label, renderer) for label, renderer in entries if renderer not in favourites
+        ]
+        self._font_renderer_by_label = dict(favourite_entries + ordinary_entries)
+        self._font_label_by_renderer = {}
+        for label, renderer in favourite_entries + ordinary_entries:
+            self._font_label_by_renderer.setdefault(renderer, label)
         return tuple(self._font_renderer_by_label)
 
     def _font_label(self, renderer):
@@ -1810,18 +2003,93 @@ class ToolPage(wx.Panel):
         self._font_labels()
         return self._font_renderer_by_label.get(str(label), str(label))
 
+    def _selected_font_renderer(self, choice):
+        """Resolve a choice using its previous mapping while regrouping favourites."""
+        label = choice.GetStringSelection()
+        cached = getattr(self, "_font_renderer_by_label", {})
+        if label in cached:
+            return cached[label]
+        return self._font_renderer(label)
+
+    def _sync_font_favourite(self):
+        control = getattr(self, "font_favourite", None)
+        choice = self.controls.get("FontComboBox")
+        if control is None or choice is None:
+            return
+        renderer = self._selected_font_renderer(choice)
+        control.SetValue(renderer in self.dialog.preferences.favourite_font_names)
+
+    def _refresh_font_choices(self):
+        choice = self.controls.get("FontComboBox")
+        if choice is None:
+            return
+        renderer = self._selected_font_renderer(choice)
+        choice.SetItems(self._font_labels())
+        choice.SetStringSelection(self._font_label(renderer))
+        subtitle = self.controls.get("SubtitleFontChoice")
+        if subtitle is not None:
+            selected = self._selected_font_renderer(subtitle)
+            subtitle.SetItems((MATCH_MAIN_TYPEFACE,) + self._font_labels())
+            subtitle.SetStringSelection(
+                MATCH_MAIN_TYPEFACE if selected == MATCH_MAIN_TYPEFACE else self._font_label(selected)
+            )
+        self._sync_font_favourite()
+
+    def _on_font_changed(self, event):
+        choice = self.controls.get("FontComboBox")
+        if choice is not None:
+            self.dialog.font_selection_changed(self._font_renderer(choice.GetStringSelection()))
+        self._sync_font_favourite()
+        event.Skip()
+
+    def _on_font_favourite_changed(self, event):
+        choice = self.controls.get("FontComboBox")
+        if choice is not None:
+            self.dialog.set_font_favourite(
+                self._font_renderer(choice.GetStringSelection()), self.font_favourite.GetValue()
+            )
+        event.Skip()
+
+    def set_font_availability_error(self, message=""):
+        warning = getattr(self, "font_availability_warning", None)
+        if warning is None:
+            return
+        warning.SetLabel("⚠ Typeface unavailable" if message else "")
+        warning.SetToolTip(message)
+        self._schedule_layout()
+
     def _build_typography(self, *, padding=True, subtitle=False, width=False):
         box = self._card("Typography & spacing")
         grid = self._grid(box)
         defaults = MODE_DEFAULTS[self.mode]
         font_labels = self._font_labels()
-        self._add(grid, "FontComboBox", "Typeface", self.choice(font_labels, self._font_label(defaults.get("FontComboBox", "FreddySpark-Regular"))))
+        font_choice = self._add(grid, "FontComboBox", "Typeface", self.choice(font_labels, self._font_label(defaults.get("FontComboBox", "FreddySpark-Regular"))))
+        self.font_favourite = ThemedCheckBox(
+            self._active_parent, label="Favourite this typeface"
+        )
+        self.font_favourite.SetValue(
+            defaults.get("FontComboBox", "FreddySpark-Regular")
+            in self.dialog.preferences.favourite_font_names
+        )
+        self.font_favourite.SetToolTip(
+            "Favourite fonts appear first in every Kobee typeface picker."
+        )
+        box.Add(self.font_favourite, 0, wx.TOP | wx.BOTTOM, 7)
+        self.font_availability_warning = wx.StaticText(self._active_parent, label="")
+        self.font_availability_warning.SetForegroundColour(wx.Colour(190, 55, 45))
+        self.font_availability_warning.SetToolTip("")
+        box.Add(self.font_availability_warning, 0, wx.EXPAND | wx.BOTTOM, 4)
+        font_choice.Bind(wx.EVT_CHOICE, self._on_font_changed)
+        self.font_favourite.Bind(wx.EVT_CHECKBOX, self._on_font_favourite_changed)
         max_height = maximum_pin_label_height() if self.mode == "2.54 mm Pin Header" else 128
         self._add(grid, "HeightCtrl", "Text height (mm)", self.spin(0.1, max_height, defaults.get("HeightCtrl", 1.2), 0.1))
         self._add(grid, "AlignmentChoice", "Alignment", self.choice(("Left", "Center", "Right"), defaults.get("AlignmentChoice", "Center")))
         self._add(grid, "LineSpacingCtrl", "Line spacing", self.spin(0.1, 10, 1.5, 0.1))
         if width:
             self._add(grid, "WidthCtrl", "Minimum width (mm)", self.spin(0, 200, 0, 0.1))
+        if self.mode == "Label":
+            anchor = self._add(grid, "PlacementAnchorChoice", "Placement anchor", self.choice(PLACEMENT_ANCHORS, "Centre"))
+            anchor.SetToolTip("This point stays fixed when placing or editing the artwork on the PCB.")
         if subtitle:
             self._add(grid, "SubtitleFontChoice", "Subtitle typeface", self.choice((MATCH_MAIN_TYPEFACE,) + font_labels, MATCH_MAIN_TYPEFACE))
             self._add(grid, "SubtitleHeightCtrl", "Subtitle height (mm)", self.spin(0.1, 128, 0.8, 0.1))
@@ -1852,8 +2120,9 @@ class ToolPage(wx.Panel):
             helper = wx.StaticText(
                 self._active_parent,
                 label=(
-                    "Create reusable native KiCad text. Variables stay as ${NAME} "
-                    "in the footprint so KiCad updates them whenever the project value changes."
+                    "Create a reusable variable label. Kobee resolves ${NAME} using "
+                    "the current project values, then places it as normal label artwork "
+                    "with the selected container and knockout."
                 ),
             )
             helper.Wrap(430)
@@ -1873,20 +2142,54 @@ class ToolPage(wx.Panel):
                 "Save in",
                 self.choice(save_scopes, "My library"),
             )
-            raw = self.text("${REVISION}", multiline=True)
+            raw = self.text("", multiline=True)
             raw.SetMinSize(wx.Size(120, 118))
+            raw.SetHint("Type label text, then choose a project value below to add its placeholder.")
             self._add(grid, "VariableTemplateText", "Template text", raw)
+            # Bind the native editor as well as the rounded wrapper. Cocoa can
+            # defer the wrapper's relayed event until focus changes; the live
+            # preview must reflect ordinary typing straight away.
+            raw.editor.Bind(wx.EVT_TEXT, self._on_variable_template_text_changed)
             available = self._add(
                 grid,
                 "VariableInsertChoice",
-                "Insert variable",
-                self.choice(("No project variables loaded",), "No project variables loaded"),
+                "Add project value",
+                self.choice(("Choose a project value…",), "Choose a project value…"),
             )
-            insert_row = wx.BoxSizer(wx.HORIZONTAL)
-            insert_row.AddStretchSpacer(1)
-            self.variable_insert_button = KobeeAction(self._active_parent, "Insert ${…}", self._insert_selected_variable)
-            insert_row.Add(self.variable_insert_button, 0)
-            template.Add(insert_row, 0, wx.EXPAND | wx.TOP, 7)
+            # Keep the selected placeholder readable even in Kobee's compact
+            # sidebar layout. The full current value remains in the status
+            # text, not in the choice label where it used to be clipped.
+            available.SetMinSize(wx.Size(250, 30))
+            value_actions = wx.BoxSizer(wx.HORIZONTAL)
+            value_actions.Add(
+                KobeeAction(self._active_parent, "Refresh values", self._refresh_variable_values),
+                0,
+            )
+            value_actions.Add(
+                wx.StaticText(
+                    self._active_parent,
+                    label="Reloads the current project values for this label's preview.",
+                ),
+                1,
+                wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
+                8,
+            )
+            template.Add(value_actions, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 8)
+            section_actions = wx.BoxSizer(wx.HORIZONTAL)
+            section_actions.Add(
+                KobeeAction(self._active_parent, "Add section [ ]", self._add_multipart_section),
+                0,
+            )
+            section_actions.Add(
+                wx.StaticText(
+                    self._active_parent,
+                    label="Adds brackets at the cursor; type or insert a project value inside.",
+                ),
+                1,
+                wx.ALIGN_CENTER_VERTICAL | wx.LEFT,
+                8,
+            )
+            template.Add(section_actions, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 8)
             self.variable_status = wx.StaticText(self._active_parent, label="")
             self.variable_status.Wrap(430)
             template.Add(self.variable_status, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 10)
@@ -1898,25 +2201,63 @@ class ToolPage(wx.Panel):
             actions.Add(self.variable_template_delete, 0)
             template.Add(actions, 0, wx.EXPAND)
             saved.Bind(wx.EVT_CHOICE, self._on_variable_template_changed)
-            available.Bind(
-                wx.EVT_CHOICE,
-                lambda event: self.variable_insert_button.Enable(
-                    0 <= available.GetSelection() < len(getattr(self, "_available_variable_names", ()))
+            available.Bind(wx.EVT_CHOICE, self._insert_selected_variable)
+            self._refresh_variable_templates()
+            multipart = self._card("Multipart label")
+            multipart_note = wx.StaticText(
+                self._active_parent,
+                label=(
+                    "Two or more [bracketed sections] automatically make one multipart label. "
+                    "For example: [${PROJECT_NUMBER}] [Rev ${KOBEE_REVISION}] "
+                    "[${KOBEE_HARDWARE_VERSION}]"
                 ),
             )
-            self._refresh_variable_templates()
-
-            native = self._card("Native text style")
-            grid = self._grid(native)
-            self._add(grid, "HeightCtrl", "Text height (mm)", self.spin(0.1, 128, 1.2, 0.1))
-            self._add(grid, "NativeTextWidthCtrl", "Text width (mm)", self.spin(0.1, 128, 1.2, 0.1))
-            self._add(grid, "NativeStrokeWidthCtrl", "Stroke width (mm)", self.spin(0.01, 10, 0.18, 0.01))
-            self._add(grid, "LineSpacingCtrl", "Line spacing", self.spin(0.1, 10, 1.5, 0.1))
-            self._add(grid, "AlignmentChoice", "Alignment", self.choice(("Left", "Center", "Right"), "Center"))
-            self._add(grid, "NativeBoldCheckbox", "Weight", self.checkbox("Bold", False))
-            self._add(grid, "NativeItalicCheckbox", "Style", self.checkbox("Italic", False))
-            self._add(grid, "NativeUnderlineCheckbox", "Decoration", self.checkbox("Underline", False))
-            self._add(grid, "NativeKeepUprightCheckbox", "Rotation", self.checkbox("Keep upright", True))
+            multipart_note.Wrap(430)
+            multipart.Add(multipart_note, 0, wx.EXPAND | wx.BOTTOM, 10)
+            multipart_grid = self._grid(multipart)
+            self._add(multipart_grid, "MultiPartStartCapChoice", "Start end", self.choice(CAP_LABELS, "Rounded"))
+            self._add(multipart_grid, "MultiPartEndCapChoice", "End end", self.choice(CAP_LABELS, "Square"))
+            self._add(multipart_grid, "MultiPartSeparatorChoice", "Section separator", self.choice(("\\", "/", "|"), "\\"))
+            self._add(multipart_grid, "MultiPartGapCtrl", "Section gap (mm)", self.spin(0, 20, 0.35, 0.05))
+            self._add(multipart_grid, "MultiPartSeparatorDepthCtrl", "Slash depth (mm)", self.spin(0, 20, 0.75, 0.05))
+            multipart.Add(wx.StaticText(self._active_parent, label="Per-section horizontal padding"), 0, wx.TOP | wx.BOTTOM, 8)
+            padding_grid = self._grid(multipart)
+            self._add(padding_grid, "MultiPartStartLeftPaddingCtrl", "Start left (mm)", self.spin(0, 100, 1.2, 0.1))
+            self._add(padding_grid, "MultiPartStartRightPaddingCtrl", "Start right (mm)", self.spin(0, 100, 1.2, 0.1))
+            self._add(padding_grid, "MultiPartMiddleLeftPaddingCtrl", "Middle left (mm)", self.spin(0, 100, 1.2, 0.1))
+            self._add(padding_grid, "MultiPartMiddleRightPaddingCtrl", "Middle right (mm)", self.spin(0, 100, 1.2, 0.1))
+            self._add(padding_grid, "MultiPartEndLeftPaddingCtrl", "End left (mm)", self.spin(0, 100, 1.2, 0.1))
+            self._add(padding_grid, "MultiPartEndRightPaddingCtrl", "End right (mm)", self.spin(0, 100, 1.2, 0.1))
+            for key in (
+                "MultiPartStartCapChoice", "MultiPartEndCapChoice",
+                "MultiPartSeparatorChoice", "MultiPartGapCtrl",
+                "MultiPartSeparatorDepthCtrl", "MultiPartStartLeftPaddingCtrl",
+                "MultiPartStartRightPaddingCtrl", "MultiPartMiddleLeftPaddingCtrl",
+                "MultiPartMiddleRightPaddingCtrl", "MultiPartEndLeftPaddingCtrl",
+                "MultiPartEndRightPaddingCtrl",
+            ):
+                self.controls[key].Bind(wx.EVT_TEXT, self._on_multipart_control_changed)
+                self.controls[key].Bind(wx.EVT_CHOICE, self._on_multipart_control_changed)
+                self.controls[key].Bind(wx.EVT_SPINCTRLDOUBLE, self._on_multipart_control_changed)
+            self._build_container(LABEL_SHAPE_LABELS)
+            self._build_typography(padding=True, width=True)
+            details = self._card("Text details")
+            details_grid = self._grid(details)
+            self._add(details_grid, "UnderlineCheckbox", "Underline", self.checkbox("Enable", False))
+            self._add(details_grid, "UnderlineThicknessCtrl", "Underline thickness (mm)", self.spin(0.05, 5, 0.15, 0.05))
+            self._add(details_grid, "UnderlineGapCtrl", "Underline gap (mm)", self.spin(0, 10, 0.12, 0.05))
+            self._add(details_grid, "OverlineCheckbox", "Overline", self.checkbox("Enable", False))
+            self._add(details_grid, "OverlineThicknessCtrl", "Overline thickness (mm)", self.spin(0.05, 5, 0.15, 0.05))
+            self._add(details_grid, "OverlineGapCtrl", "Overline gap (mm)", self.spin(0, 10, 0.12, 0.05))
+            self.controls["OverlineCheckbox"].Bind(wx.EVT_CHECKBOX, self._on_text_details_changed)
+            markup = self._add(details_grid, "inlineFormatTextbox", "Text formatting", self.checkbox("Enable", False))
+            markup.SetToolTip("KiCad syntax: D_{0} for subscript, V^{2} for superscript, ~{RESET} for overline, !{text} for underline.")
+            self._add(details_grid, "lineoverStyleChoice", "Overline style", self.choice(("Square", "Rounded"), "Rounded"))
+            self._add(details_grid, "lineoverThicknessCtrl", "Overline weight", self.integer_spin(1, 10, 1))
+            self._add_formatting_hint(details)
+            self.controls["UnderlineCheckbox"].Bind(wx.EVT_CHECKBOX, self._on_text_details_changed)
+            self.controls["inlineFormatTextbox"].Bind(wx.EVT_CHECKBOX, self._on_text_details_changed)
+            self._update_text_details_ui()
         elif self.label == "Standard":
             content = self._card("Content")
             self._build_content(content, multiline=True, subtitle=True, icon=True, preset=True)
@@ -1928,10 +2269,16 @@ class ToolPage(wx.Panel):
             self._add(grid, "UnderlineCheckbox", "Underline", self.checkbox("Enable", False))
             self._add(grid, "UnderlineThicknessCtrl", "Underline thickness (mm)", self.spin(0.05, 5, 0.15, 0.05))
             self._add(grid, "UnderlineGapCtrl", "Underline gap (mm)", self.spin(0, 10, 0.12, 0.05))
-            self._add(grid, "inlineFormatTextbox", "Legacy inline markup", self.checkbox("Enable", False))
+            self._add(grid, "OverlineCheckbox", "Overline", self.checkbox("Enable", False))
+            self._add(grid, "OverlineThicknessCtrl", "Overline thickness (mm)", self.spin(0.05, 5, 0.15, 0.05))
+            self._add(grid, "OverlineGapCtrl", "Overline gap (mm)", self.spin(0, 10, 0.12, 0.05))
+            self.controls["OverlineCheckbox"].Bind(wx.EVT_CHECKBOX, self._on_text_details_changed)
+            markup = self._add(grid, "inlineFormatTextbox", "Text formatting", self.checkbox("Enable", False))
+            markup.SetToolTip("KiCad syntax: D_{0} for subscript, V^{2} for superscript, ~{RESET} for overline, !{text} for underline.")
             self._add(grid, "lineoverStyleChoice", "Overline style", self.choice(("Square", "Rounded"), "Rounded"))
             lineover = self.integer_spin(1, 10, 1)
             self._add(grid, "lineoverThicknessCtrl", "Overline weight", lineover)
+            self._add_formatting_hint(extras)
             character_row = wx.BoxSizer(wx.HORIZONTAL)
             character_row.Add(wx.StaticText(self._active_parent, label="Insert"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
             for character in ("Ω", "μ", "²", "°", "№", "/", "\\"):
@@ -1965,6 +2312,21 @@ class ToolPage(wx.Panel):
             opening = self._card("Opening & spacing")
             grid = self._grid(opening)
             self._add(grid, "HeaderOpeningChoice", "Opening", self.choice(OPENING_LABELS, "Continuous plug opening"))
+            self._add(
+                grid,
+                "HeaderCutoutEdgeChoice",
+                "Cutout edge",
+                self.choice(
+                    ("Pill cutout", "Rounded rectangle cutout", "Square rectangle cutout"),
+                    "Pill cutout",
+                ),
+            )
+            self._add(
+                grid,
+                "HeaderCutoutRadiusCtrl",
+                "Rounded corner radius (mm)",
+                self.spin(0, 100, 0.5, 0.05),
+            )
             self._add(grid, "HeaderPadClearanceCtrl", "Pin / opening width (mm)", self.spin(0.1, 100, 2.0, 0.1))
             self._add(grid, "HeaderOpeningEndPaddingCtrl", "Opening end pad (mm)", self.spin(0, 100, 0, 0.1))
             self._add(grid, "HeaderLeadingPaddingCtrl", "Pin 1 end pad (mm)", self.spin(0, 100, 0.3, 0.1))
@@ -1983,6 +2345,9 @@ class ToolPage(wx.Panel):
             custom_pitch.Bind(wx.EVT_TEXT, self._on_header_custom_pitch_changed)
             custom_pitch.Bind(wx.EVT_SPINCTRLDOUBLE, self._on_header_custom_pitch_changed)
             self.controls["HeaderOpeningChoice"].Bind(
+                wx.EVT_CHOICE, self._on_header_opening_changed
+            )
+            self.controls["HeaderCutoutEdgeChoice"].Bind(
                 wx.EVT_CHOICE, self._on_header_opening_changed
             )
             self._update_header_opening_ui()
@@ -2029,7 +2394,7 @@ class ToolPage(wx.Panel):
             )
             self._update_component_safe_zone_ui()
         elif self.label == "Imported Graphic":
-            source = self._card("Graphic asset")
+            source = self._card("Graphic file")
             grid = self._grid(source)
             self._graphic_assets = tuple(
                 item for store in (self.dialog.global_asset_store, self.dialog.project_asset_store)
@@ -2037,9 +2402,32 @@ class ToolPage(wx.Panel):
             )
             self._graphic_visible_assets = self._graphic_assets
             self._graphic_fallback_svg = ""; self._graphic_fallback_id = ""; self._graphic_missing = False
+            choose_row = wx.BoxSizer(wx.HORIZONTAL)
+            choose_row.Add(
+                KobeeAction(self._active_parent, "Choose PNG or SVG…", self._choose_graphic_file),
+                0,
+                wx.RIGHT,
+                8,
+            )
+            choose_row.Add(
+                wx.StaticText(
+                    self._active_parent,
+                    label="Imports for this label only; it is not added to your library.",
+                ),
+                1,
+                wx.ALIGN_CENTER_VERTICAL,
+            )
+            source.Add(choose_row, 0, wx.EXPAND | wx.BOTTOM, 10)
+            self.graphic_source_status = wx.StaticText(
+                self._active_parent,
+                label="No file selected. Choose a PNG or SVG, or use a reusable graphic below.",
+            )
+            self.graphic_source_status.Wrap(430)
+            source.Add(self.graphic_source_status, 0, wx.EXPAND | wx.BOTTOM, 10)
+            source.Add(wx.StaticText(self._active_parent, label="Reusable graphics"), 0, wx.BOTTOM, 4)
             search = self._add(grid, "GraphicSearchCtrl", "Search", wx.SearchCtrl(self._active_parent, style=wx.TE_PROCESS_ENTER))
             search.SetDescriptiveText("Name, category, or scope")
-            choices = tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_visible_assets) or ("No graphics installed — add one in Settings",)
+            choices = tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_visible_assets) or ("No reusable graphics",)
             asset_choice = self._add(grid, "GraphicAssetChoice", "Graphic", self.choice(choices, choices[0]))
             transform = self._card("Transform")
             grid = self._grid(transform)
@@ -2051,7 +2439,7 @@ class ToolPage(wx.Panel):
             self._add(grid, "GraphicRotationCtrl", "Rotation (degrees)", self.spin(-360, 360, 0, 1))
             self._add(grid, "GraphicMirrorHorizontal", "Mirror", self.checkbox("Horizontal", False))
             self._add(grid, "GraphicMirrorVertical", "Mirror", self.checkbox("Vertical", False))
-            note = wx.StaticText(self._active_parent, label="Upload SVG artwork or convert a PNG in Settings → Asset library.")
+            note = wx.StaticText(self._active_parent, label="Use Settings → Asset library only to save, edit, or organise reusable graphics.")
             transform.Add(note, 0, wx.EXPAND | wx.TOP, 12)
             search.Bind(wx.EVT_TEXT, self._on_graphic_search_changed)
             asset_choice.Bind(wx.EVT_CHOICE, self._on_graphic_asset_changed)
@@ -2310,14 +2698,70 @@ class ToolPage(wx.Panel):
 
     def _insert_selected_variable(self, event=None):
         choice = self.controls["VariableInsertChoice"]
-        index = choice.GetSelection()
+        # Index zero is the explanatory prompt.  Inserting immediately on
+        # selection makes the interaction match the wording: pick a project
+        # value and its placeholder is added at the current text cursor.
+        index = choice.GetSelection() - 1
         names = getattr(self, "_available_variable_names", ())
         if not 0 <= index < len(names):
             return
         control = self.controls["VariableTemplateText"]
         control.WriteText("${" + names[index] + "}")
         control.SetFocus()
-        self.dialog.request_preview()
+        choice.SetSelection(0)
+        self.dialog.request_preview(immediate=True)
+
+    def _refresh_variable_values(self, event=None):
+        """Reload project variables before rebuilding an existing label.
+
+        Variable labels are deliberately normal, static Kobee artwork once
+        placed.  This action makes the current values explicit in the preview;
+        the normal Update artwork action then writes that rebuilt artwork back
+        into the selected footprint.
+        """
+        self.dialog.prepare_variables()
+        self.dialog.request_preview(immediate=True)
+
+    def _add_multipart_section(self, event=None):
+        """Insert an editable [] section at the current template cursor."""
+        control = self.controls["VariableTemplateText"]
+        editor = control.editor
+        current = control.GetValue()
+        # A multipart label needs two sections. On the first click create both
+        # visible blank containers immediately. If the user already typed a
+        # normal label, retain it as the first section and add an empty second.
+        if not current.strip() or current.strip() == "[]":
+            control.ChangeValue("[] []")
+            editor.SetInsertionPoint(1)
+            control.SetFocus()
+            self.dialog.request_preview(immediate=True)
+            return
+        try:
+            multipart_sections(current)
+        except ValueError:
+            converted = "[{}] []".format(current.strip())
+            control.ChangeValue(converted)
+            editor.SetInsertionPoint(len(converted) - 1)
+            control.SetFocus()
+            self.dialog.request_preview(immediate=True)
+            return
+        insertion = editor.GetInsertionPoint()
+        prefix = " " if insertion > 0 and not current[insertion - 1].isspace() else ""
+        control.WriteText(prefix + "[]")
+        editor.SetInsertionPoint(insertion + len(prefix) + 1)
+        control.SetFocus()
+        self.dialog.request_preview(immediate=True)
+
+    def _on_variable_template_text_changed(self, event):
+        self.dialog._update_variable_status()
+        if not self.dialog._loading:
+            self.dialog.request_preview(immediate=True)
+        event.Skip()
+
+    def _on_multipart_control_changed(self, event):
+        if not self.dialog._loading:
+            self.dialog.request_preview(immediate=True)
+        event.Skip()
 
     def _insert_character(self, value):
         control = self.controls["MultiLineText"]
@@ -2416,6 +2860,67 @@ class ToolPage(wx.Panel):
         self._update_component_safe_zone_ui()
         event.Skip()
 
+    def _choose_graphic_file(self, event=None):
+        """Embed one SVG or traced PNG for the current placed graphic only."""
+        picker = wx.FileDialog(
+            self,
+            "Choose a PCB graphic",
+            wildcard="PCB graphics (*.svg;*.png)|*.svg;*.png|SVG files (*.svg)|*.svg|PNG files (*.png)|*.png",
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
+        try:
+            if picker.ShowModal() != wx.ID_OK:
+                return
+            source = Path(picker.GetPath())
+        finally:
+            picker.Destroy()
+
+        try:
+            if source.suffix.lower() == ".png":
+                converter = PngTraceDialog(self, source)
+                try:
+                    if converter.ShowModal() != wx.ID_OK or converter.result is None:
+                        return
+                    result = converter.result
+                finally:
+                    converter.Destroy()
+                geometry = result.svg.decode("utf-8")
+                width, height = result.pixel_size
+                aspect_ratio = width / max(1, height)
+            else:
+                # Validate the original SVG before embedding it in the
+                # footprint metadata, and measure it for aspect-ratio lock.
+                geometry = source.read_text(encoding="utf-8")
+                _polygons, natural = render_svg(source, 10.0, allow_strokes=True)
+                aspect_ratio = natural.width / max(0.001, natural.height)
+                repair_advice = svg_import_repair_advice(geometry)
+            if source.suffix.lower() == ".png":
+                repair_advice = ""
+        except (OSError, RuntimeError, UnicodeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not import graphic", wx.OK | wx.ICON_ERROR, self)
+            return
+
+        self._graphic_fallback_id = "embedded.{}".format(source.stem)
+        self._graphic_fallback_svg = geometry
+        # The source is deliberately not added to either asset store. The
+        # embedded SVG follows this placed graphic; Settings is only for a
+        # reusable library item.
+        self._graphic_missing = True
+        self._graphic_aspect_ratio = aspect_ratio
+        width = self._measurement_mm("GraphicWidthCtrl")
+        self._set_measurement_mm("GraphicHeightCtrl", width / max(0.001, aspect_ratio))
+        self.graphic_source_status.SetLabel(
+            "Current file: {} — embedded for this placement only.{}".format(
+                source.name,
+                "\nSVG repair: Kobee closed open paths. For best fidelity, export outlined, closed filled paths."
+                if repair_advice else "",
+            )
+        )
+        self.graphic_source_status.Wrap(430)
+        self._schedule_layout()
+        self.dialog._preview_fingerprint = None
+        self.dialog.request_preview()
+
     def _on_graphic_asset_changed(self, event):
         if not getattr(self, "_graphic_visible_assets", ()): return
         index = self.controls["GraphicAssetChoice"].GetSelection()
@@ -2425,7 +2930,12 @@ class ToolPage(wx.Panel):
                 if event is not None:
                     self._graphic_missing = False
                     self._graphic_fallback_id = asset.asset_id
-                    self._graphic_fallback_svg = asset.path.read_text(encoding="utf-8")
+                self._graphic_fallback_svg = asset.path.read_text(encoding="utf-8")
+                self.graphic_source_status.SetLabel(
+                    "Reusable graphic: {} · {}. Manage reusable graphics in Settings → Asset library.".format(asset.name, asset.scope)
+                )
+                self.graphic_source_status.Wrap(430)
+                self._schedule_layout()
                 _, natural = render_svg(asset.path, 10.0, allow_strokes=True)
                 self._graphic_aspect_ratio = natural.width / natural.height
                 width = self._measurement_mm("GraphicWidthCtrl")
@@ -2442,9 +2952,17 @@ class ToolPage(wx.Panel):
     def _on_graphic_dimension_changed(self, event):
         if self.dialog._loading or self._updating_graphic_size or not self.controls["GraphicAspectLock"].GetValue():
             event.Skip(); return
+        width_control = self.controls["GraphicWidthCtrl"]
+        height_control = self.controls["GraphicHeightCtrl"]
+        source = event.GetEventObject()
+        # Native text events bubble from the numeric control's child editor
+        # before the control relays its own event. Both identify the same axis.
+        is_width = source in (width_control, width_control.editor)
+        if not is_width and source not in (height_control, height_control.editor):
+            event.Skip(); return
         self._updating_graphic_size = True
         try:
-            if event.GetEventObject() is self.controls["GraphicWidthCtrl"]:
+            if is_width:
                 self._set_measurement_mm("GraphicHeightCtrl", self._measurement_mm("GraphicWidthCtrl") / max(0.0001, self._graphic_aspect_ratio))
             else:
                 self._set_measurement_mm("GraphicWidthCtrl", self._measurement_mm("GraphicHeightCtrl") * self._graphic_aspect_ratio)
@@ -2464,7 +2982,7 @@ class ToolPage(wx.Panel):
         selected = next((index for index, item in enumerate(self._graphic_visible_assets) if item.asset_id == current_id), None)
         if selected is not None:
             self.controls["GraphicAssetChoice"].SetSelection(selected)
-        elif self._graphic_visible_assets:
+        elif self._graphic_visible_assets and not self._graphic_missing:
             self.controls["GraphicAssetChoice"].SetSelection(0)
             self._on_graphic_asset_changed(None)
         event.Skip()
@@ -2594,14 +3112,16 @@ class ToolPage(wx.Panel):
                 settings["MultiLineText"] = self.dialog.resolve_variable_template(raw_template)
             else:
                 settings["MultiLineText"] = raw_template
-            # The polygon preview is only a visual approximation of KiCad's
-            # native stroke text. Never imply a dynamic container or padding.
-            settings["ShapeChoice"] = "No container"
-            settings["PaddingTopCtrl"] = 0.0
-            settings["PaddingBottomCtrl"] = 0.0
-            settings["PaddingLeftCtrl"] = 0.0
-            settings["PaddingRightCtrl"] = 0.0
-            settings["FontComboBox"] = "UbuntuMono-B"
+            # Brackets are the multipart affordance.  This makes the result
+            # match what the user typed without a separate hidden mode which
+            # could leave valid sections rendering as one literal string.
+            try:
+                multipart_sections(raw_template)
+            except ValueError:
+                settings["VariableLayoutChoice"] = "Single label"
+            else:
+                settings["VariableLayoutChoice"] = "Multipart label"
+                settings["MultiPartSectionTemplate"] = raw_template
         return settings
 
     def apply(self, settings):
@@ -2671,6 +3191,12 @@ class ToolPage(wx.Panel):
                     self._graphic_visible_assets = self._graphic_assets
                     self.controls["GraphicAssetChoice"].SetItems(tuple("{}  ·  {}".format(item.name, item.scope) for item in self._graphic_assets))
                     self.controls["GraphicAssetChoice"].SetSelection(index); self._graphic_missing = False; break
+            if self._graphic_missing and self._graphic_fallback_svg:
+                self.graphic_source_status.SetLabel(
+                    "Embedded graphic from this placed item — not saved to the reusable library."
+                )
+                self.graphic_source_status.Wrap(430)
+                self._schedule_layout()
             self._graphic_aspect_ratio = self._measurement_mm("GraphicWidthCtrl") / max(0.1, self._measurement_mm("GraphicHeightCtrl"))
         if "ContentModeChoice" in self.controls:
             saved_mode = settings.get("ContentModeChoice")
@@ -2689,11 +3215,12 @@ class ToolPage(wx.Panel):
         self._update_header_opening_ui()
         self._update_component_safe_zone_ui()
         self._update_machine_code_ui()
+        self._sync_font_favourite()
         if "HeaderPitchChoice" in self.controls:
             self._on_header_pitch_changed(None)
 
 
-class StudioEditorDialog(wx.Dialog):
+class StudioEditorDialog(AsyncDialog):
     """Modern, page-based Kobee Studio editor with a persistent preview."""
 
     def __init__(self, parent, config, buzzard, func, editor_session=None, build_label=""):
@@ -2705,7 +3232,25 @@ class StudioEditorDialog(wx.Dialog):
         effective_unit = self.preferences.measurement_unit
         self.measurement_unit = effective_unit
         set_appearance_preference(self.preferences.appearance)
-        self.project_path = _active_board_path(editor_session)
+        self.project_path = _active_project_path(editor_session)
+        self.project_data_catalog_store = ProjectDataCatalogStore(self.data_root)
+        try:
+            self.project_data_catalog = self.project_data_catalog_store.load()
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            self.project_data_catalog = ProjectDataCatalog.empty()
+        self.project_data_store = ProjectDataStore(self.project_path) if self.project_path is not None else None
+        self.project_data_record_exists = bool(self.project_data_store is not None and self.project_data_store.path.is_file())
+        self.project_data_fingerprint = None
+        self.project_data_recovery_error = None
+        try:
+            if self.project_data_store is not None:
+                self.project_data_fingerprint = self.project_data_store.fingerprint()
+                self.project_data = self.project_data_store.load()
+            else:
+                self.project_data = ProjectData.empty()
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, ProjectDataRecoveryError) as error:
+            self.project_data = ProjectData.empty()
+            self.project_data_recovery_error = str(error)
         self.global_asset_store = SvgAssetStore.global_store(self.data_root)
         self.font_store = FontLibraryStore(self.data_root)
         self.global_component_store = ComponentPresetStore.global_store(self.data_root)
@@ -2739,6 +3284,8 @@ class StudioEditorDialog(wx.Dialog):
         title = "Kobee Studio" + (" — " + str(build_label) if build_label else "")
         super().__init__(parent, title=title, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.buzzard = buzzard
+        self.system_font_names = tuple(self.buzzard.system_font_names())
+        self.system_font_paths = self.buzzard.system_font_paths()
         for face in self.font_store.list():
             self.buzzard.register_font(face.renderer_name, face.path)
         self.func = func
@@ -2755,10 +3302,12 @@ class StudioEditorDialog(wx.Dialog):
         self._loading = True
         self._family = "labels"
         self._tool = "Standard"
+        self._last_tool_by_family = {}
         self._editing_existing = False
         self._default_applied_tools = set()
         self._recalled_profile_ids = {}
         self.restart_requested = False
+        self.restart_state = None
         self._missing_font_metadata = None
         self._designator_footprints = ()
         self._designator_skipped = 0
@@ -2766,9 +3315,9 @@ class StudioEditorDialog(wx.Dialog):
         self._project_text_variables = {}
         self._output_layers = (FRONT_SILKSCREEN,)
         self._text_vectorizer = TextVectorizer(self.buzzard)
-        self._timer = wx.Timer(self)
+        self._timer = self.own_timer()
         self.Bind(wx.EVT_TIMER, self._on_preview_timer, self._timer)
-        self._selection_timer = wx.Timer(self)
+        self._selection_timer = self.own_timer()
         self.Bind(wx.EVT_TIMER, self._on_board_selection_timer, self._selection_timer)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         settings, footprint = self._initial_settings()
@@ -2915,7 +3464,7 @@ class StudioEditorDialog(wx.Dialog):
         self.family_bar.SetSizer(family_sizer)
         family_sizer.AddSpacer(14)
         self.family_buttons = {}
-        for family, label in (("labels", "Labels"), ("graphics", "Graphics"), ("codes", "Codes"), ("board_tools", "Board Tools")):
+        for family, label in (("labels", "Labels"), ("graphics", "Graphics"), ("codes", "Codes"), ("board_tools", "Board Tools"), ("project_data", "Project Data")):
             button = KobeeTab(
                 self.family_bar,
                 label,
@@ -2930,7 +3479,7 @@ class StudioEditorDialog(wx.Dialog):
 
         self.tool_bar = wx.Panel(self)
         self.tool_bar.SetBackgroundColour(palette["subnav"])
-        self.tool_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.tool_sizer = wx.WrapSizer(wx.HORIZONTAL, flags=0)
         self.tool_bar.SetSizer(self.tool_sizer)
         self.tool_sizer.AddSpacer(14)
         self.tool_buttons = {}
@@ -2943,7 +3492,6 @@ class StudioEditorDialog(wx.Dialog):
             )
             self.tool_sizer.Add(button, 0, wx.RIGHT, 5)
             self.tool_buttons[label] = button
-        self.tool_sizer.AddStretchSpacer(1)
         root.Add(self.tool_bar, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 6)
 
         # Profiles are a concise, tool-level workflow control. Keeping the
@@ -2975,7 +3523,7 @@ class StudioEditorDialog(wx.Dialog):
         # every selected PCB layer visible and independently controllable.
         self.placement_bar = wx.Panel(self)
         self.placement_bar.SetBackgroundColour(palette["subnav"])
-        placement_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        placement_sizer = wx.WrapSizer(wx.HORIZONTAL, flags=0)
         self.placement_bar.SetSizer(placement_sizer)
         placement_sizer.AddSpacer(14)
         placement_label = wx.StaticText(self.placement_bar, label="Place artwork on")
@@ -2992,7 +3540,6 @@ class StudioEditorDialog(wx.Dialog):
             toggle.Bind(wx.EVT_CHECKBOX, self._on_target_layers_changed)
             placement_sizer.Add(toggle, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
             self.layer_toggles[layer] = toggle
-        placement_sizer.AddStretchSpacer(1)
         root.Add(self.placement_bar, 0, wx.EXPAND | wx.BOTTOM, 6)
 
         workspace = wx.BoxSizer(wx.HORIZONTAL)
@@ -3001,7 +3548,7 @@ class StudioEditorDialog(wx.Dialog):
         self.page_by_tool = {}
         self.page_index_by_tool = {}
         for family, label, mode in TOOL_DEFINITIONS:
-            page = ToolPage(self.pages, self, family, label, mode)
+            page = ProjectDataPage(self.pages, self) if family == "project_data" else ToolPage(self.pages, self, family, label, mode)
             self.pages.AddPage(page, label)
             self.page_by_tool[label] = page
             self.page_index_by_tool[label] = self.pages.GetPageCount() - 1
@@ -3012,6 +3559,7 @@ class StudioEditorDialog(wx.Dialog):
         workspace.Add(self.pages, 1, wx.EXPAND | wx.RIGHT, 10)
 
         preview_panel = wx.Panel(self, style=wx.BORDER_NONE)
+        self.preview_panel = preview_panel
         # Keep the surrounding column invisible; PreviewCanvas owns the one
         # rounded surface the user interacts with.
         preview_panel.SetBackgroundColour(palette["controls"])
@@ -3091,6 +3639,8 @@ class StudioEditorDialog(wx.Dialog):
         self.SetSize(wx.Size(min(1220, display.width - 50), min(780, display.height - 50)))
 
     def _profile_module(self):
+        if self._family == "project_data":
+            return None
         return profile_module_for_mode(self.active_page.mode)
 
     def _recall_profile_for_active_tool(self):
@@ -3165,29 +3715,115 @@ class StudioEditorDialog(wx.Dialog):
         finally:
             prompt.Destroy()
 
+    def capture_session_state(self):
+        """Retain unsaved forms across a library-triggered editor rebuild."""
+        pages = {}
+        sections = {}
+        for tool, page in self.page_by_tool.items():
+            if isinstance(page, ToolPage):
+                try:
+                    pages[tool] = page.settings(resolve_variables=False)
+                except (OSError, ValueError):
+                    # A missing library file must not prevent Settings opening
+                    # to repair it. Retain the other fields without reading it.
+                    pages[tool] = {key: _control_value(control) for key, control in page.controls.items()
+                                   if key not in MEASUREMENT_SETTING_KEYS}
+                    for key in MEASUREMENT_SETTING_KEYS.intersection(page.controls):
+                        pages[tool][key] = page._measurement_mm(key)
+                sections[tool] = next((name for name, button in page.section_buttons.items() if button.active), None)
+        active = dict(pages.get(self._tool, {}))
+        active["StudioModeChoice"] = self.active_page.mode if isinstance(self.active_page, ToolPage) else "Label"
+        if self._tool == "Variables":
+            active["StudioTool"] = "Variables"
+        active["LayerComboBox"] = self.output_layer
+        active["OutputLayers"] = list(self.output_layers)
+        if isinstance(self.active_page, ToolPage):
+            try:
+                active.update(self.CurrentSettings())
+            except (OSError, ValueError):
+                pass
+        project_page = self.page_by_tool["Project Data"]
+        return {
+            "tool": self._tool, "pages": pages, "sections": sections, "active": active,
+            "footprint": self.updateFootprint, "editing": self._editing_existing,
+            "defaults": set(self._default_applied_tools), "profiles": dict(self._recalled_profile_ids),
+            "family_tools": dict(self._last_tool_by_family),
+            "project_fields": {key: _control_value(control) for key, (_field, control) in project_page.controls.items()},
+            "project_dirty": project_page._dirty,
+        }
+
+    def restore_session_state(self, state):
+        self._loading = True
+        try:
+            self.updateFootprint = state["footprint"]
+            self._editing_existing = state["editing"]
+            self._default_applied_tools = set(state["defaults"])
+            self._recalled_profile_ids = dict(state["profiles"])
+            self._last_tool_by_family = dict(state["family_tools"])
+            for tool, settings in state["pages"].items():
+                self.page_by_tool[tool].apply(settings)
+                section = state["sections"].get(tool)
+                if section in self.page_by_tool[tool].sections:
+                    self.page_by_tool[tool]._show_section(section)
+            if state["tool"] not in ("Project Data", "Cleanup", "Designators"):
+                self._route_settings(dict(state["active"]))
+            self._set_output_layers(state["active"]["OutputLayers"], state["active"]["LayerComboBox"])
+            self.place_button.SetLabel("Update artwork" if self.updateFootprint is not None else "Place artwork")
+        finally:
+            self._loading = False
+        self._tool = ""  # Run the normal workflow chrome and selection setup.
+        self._select_tool(state["tool"])
+        self._restore_project_draft(state)
+        self.request_preview()
+
+    def _restore_project_draft(self, state):
+        project_page = self.page_by_tool["Project Data"]
+        for key, value in state["project_fields"].items():
+            if key in project_page.controls:
+                control = project_page.controls[key][1]
+                if hasattr(control, "ChangeValue"):
+                    control.ChangeValue(str(value))
+                else:
+                    _set_control_value(control, value)
+        project_page._dirty = state["project_dirty"]
+
     def _open_settings(self, initial_page=0):
-        dialog = SettingsDialog(
-            self,
-            preferences_store=self.preferences_store,
-            profile_store=self.profile_store,
-            global_asset_store=self.global_asset_store,
-            project_asset_store=self.project_asset_store,
-            global_label_store=self.global_label_store,
-            project_label_store=self.project_label_store,
-            font_store=self.font_store,
-            global_component_store=self.global_component_store,
-            project_component_store=self.project_component_store,
-            font_preview_renderer=self._render_font_settings_preview,
-            symbol_catalog=symbol_catalog_for_context(
-                project=self.project_path,
-                data_root=self.data_root,
-            ),
-            hidden_symbol_ids=self.preferences.hidden_symbol_ids,
-            hidden_label_ids=self.preferences.hidden_label_ids,
-            current_module=self._profile_module(),
-            initial_page=initial_page,
-            preferences_changed=self._on_preferences_changed,
-        )
+        if not self.accepts_background_results():
+            return
+        session_state = self.capture_session_state()
+        try:
+            dialog = SettingsDialog(
+                self,
+                preferences_store=self.preferences_store,
+                profile_store=self.profile_store,
+                global_asset_store=self.global_asset_store,
+                project_asset_store=self.project_asset_store,
+                global_label_store=self.global_label_store,
+                project_label_store=self.project_label_store,
+                font_store=self.font_store,
+                global_component_store=self.global_component_store,
+                project_component_store=self.project_component_store,
+                project_data_catalog_store=self.project_data_catalog_store,
+                font_preview_renderer=self._render_font_settings_preview,
+                system_font_names=self.system_font_names,
+                system_font_paths=self.system_font_paths,
+                symbol_catalog=symbol_catalog_for_context(
+                    project=self.project_path,
+                    data_root=self.data_root,
+                ),
+                hidden_symbol_ids=self.preferences.hidden_symbol_ids,
+                hidden_label_ids=self.preferences.hidden_label_ids,
+                current_module=self._profile_module(),
+                initial_page=initial_page,
+                preferences_changed=self._on_preferences_changed,
+            )
+        except Exception as error:
+            traceback.print_exc()
+            wx.MessageBox(
+                "Kobee could not open Settings. Your project and existing settings were not changed.\n\n{}".format(error),
+                "Could not open Settings", wx.OK | wx.ICON_ERROR, self,
+            )
+            return
         restart_requested = False
         try:
             dialog.ShowModal()
@@ -3199,9 +3835,16 @@ class StudioEditorDialog(wx.Dialog):
             # editor instance so the host entry point can construct a fresh
             # one with the restored preferences, assets, and profiles.
             self.restart_requested = True
+            self.restart_state = session_state
             self._cancel()
             return
         self._refresh_symbol_catalog()
+        try:
+            self.project_data_catalog = self.project_data_catalog_store.load()
+            self.page_by_tool["Project Data"].reload(self.project_data, self.project_data_catalog)
+            self._restore_project_draft(session_state)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            pass
         self._refresh_profile_bar()
         self.request_preview()
 
@@ -3241,6 +3884,10 @@ class StudioEditorDialog(wx.Dialog):
         if not hasattr(self, "profile_status"):
             return
         module = self._profile_module()
+        if module is None:
+            self.profile_status.SetLabel("Project Data has no artwork profile")
+            self.profile_bar.Layout()
+            return
         profile_id = self._recalled_profile_ids.get(module)
         name = "None"
         if profile_id:
@@ -3262,7 +3909,15 @@ class StudioEditorDialog(wx.Dialog):
     def _on_preferences_changed(self, preferences):
         old_appearance = self.preferences.appearance
         self.preferences = preferences
-        set_appearance_preference(preferences.appearance)
+        # Keep the current window on its original palette until it is reopened.
+        # Painted controls consult the global preference on every repaint.
+        # Switching it here mixes new fields with old panel backgrounds.
+        # Settings can opt system fonts in or out while this editor is open.
+        # Refresh choices immediately; no restart should be needed just to
+        # use a font the user has explicitly enabled.
+        for page in self.page_by_tool.values():
+            if hasattr(page, "_refresh_font_choices"):
+                page._refresh_font_choices()
         requested_unit = preferences.measurement_unit
         if requested_unit is not self.measurement_unit:
             self._loading = True
@@ -3508,6 +4163,119 @@ class StudioEditorDialog(wx.Dialog):
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return {}
 
+    def save_project_data(self, project_data):
+        """Persist a validated Project Data record beside the KiCad project."""
+        if self.project_data_store is None:
+            raise ValueError("Save the active board as a KiCad project first")
+        if self.project_data_recovery_error:
+            raise ProjectDataRecoveryError("Back up the unreadable Project Data record before creating a new one")
+        self.project_data_fingerprint = self.project_data_store.save(
+            project_data, expected_fingerprint=self.project_data_fingerprint,
+        )
+        self.project_data = project_data
+        self.project_data_record_exists = True
+
+    def reload_project_data(self):
+        if self.project_data_store is None:
+            return
+        self.project_data_fingerprint = self.project_data_store.fingerprint()
+        self.project_data = self.project_data_store.load()
+        self.project_data_recovery_error = None
+        self.project_data_record_exists = self.project_data_store.path.is_file()
+        self.page_by_tool["Project Data"].reload(self.project_data, self.project_data_catalog)
+
+    def resolve_project_data_conflict(self, parent):
+        if wx.MessageBox(
+            "kobee-project.json changed, was deleted, or was replaced outside Kobee. Reload it now? Unsaved edits in this window will be discarded.",
+            "Project Data changed", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, parent,
+        ) != wx.YES:
+            return
+        try:
+            self.reload_project_data()
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, ProjectDataRecoveryError) as error:
+            self.project_data_recovery_error = str(error)
+            self.page_by_tool["Project Data"].reload(self.project_data, self.project_data_catalog)
+
+    def recover_project_data(self):
+        if self.project_data_store is None or not self.project_data_recovery_error:
+            return None
+        backup = self.project_data_store.backup_corrupt_record()
+        self.project_data_store.remove_corrupt_record_after_backup(backup)
+        self.project_data_fingerprint = None
+        self.project_data_recovery_error = None
+        self.save_project_data(ProjectData.empty())
+        return backup
+
+    def import_project_data_record(self, record_path):
+        if self.project_data_store is None:
+            raise ValueError("Save the active board as a KiCad project first")
+        if self.project_data_record_exists:
+            raise ValueError("This project already has Project Data; reload or recover it instead")
+        imported = ProjectDataStore.read_record(record_path)
+        self.save_project_data(imported)
+        return imported
+
+    def sync_project_data(self, create_checkpoint=False):
+        """Merge only Kobee-owned names into KiCad's project text variables."""
+        if self.project_data_store is None:
+            wx.MessageBox("Save the active board as a KiCad project first.", "Project Data", wx.OK | wx.ICON_INFORMATION, self)
+            return
+        if self.editor_session is None:
+            wx.MessageBox(
+                "Project Data sync requires the KiCad IPC plugin so Kobee can safely update the active project.",
+                "KiCad IPC required", wx.OK | wx.ICON_INFORMATION, self,
+            )
+            return
+        kicad_variables_applied = False
+        try:
+            page = self.page_by_tool["Project Data"]
+            draft = page.collect()
+            if create_checkpoint and not str(draft.revision_draft.get("default_change_summary", "")).strip():
+                if wx.MessageBox(
+                    "This checkpoint has no change summary. Create it anyway?",
+                    "Missing change summary", wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING, self,
+                ) != wx.YES:
+                    return
+            project_data = draft.with_checkpoint(draft.revision_draft) if create_checkpoint else draft
+            project = self.editor_session.board.get_project()
+            text_variables = project.get_text_variables()
+            generated = generated_variables(project_data, self.project_data_catalog)
+            merged, managed = merge_kicad_variables(
+                text_variables.variables, generated, project_data.managed_variable_names,
+            )
+            project_data = project_data.with_managed_variable_names(managed).with_sync_state(pending=True)
+            # Persist the checkpoint and the intended variable ownership first.
+            # If KiCad is unavailable afterwards, a retry remains deterministic.
+            self.save_project_data(project_data)
+            text_variables.variables = merged
+            try:
+                project.set_text_variables(text_variables)
+                kicad_variables_applied = True
+            except Exception as error:
+                page.reload(project_data, self.project_data_catalog)
+                wx.MessageBox(
+                    "Project Data was saved, but KiCad variables were not updated. Retry Sync to KiCad after resolving the issue.\n\n{}".format(error),
+                    "KiCad sync pending", wx.OK | wx.ICON_WARNING, self,
+                )
+                return
+            project_data = project_data.mark_synced()
+            self.save_project_data(project_data)
+            self._project_text_variables = merged
+            if "Variables" in self.page_by_tool:
+                self.prepare_variables()
+            page.reload(project_data, self.project_data_catalog)
+            message = "Created revision checkpoint and synced {} KiCad variable(s)." if create_checkpoint else "Synced {} KiCad variable(s)."
+            wx.MessageBox(message.format(len(generated)), "Project Data", wx.OK | wx.ICON_INFORMATION, self)
+        except ProjectDataConflictError:
+            if kicad_variables_applied:
+                wx.MessageBox(
+                    "KiCad variables were updated, but kobee-project.json changed before Kobee could mark the sync complete. Reload it, then retry Sync to KiCad to reconcile the record.",
+                    "Project Data sync needs review", wx.OK | wx.ICON_WARNING, self,
+                )
+            self.resolve_project_data_conflict(self)
+        except (AttributeError, OSError, TypeError, ValueError, ProjectDataRecoveryError) as error:
+            wx.MessageBox(str(error), "Could not sync Project Data", wx.OK | wx.ICON_ERROR, self)
+
     def prepare_variables(self):
         page = self.page_by_tool.get("Variables")
         if page is None:
@@ -3523,18 +4291,27 @@ class StudioEditorDialog(wx.Dialog):
         names = tuple(sorted(values, key=str.casefold))
         page._available_variable_names = names
         choice = page.controls["VariableInsertChoice"]
+
+        def menu_label(name):
+            token = "${{{}}}".format(name)
+            value = str(values.get(name, "")).replace("\r", "").replace("\n", " ↵ ").strip()
+            if not value:
+                return token if len(token) <= 44 else token[:43].rstrip() + "…"
+            # Keep the closed choice legible while still making it clear what
+            # will be inserted. The complete value is available as a tooltip.
+            token = token if len(token) <= 28 else token[:27].rstrip() + "…"
+            value = value if len(value) <= 26 else value[:25].rstrip() + "…"
+            return "{}  —  {}".format(token, value)
+
         choice.SetItems(
-            tuple(
-                "${{{}}}  →  {}".format(
-                    name,
-                    values[name].replace("\r", "").replace("\n", " ↵ ")[:96],
-                )
-                for name in names
-            )
-            or ("No project variables loaded",)
+            ("Choose a project value…",)
+            + tuple(menu_label(name) for name in names)
         )
         choice.SetSelection(0)
-        page.variable_insert_button.Enable(bool(names))
+        choice.SetToolTip(
+            "Choose a project value to insert its ${NAME} placeholder at the text cursor. "
+            "The text after the dash is that value's current contents."
+        )
         self._update_variable_status()
         self._preview_fingerprint = None
         self.request_preview()
@@ -3554,21 +4331,33 @@ class StudioEditorDialog(wx.Dialog):
             if unresolved else ""
         )
         page.variable_status.SetLabel(
-            "{} project variable(s) available. Preview uses current values; placed text keeps {} for KiCad to resolve dynamically.{}".format(
+                "{} project value(s) available. Choose one above to add its ${{NAME}} placeholder at the cursor. "
+            "Preview uses the current value for {}. Use Refresh values, then Update artwork, after a project value changes.{}".format(
                 len(names),
-                ", ".join("${" + name + "}" for name in used) if used else "the original text",
+                ", ".join("${" + name + "}" for name in used) if used else "the template text",
                 detail,
             )
         )
 
     def resolve_variable_template(self, template_text):
         raw = validate_variable_template(template_text)
+        # Kobee-managed values are read directly from the project's current
+        # text-variable map before asking KiCad to resolve anything else.
+        # KiCad can retain a previously expanded value in an open board, even
+        # though get_text_variables() already exposes the new value. Resolving
+        # the known values first prevents that stale expansion from being baked
+        # back into an existing static Kobee label on Update artwork.
+        current = expand_variable_template(raw, self._project_text_variables)
         if self.editor_session is not None:
             try:
-                return str(self.editor_session.board.expand_text_variables(raw))
+                # Let KiCad resolve any remaining built-ins or foreign
+                # project variables, then fill anything it intentionally left
+                # native from the current map.
+                expanded = str(self.editor_session.board.expand_text_variables(current))
+                return expand_variable_template(expanded, self._project_text_variables)
             except Exception:
                 pass
-        return expand_variable_template(raw, self._project_text_variables)
+        return current
 
     def _sync_board_selection_timer(self):
         selected_scope = False
@@ -3642,7 +4431,7 @@ class StudioEditorDialog(wx.Dialog):
         if self._tool not in tools:
             # Route through the normal tool selector so a default profile is
             # applied consistently when a family is first opened.
-            self._select_tool(tools[0])
+            self._select_tool(self._last_tool_by_family.get(family, tools[0]))
             return
         self.Freeze()
         try:
@@ -3659,11 +4448,14 @@ class StudioEditorDialog(wx.Dialog):
         if tool == self._tool and not self._loading:
             return
         self._tool = tool
+        self._last_valid = None
+        self._preview_fingerprint = None
         self._family = self.page_by_tool[tool].family
+        self._last_tool_by_family[self._family] = tool
         was_loading = self._loading
         self._loading = True
         try:
-            if not self._editing_existing and tool not in self._default_applied_tools:
+            if self._family != "project_data" and not self._editing_existing and tool not in self._default_applied_tools:
                 try:
                     profile = self.profile_store.load(profile_module_for_mode(self.page_by_tool[tool].mode))
                     self.page_by_tool[tool].apply(profile.settings)
@@ -3687,10 +4479,14 @@ class StudioEditorDialog(wx.Dialog):
             self._loading = was_loading
         self._refresh_profile_bar()
         board_tools = self._family == "board_tools"
-        self.profile_bar.Show(not board_tools)
-        self.placement_bar.Show(not board_tools)
-        self.place_button.Show(not board_tools)
+        project_data = self._family == "project_data"
+        self.tool_bar.Show(not project_data)
+        self.profile_bar.Show(not board_tools and not project_data)
+        self.placement_bar.Show(not board_tools and not project_data)
+        self.preview_panel.Show(self._tool_needs_preview(tool))
+        self.place_button.Show(not board_tools and not project_data)
         self.designator_footer_button.Show(tool == "Designators")
+        self.footer_shortcut.Show(self._tool_needs_preview(tool))
         self.footer_shortcut.SetLabel(
             "Ctrl/Shift + Enter applies designators"
             if tool == "Designators" else
@@ -3702,6 +4498,11 @@ class StudioEditorDialog(wx.Dialog):
             self.prepare_designators()
         elif tool == "Variables":
             self.prepare_variables()
+        elif project_data:
+            self.preview.set_artwork((), (), (), FRONT_SILKSCREEN); self.preview_error.SetLabel("")
+            project_page = self.page_by_tool["Project Data"]
+            project_page.reload(self.project_data, self.project_data_catalog)
+            wx.CallAfter(project_page.maybe_offer_adoption)
         elif board_tools:
             self.preview.set_artwork((), (), (), FRONT_SILKSCREEN); self.preview_error.SetLabel("")
         else:
@@ -3715,6 +4516,19 @@ class StudioEditorDialog(wx.Dialog):
             button.set_active(label == self._tool)
         self.tool_bar.Layout()
 
+    def _tool_needs_preview(self, tool=None):
+        """Return whether the selected workflow benefits from artwork preview.
+
+        Cleanup is a board operation with its own before/after examples; its
+        empty artwork canvas only wastes space. Designators still uses the
+        preview to show the generated reference label.
+        """
+        page = self.page_by_tool[tool or self._tool]
+        return not (
+            page.family == "project_data"
+            or (page.family == "board_tools" and page.label == "Cleanup")
+        )
+
     def _update_tab_state(self):
         for family, button in self.family_buttons.items():
             selected = family == self._family
@@ -3724,9 +4538,20 @@ class StudioEditorDialog(wx.Dialog):
     def _show_active_page(self):
         page = self.page_by_tool[self._tool]
         self.pages.ChangeSelection(self.page_index_by_tool[self._tool])
+        # Apply this here as well as in _select_tool so a routed initial page
+        # cannot leave an irrelevant preview column visible.
+        self.preview_panel.Show(self._tool_needs_preview())
         page._schedule_layout(scroll_to_top=True)
 
     def _route_settings(self, settings):
+        # Profiles created before the expanded cutout control used the two
+        # shorter labels. Preserve their intent rather than silently falling
+        # back to the new default pill.
+        legacy_cutout = settings.get("HeaderCutoutEdgeChoice")
+        if legacy_cutout == "Rounded cutout":
+            settings["HeaderCutoutEdgeChoice"] = "Rounded rectangle cutout"
+        elif legacy_cutout == "Square edge cutout":
+            settings["HeaderCutoutEdgeChoice"] = "Square rectangle cutout"
         mode = settings.get("StudioModeChoice", "Label")
         if settings.get("StudioTool") == "Variables":
             tool = "Variables"
@@ -3745,11 +4570,13 @@ class StudioEditorDialog(wx.Dialog):
         self._family = self.page_by_tool[tool].family
         requested_font = str(settings.get("FontComboBox", ""))
         font_control = self.page_by_tool[tool].controls.get("FontComboBox")
+        self._missing_font_metadata = None
         if requested_font and font_control is not None and requested_font not in self.page_by_tool[tool]._font_names():
             font_control.SetItems((requested_font,) + self.page_by_tool[tool]._font_labels())
             metadata = settings.get("FontFaceMetadata")
             self._missing_font_metadata = dict(metadata) if isinstance(metadata, dict) else {"renderer_name":requested_font}
         self.page_by_tool[tool].apply(settings)
+        self._update_font_availability()
         configured_layers = settings.get("OutputLayers", ())
         if isinstance(configured_layers, str):
             configured_layers = (configured_layers,)
@@ -3819,37 +4646,110 @@ class StudioEditorDialog(wx.Dialog):
         font_name = settings.get("FontComboBox")
         face = next((item for item in self.font_store.list() if item.renderer_name == font_name), None)
         if face is not None:
-            settings["FontFaceMetadata"] = {"renderer_name":face.renderer_name,"family":face.family,"weight":face.weight,"style":face.style,"source_url":face.source_url,"licence_url":face.licence_url}
+            settings["FontFaceMetadata"] = {"renderer_name":face.renderer_name,"family":face.family,"weight":face.weight,"style":face.style,"source_url":face.source_url,"licence_url":face.licence_url,"source":"google"}
+        elif font_name:
+            settings["FontFaceMetadata"] = {
+                "renderer_name": str(font_name),
+                "family": str(font_name),
+                "source": (
+                    "system" if font_name in self.system_font_names else "bundled"
+                ),
+            }
         return settings
 
     def _offer_missing_font(self):
+        if not self.accepts_background_results():
+            return
         metadata = self._missing_font_metadata
         if not metadata: return
+        if metadata.get("source") != "google" or not metadata.get("family"):
+            return
         if wx.MessageBox("This artwork uses the missing Google Font face “{}”. Redownload it now?".format(metadata.get("family", metadata.get("renderer_name", "Unknown"))), "Missing font", wx.YES_NO | wx.ICON_QUESTION, self) != wx.YES: return
+        tool = self._tool
+        expected_renderer = self.active_page._selected_font_renderer(self.active_page.controls["FontComboBox"])
         def worker():
             try: face, error = self.font_store.download_google_face(metadata["family"], int(metadata.get("weight",400)), metadata.get("style","normal")), None
             except Exception as caught: face, error = None, caught
-            wx.CallAfter(self._missing_font_finished, face, error)
+            wx.CallAfter(self._missing_font_finished, face, error, tool, expected_renderer)
         threading.Thread(target=worker,daemon=True).start()
 
-    def _missing_font_finished(self, face, error):
+    def _missing_font_finished(self, face, error, tool=None, expected_renderer=None):
+        if not self.accepts_background_results():
+            return
         if error is not None:
             wx.MessageBox(str(error), "Could not redownload font", wx.OK | wx.ICON_ERROR, self); return
         self.buzzard.register_font(face.renderer_name, face.path)
-        page=self.active_page; choice=page.controls.get("FontComboBox")
-        if choice is not None:
+        target_tool = tool or self._tool
+        page = self.page_by_tool.get(target_tool)
+        choice = page.controls.get("FontComboBox") if page is not None else None
+        if choice is not None and (expected_renderer is None or page._selected_font_renderer(choice) == expected_renderer):
             choice.SetItems(page._font_labels()); choice.SetStringSelection(page._font_label(face.renderer_name))
-        self._missing_font_metadata=None; self._preview_fingerprint=None; self.request_preview(immediate=True)
+            page.set_font_availability_error()
+        if expected_renderer is None or (self._missing_font_metadata or {}).get("renderer_name") == expected_renderer:
+            self._missing_font_metadata=None
+        if target_tool == self._tool:
+            self._update_font_availability()
+        self._preview_fingerprint=None; self.request_preview(immediate=True)
+
+    def _update_font_availability(self):
+        page = self.page_by_tool.get(self._tool)
+        if page is None or not hasattr(page, "set_font_availability_error"):
+            return
+        metadata = self._missing_font_metadata
+        if not metadata:
+            page.set_font_availability_error()
+            return
+        name = str(metadata.get("family") or metadata.get("renderer_name") or "Unknown font")
+        page.set_font_availability_error(
+            "Font “{}” is no longer available on this computer. Install it or choose another typeface, then save the profile again.".format(name)
+        )
+
+    def font_selection_changed(self, renderer_name):
+        """Clear a moved-profile warning once the user picks an available face."""
+        if renderer_name in self.active_page._font_names():
+            self._missing_font_metadata = None
+        self._update_font_availability()
+
+    def set_font_favourite(self, renderer_name, favourite):
+        """Persist one favourite and refresh the compact typeface pickers."""
+        renderer_name = str(renderer_name).strip()
+        if not renderer_name:
+            return
+        favourites = set(self.preferences.favourite_font_names)
+        if favourite:
+            favourites.add(renderer_name)
+        else:
+            favourites.discard(renderer_name)
+        preferences = AppPreferences(
+            appearance=self.preferences.appearance,
+            measurement_unit=self.preferences.measurement_unit,
+            hidden_symbol_ids=self.preferences.hidden_symbol_ids,
+            hidden_label_ids=self.preferences.hidden_label_ids,
+            favourite_font_names=tuple(favourites),
+            enabled_system_font_names=self.preferences.enabled_system_font_names,
+        )
+        try:
+            self.preferences_store.save(preferences)
+        except (OSError, TypeError, ValueError) as error:
+            wx.MessageBox(str(error), "Could not save favourite fonts", wx.OK | wx.ICON_ERROR, self)
+            return
+        self.preferences = preferences
+        for page in self.page_by_tool.values():
+            if hasattr(page, "_refresh_font_choices"):
+                page._refresh_font_choices()
 
     def on_control_changed(self, event):
         if self._tool == "Variables" and hasattr(self.active_page, "variable_status"):
             self._update_variable_status()
         if not self._loading:
-            self.request_preview()
+            # Variable labels have a compact, lightweight renderer. Keeping
+            # every edit immediate avoids stale section previews when changing
+            # gaps, end treatments, or individual padding controls.
+            self.request_preview(immediate=self._tool == "Variables")
         event.Skip()
 
     def request_preview(self, immediate=False):
-        if self._loading:
+        if not self.accepts_background_results() or self._loading:
             return
         self._timer.Stop()
         if immediate:
@@ -3857,6 +4757,8 @@ class StudioEditorDialog(wx.Dialog):
             self._regenerate_preview()
         else:
             self._pending_preview = True
+            self.place_button.Disable()
+            self.place_button.Refresh(False)
             self._timer.StartOnce(300)
 
     def _on_preview_timer(self, event):
@@ -3907,10 +4809,24 @@ class StudioEditorDialog(wx.Dialog):
         )
 
     def _regenerate_preview(self):
-        if self._family == "board_tools" and self._tool != "Designators": return
+        # Read settings inside the error boundary too. Missing imported files,
+        # invalid numeric input and project-variable errors occur before the
+        # renderer is reached, often from a native wx timer callback.
+        try:
+            self._render_preview()
+        except Exception as error:
+            traceback.print_exc()
+            self._preview_fingerprint = None
+            self._show_preview_error(error)
+
+    def _render_preview(self):
+        if self._family == "project_data" or (self._family == "board_tools" and self._tool != "Designators"):
+            return
         settings = self.CurrentSettings()
         fingerprint = json.dumps(settings, sort_keys=True, separators=(",", ":"))
         if fingerprint == self._preview_fingerprint:
+            self.place_button.Enable(self.error is None and self.artwork is not None)
+            self.place_button.Refresh(False)
             return
         self._preview_fingerprint = fingerprint
         mode = self.active_page.mode
@@ -3934,7 +4850,23 @@ class StudioEditorDialog(wx.Dialog):
         try:
             if self._tool == "Imported Graphic":
                 geometry = str(settings.get("GraphicGeometrySvg", ""))
-                if not geometry: raise ValueError("Choose or upload a graphic asset")
+                if not geometry:
+                    # A missing graphic is an empty state, not a failed
+                    # version of the previous label.  Never retain stale
+                    # artwork here: it makes the Graphic tab appear to have
+                    # selected a label that cannot actually be placed.
+                    self.artwork = None
+                    self.polys = []
+                    self.stroke_polys = []
+                    self.guide_polys = []
+                    self.preview.set_artwork((), (), (), self.output_layer)
+                    self.preview.set_transform_handler()
+                    self.preview_error.SetLabel("Choose or upload a graphic asset")
+                    self.preview_error.Wrap(max(240, self.preview.GetClientSize().width))
+                    self.place_button.Disable()
+                    side = "Bottom side · front-view mirror" if is_bottom(self.output_layer) else "Front side"
+                    self.preview_status.SetLabel("{} · {}".format(side, LAYER_LABELS[self.output_layer]))
+                    return
                 graphic = GraphicObject(
                     object_id="graphic.main", asset_id=str(settings.get("GraphicAssetId", "embedded")), geometry_svg=geometry,
                     position=Point(float(settings.get("GraphicOffsetXCtrl", 0)), float(settings.get("GraphicOffsetYCtrl", 0))),
@@ -3982,6 +4914,14 @@ class StudioEditorDialog(wx.Dialog):
                     label_side=PIN_SIDE_TO_LABEL_SIDE[side],
                     pad_clearance_mm=float(settings.get("HeaderPadClearanceCtrl", 2.0)),
                     opening_mode=OPENING_LABELS.get(settings.get("HeaderOpeningChoice"), "continuous"),
+                    opening_shape={
+                        "Pill cutout": "pill",
+                        "Rounded cutout": "rounded_rectangle",
+                        "Rounded rectangle cutout": "rounded_rectangle",
+                        "Square edge cutout": "rectangle",
+                        "Square rectangle cutout": "rectangle",
+                    }.get(settings.get("HeaderCutoutEdgeChoice", "Pill cutout"), "pill"),
+                    opening_corner_radius_mm=float(settings.get("HeaderCutoutRadiusCtrl", 0.5)),
                     opening_end_padding_mm=float(settings.get("HeaderOpeningEndPaddingCtrl", 0)),
                     leading_padding_mm=float(settings.get("HeaderLeadingPaddingCtrl", 0.3)),
                     trailing_padding_mm=float(settings.get("HeaderTrailingPaddingCtrl", 0.3)),
@@ -4047,6 +4987,40 @@ class StudioEditorDialog(wx.Dialog):
                     icon_variant=icon_variant,
                     icon_renderer=icon_renderer,
                 )
+            elif (
+                self._tool == "Variables"
+                and settings.get("VariableLayoutChoice") == "Multipart label"
+            ):
+                raw_sections = multipart_sections(settings.get("VariableTemplateText", ""))
+                sections = tuple(
+                    self.resolve_variable_template(section) for section in raw_sections
+                )
+                self.artwork = render_multipart_label_artwork(
+                    self._text_vectorizer,
+                    sections,
+                    style,
+                    self.output_layer,
+                    start_cap=cap_style_id(settings.get("MultiPartStartCapChoice", "Rounded")),
+                    end_cap=cap_style_id(settings.get("MultiPartEndCapChoice", "Square")),
+                    separator=str(settings.get("MultiPartSeparatorChoice", "\\")),
+                    gap_mm=float(settings.get("MultiPartGapCtrl", 0.35)),
+                    separator_depth_mm=float(settings.get("MultiPartSeparatorDepthCtrl", 0.75)),
+                    start_padding_left_mm=float(settings.get("MultiPartStartLeftPaddingCtrl", style.shape.padding.left)),
+                    start_padding_right_mm=float(settings.get("MultiPartStartRightPaddingCtrl", style.shape.padding.right)),
+                    middle_padding_left_mm=float(settings.get("MultiPartMiddleLeftPaddingCtrl", style.shape.padding.left)),
+                    middle_padding_right_mm=float(settings.get("MultiPartMiddleRightPaddingCtrl", style.shape.padding.right)),
+                    end_padding_left_mm=float(settings.get("MultiPartEndLeftPaddingCtrl", style.shape.padding.left)),
+                    end_padding_right_mm=float(settings.get("MultiPartEndRightPaddingCtrl", style.shape.padding.right)),
+                    inline_format=bool(settings.get("inlineFormatTextbox", False)),
+                    lineover_style=settings.get("lineoverStyleChoice", "Rounded"),
+                    lineover_thickness=int(settings.get("lineoverThicknessCtrl", 1)),
+                    underline=bool(settings.get("UnderlineCheckbox", False)),
+                    underline_thickness_mm=float(settings.get("UnderlineThicknessCtrl", 0.15)),
+                    underline_gap_mm=float(settings.get("UnderlineGapCtrl", 0.12)),
+                    overline=bool(settings.get("OverlineCheckbox", False)),
+                    overline_thickness_mm=float(settings.get("OverlineThicknessCtrl", 0.15)),
+                    overline_gap_mm=float(settings.get("OverlineGapCtrl", 0.12)),
+                )
             else:
                 shape = LABEL_SHAPE_LABELS.get(settings.get("ShapeChoice"))
                 content_mode = settings.get("ContentModeChoice", "Label")
@@ -4085,17 +5059,24 @@ class StudioEditorDialog(wx.Dialog):
                     underline=bool(settings.get("UnderlineCheckbox", False)),
                     underline_thickness_mm=float(settings.get("UnderlineThicknessCtrl", 0.15)),
                     underline_gap_mm=float(settings.get("UnderlineGapCtrl", 0.12)),
+                    overline=bool(settings.get("OverlineCheckbox", False)),
+                    overline_thickness_mm=float(settings.get("OverlineThicknessCtrl", 0.15)),
+                    overline_gap_mm=float(settings.get("OverlineGapCtrl", 0.12)),
                     icon_variant=icon_variant,
                     icon_renderer=icon_renderer,
                 )
+            if "PlacementAnchorChoice" in settings:
+                self.artwork = with_placement_anchor(self.artwork, settings["PlacementAnchorChoice"])
             self.polys = list(self.artwork.filled_polygons)
             self.stroke_polys = list(self.artwork.strokes)
             self.guide_polys = list(self.artwork.guides)
             self._last_valid = (self.artwork, tuple(self.polys), tuple(self.stroke_polys), tuple(self.guide_polys))
             self.preview.set_artwork(self.polys, self.stroke_polys, self.guide_polys, self.output_layer)
+            self.preview._anchor = self.artwork.document.origin if "PlacementAnchorChoice" in settings else None
             graphic = next((item for item in self.artwork.document.objects if isinstance(item, GraphicObject)), None)
             self.preview.set_transform_handler(graphic, self._on_graphic_transform) if graphic is not None else self.preview.set_transform_handler()
             self.preview_error.SetLabel("")
+            self.place_button.Enable()
         except ValueError as error:
             self._show_preview_error(error)
         except Exception as error:
@@ -4106,6 +5087,8 @@ class StudioEditorDialog(wx.Dialog):
 
     def _show_preview_error(self, error):
         self.error = str(error) or "Preview unavailable"
+        self.place_button.Disable()
+        self.place_button.Refresh(False)
         if self._last_valid:
             artwork, filled, strokes, guides = self._last_valid
             self.artwork = artwork
@@ -4122,10 +5105,13 @@ class StudioEditorDialog(wx.Dialog):
         self.preview_error.Wrap(max(240, self.preview.GetClientSize().width))
 
     def OnOkClick(self, event):
+        if self._family == "project_data":
+            self.sync_project_data(False)
+            return
         if self._tool == "Variables" and self.editor_session is None:
             wx.MessageBox(
                 "Variable labels must be placed from KiCad 10 using the IPC plugin. "
-                "Their ${NAME} expressions need to remain native KiCad text.",
+                "Kobee uses the active project's current values to render the label.",
                 "KiCad IPC required",
                 wx.OK | wx.ICON_INFORMATION,
                 self,

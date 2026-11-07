@@ -78,6 +78,20 @@ class ComponentPresetStore:
                                      cutout_shape, float(cutout_radius_mm), self.scope)
         self.root.mkdir(parents=True, exist_ok=True)
         destination = self.root / "{}.json".format(preset_id)
+        if destination.exists() or destination.is_symlink():
+            try:
+                if destination.is_symlink() or not destination.is_file():
+                    raise ValueError("not a regular file")
+                payload = json.loads(destination.read_text(encoding="utf-8"))
+                if payload.pop("schema_version", None) != COMPONENT_PRESET_SCHEMA_VERSION:
+                    raise ValueError("unsupported schema")
+                existing = CustomComponentPreset(**payload)
+                if existing.preset_id != preset_id or existing.scope != self.scope:
+                    raise ValueError("identifier or scope does not match")
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(
+                    "Refusing to replace an unreadable component preset; back it up from Data health first: {}".format(error)
+                ) from error
         descriptor, temporary = tempfile.mkstemp(prefix=".preset-", suffix=".tmp", dir=str(self.root))
         try:
             with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:

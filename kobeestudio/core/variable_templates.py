@@ -16,6 +16,7 @@ from .data_paths import project_data_root, user_data_root
 
 VARIABLE_TEMPLATE_SCHEMA_VERSION = 1
 _VARIABLE = re.compile(r"\$\{([^{}]+)\}")
+_MULTIPART_SECTION = re.compile(r"\[([^\[\]]*)\]")
 
 
 def _printable(value: str, field_name: str, maximum: int) -> str:
@@ -62,6 +63,23 @@ def expand_variable_template(template_text: str, variables: Mapping[str, Any]) -
         lambda match: values.get(match.group(1).strip(), match.group(0)),
         text,
     )
+
+
+def multipart_sections(template_text: str) -> Tuple[str, ...]:
+    """Parse strict ``[section] [section]`` variable-label syntax.
+
+    Empty sections are valid while a multipart label is being composed; they
+    render as blank containers ready for text or a placeholder.
+    """
+    text = validate_variable_template(template_text)
+    sections = tuple(match.group(1).strip() for match in _MULTIPART_SECTION.finditer(text))
+    remainder = _MULTIPART_SECTION.sub("", text)
+    if len(sections) < 2 or remainder.strip():
+        raise ValueError(
+            "Multipart labels need two or more bracketed sections, for example "
+            "[${PROJECT_NUMBER}] [Rev ${KOBEE_REVISION}] [${KOBEE_HARDWARE_VERSION}]"
+        )
+    return sections
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -167,7 +185,24 @@ class VariableTemplateStore:
             settings=dict(settings or {}),
             scope=self.scope,
         )
-        _atomic_json(self.root / (template.template_id + ".json"), template.to_dict())
+        destination = self.root / (template.template_id + ".json")
+        if destination.exists() or destination.is_symlink():
+            try:
+                if destination.is_symlink() or not destination.is_file():
+                    raise ValueError("not a regular file")
+                payload = json.loads(destination.read_text(encoding="utf-8"))
+                existing = VariableLabelTemplate(
+                    template_id=str(payload["template_id"]), name=str(payload["name"]),
+                    template_text=str(payload["template_text"]), settings=dict(payload.get("settings", {})),
+                    scope=str(payload["scope"]),
+                )
+                if payload.get("schema_version") != VARIABLE_TEMPLATE_SCHEMA_VERSION or existing.template_id != template.template_id or existing.scope != self.scope:
+                    raise ValueError("schema or identifier does not match")
+            except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+                raise ValueError(
+                    "Refusing to replace an unreadable variable template; back it up from Data health first: {}".format(error)
+                ) from error
+        _atomic_json(destination, template.to_dict())
         return template
 
     def delete(self, template_id: str) -> None:

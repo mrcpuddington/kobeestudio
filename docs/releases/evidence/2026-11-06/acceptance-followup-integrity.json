@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-06T22:42:34.966137+00:00",
+  "archiveBytes": 2711038,
+  "sha256": "346674e9708049c287b4602d0db8e7594c4d34ccd88f87f80b4a40c64d8cb1b5",
+  "matchesTestedArtifact": true,
+  "zipIntegrity": true,
+  "runtimeFilesCompared": 430,
+  "runtimeFilesMatchingArchive": 430,
+  "sourceChangedSinceNativeSuite": [],
+  "freeDiskBytes": 18104320000,
+  "nativeAccess": "Mac reported locked; hands-on checks not performed in this follow-up",
+  "publicArtifactVerified": false
+}

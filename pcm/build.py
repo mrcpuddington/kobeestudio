@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import zipfile
 from pathlib import Path
 
 
@@ -50,9 +51,15 @@ def _write_metadata() -> tuple[dict, str]:
 
 
 def _build_archive(version: str) -> Path:
-    archive_base = BUILD / "Kobee-Studio-{}-pcm".format(version)
-    shutil.make_archive(str(archive_base), "zip", STAGING)
-    return Path(str(archive_base) + ".zip")
+    archive = BUILD / "Kobee-Studio-{}-pcm.zip".format(version)
+    # Restored checkouts can contain epoch-dated resources. ZIP has a 1980
+    # lower bound, so clamp those timestamps rather than leaving a partial
+    # package that happens to look like a successful build.
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as package:
+        for path in sorted(STAGING.rglob("*")):
+            if path.is_file():
+                package.write(path, path.relative_to(STAGING))
+    return archive
 
 
 def _write_repository_metadata(metadata: dict, version: str, archive: Path) -> None:

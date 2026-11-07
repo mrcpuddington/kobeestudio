@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kobeestudio.core.composition import DocumentStyle, Padding, ShapeStyle, TypographyStyle
 from kobeestudio.core.legacy_adapter import build_footprint_payload
@@ -59,6 +63,7 @@ def _payload(text: str, artwork):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--socket", required=True, help="PCB Editor IPC URL")
+    parser.add_argument("--expected-board", required=True, help="Absolute filename of a disposable board")
     args = parser.parse_args()
 
     session = IpcSession.connect(
@@ -67,11 +72,23 @@ def main() -> int:
         client_name="Kobee Studio end-to-end test",
     )
     placement = IpcArtworkPlacement(session)
+    document = session.board.document
+    active_path = Path(document.board_filename)
+    if not active_path.is_absolute():
+        project_path = Path(document.project.path)
+        if not project_path.is_absolute():
+            session.close()
+            raise RuntimeError("KiCad did not provide an absolute test-board location")
+        active_path = project_path / active_path
+    active_path = active_path.resolve()
+    if active_path != Path(args.expected_board).resolve():
+        session.close()
+        raise RuntimeError("Refusing to change a board other than the specified disposable board")
     before = len(session.board.get_footprints())
 
-    existing_selection = list(session.board.get_selection())
-    if existing_selection:
-        session.board.remove_from_selection(existing_selection)
+    # Fields have FieldId rather than KIID identities; clearing through the
+    # editor works for mixed selections without serializing each wrapper ID.
+    session.board.clear_selection()
     legacy_candidates = [
         footprint
         for footprint in session.board.get_footprints()
@@ -88,7 +105,7 @@ def main() -> int:
         session.board.remove_from_selection(legacy_candidates[0])
 
     first_artwork = _artwork("IPC TEST")
-    placed = placement.place(first_artwork, _payload("IPC TEST", first_artwork), "F.SilkS")
+    placed = placement.place(first_artwork, _payload("IPC TEST", first_artwork), "F.SilkS", start_interactive_move=False)
     after_place = len(session.board.get_footprints())
     if placed is None or after_place != before + 1:
         raise RuntimeError("IPC placement did not add exactly one footprint")

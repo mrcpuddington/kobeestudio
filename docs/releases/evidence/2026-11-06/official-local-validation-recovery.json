@@ -1,0 +1,65 @@
+{
+  "checked_at": "2026-11-06T23:43:15.521798+00:00",
+  "result": "passed",
+  "scope": "local archive only",
+  "archive_sha256": "f300f20829e38a937c170936a269ae513e01d47348e2e1f141c7f10504446e51",
+  "archive_size": 2711208,
+  "candidate_version": "1.5.20",
+  "candidate_channel": "testing",
+  "public_archive_verified": false,
+  "gitlab_ci_verified": false,
+  "temporary_pcm_repository_verified": false,
+  "preserved_versions": [
+    "1.4.1",
+    "1.4.0",
+    "1.3.4"
+  ],
+  "preserved_versions_unchanged": true,
+  "embedded_metadata_v2_validated": true,
+  "upstream_metadata_sha256": "c637671574f2d97a52e69716e259279d1d6972d54d4dfd6e87be30ce2e3a9f84",
+  "validator_source": [
+    {
+      "path": "schema-v1.json",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/schema-v1.json",
+      "sha256": "ed07f48d3dceb3af723bba347c6b90d3fc74228b3d73bcb8954850c39f8d9015"
+    },
+    {
+      "path": "schema-v2.json",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/schema-v2.json",
+      "sha256": "c70b2464d1b23407c040bf089758bde9514baac5fe55bae281cadd19c3f4f53e"
+    },
+    {
+      "path": "validate-package.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate-package.py",
+      "sha256": "5ed382fa2bc7b04a69d02ebadb303bcfeee9c7edd164b2538a604e6ebb3a386a"
+    },
+    {
+      "path": "validate/__init__.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "validate/package.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate/package.py",
+      "sha256": "5808878937f56a9c56b0c420258f75e76c58a4f36a3332ee87e809cedc7f3874"
+    },
+    {
+      "path": "validate/image.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate/image.py",
+      "sha256": "a892d10a7bbfbcacfeab84a9add8b5072d93de86249d517b3c3cd4dee1aa5d16"
+    },
+    {
+      "path": "validate/util/verify.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate/util/verify.py",
+      "sha256": "d8f5344ecf1813b3501821dd2127b08bc91b58885ee3aa79e213f5acb0eaed18"
+    },
+    {
+      "path": "validate/util/getsha.py",
+      "url": "https://gitlab.com/kicad/addons/metadata/-/raw/main/ci/validate/util/getsha.py",
+      "sha256": "01757c2106d244e19d6a0845c0c9dc7f0dd8c5250ae4f34f2e6069b8635ef3b7"
+    }
+  ],
+  "substitution": "Only download_file was replaced by a copy of the tested local archive. All validator assertions retained. Embedded metadata additionally validated independently.",
+  "wrapper_sha256": "286068a99bd4ffef8605a7cf0d3a50f481ba1eab607f7737f51deb653a26e608",
+  "validator_note": "Reused official validator/schema sources downloaded earlier this date; fetched current upstream metadata again for the rebuilt local archive."
+}

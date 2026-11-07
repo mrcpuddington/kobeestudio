@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from kobeestudio.core.app_preferences import AppPreferences, AppPreferencesStore
 from kobeestudio.core.data_paths import project_data_root, user_data_root
+from kobeestudio.core.data_health import backup_data_issues, scan_user_data
 from kobeestudio.core.library_archive import export_library, import_library, reset_library, restore_library
 from kobeestudio.core.measurement_units import (
     MeasurementUnit,
@@ -45,6 +48,8 @@ class AppPreferencesTests(unittest.TestCase):
             self.assertIs(MeasurementUnit.MILS, reopened.measurement_unit)
             store.path.write_text("not json", encoding="utf-8")
             self.assertEqual(AppPreferences(), store.load())
+            with self.assertRaises(ValueError):
+                store.save(AppPreferences(appearance="light"))
 
     def test_hidden_bundled_library_entries_persist_without_changing_schema(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -53,6 +58,30 @@ class AppPreferencesTests(unittest.TestCase):
             reopened = store.load()
             self.assertEqual(("builtin.ground",), reopened.hidden_symbol_ids)
             self.assertEqual(("gnd",), reopened.hidden_label_ids)
+
+    def test_favourite_fonts_default_to_kibuzzard_faces_and_can_be_removed(self):
+        defaults = AppPreferences()
+        self.assertEqual(
+            ("FreddySpark-Regular", "UbuntuMono-B", "mplus-1mn-medium"),
+            defaults.favourite_font_names,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            store = AppPreferencesStore(Path(directory))
+            store.save(AppPreferences(favourite_font_names=("System Sans",)))
+            self.assertEqual(
+                ("System Sans",),
+                AppPreferencesStore(Path(directory)).load().favourite_font_names,
+            )
+
+    def test_system_fonts_are_explicitly_enabled_and_persisted(self):
+        self.assertEqual((), AppPreferences().enabled_system_font_names)
+        with tempfile.TemporaryDirectory() as directory:
+            store = AppPreferencesStore(Path(directory))
+            store.save(AppPreferences(enabled_system_font_names=("SF Pro", "Avenir Next")))
+            self.assertEqual(
+                ("Avenir Next", "SF Pro"),
+                AppPreferencesStore(Path(directory)).load().enabled_system_font_names,
+            )
 
 
 class MeasurementUnitTests(unittest.TestCase):
@@ -147,6 +176,21 @@ class PortableLibraryTests(unittest.TestCase):
             self.assertTrue((target / "labels" / "v1" / "items" / "label.json").is_file())
             self.assertFalse((target / "unrelated.txt").exists())
 
+    def test_project_data_catalog_and_recovery_copies_are_portable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, target, archive = root / "source", root / "target", root / "library.zip"
+            catalog = source / "project-data" / "v1" / "catalog.json"
+            catalog.parent.mkdir(parents=True)
+            catalog.write_text('{"schema_version": 1}', encoding="utf-8")
+            recovery = source / "recovery" / "v1" / "20260815T000000Z" / "preferences.json"
+            recovery.parent.mkdir(parents=True)
+            recovery.write_text("not json", encoding="utf-8")
+            self.assertEqual(2, export_library(source, archive))
+            self.assertEqual(2, import_library(archive, target))
+            self.assertTrue((target / "project-data" / "v1" / "catalog.json").is_file())
+            self.assertTrue((target / "recovery" / "v1" / "20260815T000000Z" / "preferences.json").is_file())
+
     def test_restore_replaces_existing_portable_library_content(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -171,6 +215,65 @@ class PortableLibraryTests(unittest.TestCase):
             self.assertFalse((root / "labels").exists())
             self.assertFalse((root / "preferences.json").exists())
             self.assertTrue((root / "unrelated.txt").is_file())
+
+
+class DataHealthTests(unittest.TestCase):
+    def test_scan_accepts_large_catalog_written_by_font_refresh(self):
+        from kobeestudio.core.font_library import FontLibraryStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = FontLibraryStore(root)
+            families = [{"family": "Acceptance font", "description": "x" * (1100 * 1024)}]
+            response = io.BytesIO(json.dumps({"familyMetadataList": families}).encode())
+            with patch("kobeestudio.core.font_library._urlopen", return_value=response):
+                self.assertEqual(tuple(families), store.refresh_catalog())
+            original = store.catalog_path.read_bytes()
+            self.assertGreater(len(original), 1024 * 1024)
+            self.assertEqual((), scan_user_data(root))
+            self.assertEqual(original, store.catalog_path.read_bytes())
+
+            # A catalogue exception must not relax ordinary record limits.
+            (root / "preferences.json").write_text(json.dumps({"padding": "x" * (1100 * 1024)}))
+            issues = scan_user_data(root)
+            self.assertEqual(["preferences.json"], [issue.relative_path for issue in issues])
+            self.assertIn("1 MiB", issues[0].detail)
+
+    def test_scan_still_bounds_font_catalog_size(self):
+        from kobeestudio.core.font_library import MAX_CATALOG_BYTES
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / "fonts" / "v1" / "catalog.json"
+            catalog.parent.mkdir(parents=True)
+            with catalog.open("wb") as stream:
+                stream.seek(MAX_CATALOG_BYTES)
+                stream.write(b"x")
+            issues = scan_user_data(root)
+            self.assertEqual(["fonts/v1/catalog.json"], [issue.relative_path for issue in issues])
+            self.assertIn("16 MiB", issues[0].detail)
+
+    def test_scan_reports_invalid_data_and_backup_keeps_original_untouched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            broken = root / "preferences.json"
+            broken.write_text("not json", encoding="utf-8")
+            issues = scan_user_data(root)
+            self.assertEqual(("preferences.json",), tuple(issue.relative_path for issue in issues))
+            backup = backup_data_issues(root, issues)
+            self.assertEqual("not json", broken.read_text(encoding="utf-8"))
+            self.assertEqual("not json", (backup / "preferences.json").read_text(encoding="utf-8"))
+            self.assertTrue((backup / "report.json").is_file())
+
+    def test_scan_reports_unsupported_schema_instead_of_silently_ignoring_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / "project-data" / "v1" / "catalog.json"
+            catalog.parent.mkdir(parents=True)
+            catalog.write_text('{"schema_version": 999}', encoding="utf-8")
+            issues = scan_user_data(root)
+            self.assertEqual(1, len(issues))
+            self.assertIn("Unsupported schema", issues[0].detail)
 
 
 if __name__ == "__main__":

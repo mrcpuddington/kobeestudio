@@ -103,11 +103,16 @@ def apply_native_theme(root: Any, wx_module: Any, palette: Mapping[str, Any]) ->
     if combo_box is not None:
         control_types.append(combo_box)
     control_types = tuple(control_types)
+    static_box = getattr(wx_module, "StaticBox", None)
 
     for child in root.GetChildren():
         try:
             if isinstance(child, wx_module.StaticText):
                 child.SetForegroundColour(text_colour)
+            elif static_box is not None and isinstance(child, static_box):
+                child.SetForegroundColour(text_colour)
+                child.SetBackgroundColour(palette.get("surface", root.GetBackgroundColour()))
+                child.Refresh(False)
             elif isinstance(child, control_types):
                 # Cocoa can ignore inherited colours for editable native
                 # controls. Setting both the local and own colour paths makes

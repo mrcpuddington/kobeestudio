@@ -1,0 +1,377 @@
+{
+  "version": "1.5.20",
+  "kicad": "10.0.5 (10.0.5)",
+  "board": "/private/tmp/kobeestudio-acceptance-2026-11-06/acceptance.kicad_pcb",
+  "cases": [
+    {
+      "tool": "label",
+      "layer": "F.SilkS",
+      "id": "54585b98-a81d-40f3-b771-16af4fdfe73e",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "F.SilkS",
+      "id": "2d12122c-01c7-4c3d-abfa-672144898913",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "F.SilkS",
+      "id": "afb215fd-7d23-4bde-a83e-0d67a064d99b",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "F.SilkS",
+      "id": "ad25dc20-19ac-406d-81ec-0a3dcabda8a2",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "F.SilkS",
+      "id": "e53ad2ac-625a-4c3d-bb7f-896f4e16aed4",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "F.SilkS",
+      "id": "819cf9b4-af12-4c57-865d-91b269d5d43e",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "F.SilkS",
+      "id": "85432abe-a631-4723-a32f-7476fbc8d6ed",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "F.SilkS",
+      "id": "c4534058-bffb-47cc-a05d-aa3cecb68564",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "F.SilkS",
+      "id": "09e0c832-caca-4ba6-935c-a6e21ef4fc5d",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "F.SilkS",
+      "id": "6811feb1-7da6-455a-9626-9ddff1a760ff",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "label",
+      "layer": "B.SilkS",
+      "id": "8e7ba28c-3afb-4581-892c-3ee1d8e09ba1",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "B.SilkS",
+      "id": "04994005-f821-4910-a017-0c4fff3b2eaa",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "B.SilkS",
+      "id": "9b01fae4-36dc-4b03-b397-9dd53c400448",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "B.SilkS",
+      "id": "53434a1a-eda6-4813-a14d-9e1649a2c3c0",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "B.SilkS",
+      "id": "1016e9c2-9334-4678-b3ca-3587a161585a",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "B.SilkS",
+      "id": "b9c5189d-c034-401b-8f59-0c958a0187dc",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "B.SilkS",
+      "id": "30e15f8b-e2f3-44bd-8d9f-fd812b386196",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "B.SilkS",
+      "id": "81ad3e19-d2c5-4791-9b36-39862fa9cabf",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "B.SilkS",
+      "id": "30eda487-8a45-49fa-9345-4d39df9cb992",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "B.SilkS",
+      "id": "ab6dea68-086c-49c5-9ea4-f1192044a903",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "label",
+      "layer": "F.Cu",
+      "id": "920a950e-71a3-436b-bf56-8ed41a9324b8",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "F.Cu",
+      "id": "6ae1306a-60d4-4e88-8088-726a95065385",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "F.Cu",
+      "id": "7234dffa-99dd-4336-b1fa-1e018ecb7885",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "F.Cu",
+      "id": "d8b1d0b8-3bb4-4f01-9db2-4fc10537bb56",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "F.Cu",
+      "id": "40df0039-2e16-4f8f-99a8-f94b636213fa",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "F.Cu",
+      "id": "8f6bd58c-a044-4f68-a1c8-cb9e1a33c3db",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "F.Cu",
+      "id": "b79606d8-f6ac-4514-ba77-1cbb6b466f2a",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "F.Cu",
+      "id": "2eea851e-ca8a-4cf4-8b69-aaad6e44a18d",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "F.Cu",
+      "id": "a2285ccb-48be-46bf-a05a-bb084e6fae43",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "F.Cu",
+      "id": "dd215894-a039-4feb-b2e5-5a4be2854f7b",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "label",
+      "layer": "B.Cu",
+      "id": "ca686d3a-5261-4af2-8224-563768a4caf3",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "B.Cu",
+      "id": "0f6a547d-3f55-4343-a962-81b92d921686",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "B.Cu",
+      "id": "562e74cd-6b83-4b27-87d8-4bd3024286cd",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "B.Cu",
+      "id": "ce4c8acc-c0b2-4b45-98ed-833b8e1d466b",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "B.Cu",
+      "id": "e622a974-2912-4019-b386-ea1fef7ffe74",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "B.Cu",
+      "id": "266985d0-bd89-42e1-b071-09ee489461c2",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "B.Cu",
+      "id": "7a47ff16-5490-4fb7-b5de-abdcd23bac77",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "B.Cu",
+      "id": "3d069498-35da-4b0f-bc13-b7bf440e5e61",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "B.Cu",
+      "id": "bcd2c81c-6ef6-4a13-a5e5-3c051557c22e",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "B.Cu",
+      "id": "faaa4dd0-4c97-4ef3-b14e-9436bed2075e",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "label",
+      "layer": "F.Mask",
+      "id": "ba6a5157-6731-496e-9d59-4e19d38e159c",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "F.Mask",
+      "id": "d256f749-c823-45ee-9acd-03e7f97e483b",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "F.Mask",
+      "id": "71c32475-a1bb-4638-9883-f5aa20708f56",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "F.Mask",
+      "id": "b9224ba0-6a07-42c6-9361-41767a4bb861",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "F.Mask",
+      "id": "09b06664-c704-4e6c-9c3d-d5671b78023c",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "F.Mask",
+      "id": "7016477f-ec27-4b8e-9229-5a0e78a51655",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "F.Mask",
+      "id": "1d65ae14-3471-4ca4-b5f4-9b1c6b5af82f",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "F.Mask",
+      "id": "ef871a74-fbb0-4941-8965-dc986fec3d0b",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "F.Mask",
+      "id": "03d53f15-6682-4892-bcd3-ca65bd247a6c",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "F.Mask",
+      "id": "f1242ca7-17b6-4ecd-9db1-6e6df23f8e68",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "label",
+      "layer": "B.Mask",
+      "id": "8d74e583-639b-4146-adf0-6bceaf1f0df7",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "formatted",
+      "layer": "B.Mask",
+      "id": "fdf47c4c-0028-4952-8a2e-95626b4f4100",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "symbol",
+      "layer": "B.Mask",
+      "id": "1a4f5d8e-0cd4-4640-b500-9d0920f2e4ab",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "sections",
+      "layer": "B.Mask",
+      "id": "b387f6f4-3612-4362-ac9d-693453c9043a",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "connector",
+      "layer": "B.Mask",
+      "id": "5bcc3830-5fa6-483b-9dfb-3e16d60b5869",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "callout",
+      "layer": "B.Mask",
+      "id": "a435eedb-08d3-4134-8e73-d680108c8b00",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "array",
+      "layer": "B.Mask",
+      "id": "c6752b9b-9985-4b40-99f2-855595a7b6af",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "qr",
+      "layer": "B.Mask",
+      "id": "c9e050da-8206-4722-bc82-b63f85e4c4f6",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "barcode",
+      "layer": "B.Mask",
+      "id": "10446b6b-8ba7-421e-b1d4-cbc466fc81bb",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    },
+    {
+      "tool": "graphic",
+      "layer": "B.Mask",
+      "id": "2ff423e3-5d9f-49fe-a939-841715bd6f52",
+      "placement_update": "completed in preceding matrix; existing metadata and geometry reverified"
+    }
+  ],
+  "cleanup": {
+    "designator_create_update_remove": "passed",
+    "silkscreen_removal": "passed",
+    "non_silk_and_pad_preservation": "passed",
+    "locked_and_generated_skip": "passed",
+    "whole_board_scope_preserves_locked_and_generated": "passed"
+  },
+  "saved": true,
+  "reused_artwork": true,
+  "footprints": 67
+}

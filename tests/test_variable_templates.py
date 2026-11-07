@@ -8,6 +8,7 @@ from kobeestudio.core.library_archive import export_library, import_library
 from kobeestudio.core.variable_templates import (
     VariableTemplateStore,
     expand_variable_template,
+    multipart_sections,
     validate_variable_template,
     variable_names,
 )
@@ -33,6 +34,16 @@ class VariableTemplateTests(unittest.TestCase):
             validate_variable_template("${ REVISION }")
         with self.assertRaisesRegex(ValueError, "1 to 8000"):
             validate_variable_template("")
+
+    def test_multipart_sections_require_strict_bracketed_sections(self):
+        template = "[${PROJECT_NUMBER}] [Rev ${KOBEE_REVISION}] [${KOBEE_HARDWARE_VERSION}]"
+        self.assertEqual(
+            ("${PROJECT_NUMBER}", "Rev ${KOBEE_REVISION}", "${KOBEE_HARDWARE_VERSION}"),
+            multipart_sections(template),
+        )
+        self.assertEqual(("", ""), multipart_sections("[] []"))
+        with self.assertRaisesRegex(ValueError, "bracketed sections"):
+            multipart_sections("${PROJECT_NUMBER} [Rev ${KOBEE_REVISION}]")
 
     def test_global_store_crud_and_archive_round_trip(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,0 +1,11 @@
+{
+  "result": "passed",
+  "files": {
+    "acceptance-F_Silkscreen.gto": 131170,
+    "acceptance-B_Silkscreen.gbo": 103918,
+    "acceptance-F_Mask.gts": 116470,
+    "acceptance-B_Cu.gbl": 132092,
+    "acceptance-B_Mask.gbs": 116168,
+    "acceptance-F_Cu.gtl": 132477
+  }
+}

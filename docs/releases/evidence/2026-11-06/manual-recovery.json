@@ -1,0 +1,26 @@
+{
+  "scope": "Real source editor manually operated through native UI with a disposable data root; no IPC placement callback. Installed app cancellation guards were checked separately.",
+  "wrong_reset_confirmation_preserved_all_files": true,
+  "reset_custom_data_removed": true,
+  "unsafe_backup_rejected_without_changes": true,
+  "unsafe_backup_escape_created": false,
+  "restored_files": 9,
+  "restored_all_hashes_match_initial": true,
+  "unsaved_label_survived_both_restarts": "RECOVERY_DRAFT",
+  "script_svg_rejected": "Unsupported or unsafe SVG element: script",
+  "corrupt_png_rejected": "Could not read PNG; OK remains disabled; Cancel returned to Settings",
+  "final_data_matches_initial": true,
+  "source_defect_found": "Data Health falsely flags valid 2694670-byte refreshed Google catalogue under generic 1 MiB limit",
+  "files": {
+    "assets/v1/symbols/f3baf41f-5e9f-43af-ac66-24e3fede8a1b/asset.svg": "6ae31317d07c9bfd0569b5db888da6da8cd9e5dc1260fc5208b271a82d2c2192",
+    "assets/v1/symbols/f3baf41f-5e9f-43af-ac66-24e3fede8a1b/metadata.json": "1408f2342280f4a7590477aba6295acbb9cbb49afdf628c4631763ba8af02442",
+    "fonts/v1/catalog.json": "9ca94d8f10ca0c7c448faa6bb0ad6eac2c1b6a82358dd0fa8a46cb62176f21a6",
+    "fonts/v1/f1d95b42-150d-491d-a00b-d62a5bfd0c28/LICENSE.txt": "f0376d04eb58fb19e9f1690a99a1eb37380ad0246f7d503f2abd8e8a74ed12be",
+    "fonts/v1/f1d95b42-150d-491d-a00b-d62a5bfd0c28/font.ttf": "9aef6d62978c26eaa519e75a5a8c9bee8ac84e43158c2cd1d44b741eafde1af6",
+    "fonts/v1/f1d95b42-150d-491d-a00b-d62a5bfd0c28/metadata.json": "34d0618413d7cc35c595e828641a4da1ec1ee680852434949fd03c28cd4ecb09",
+    "preferences.json": "dda90e633040a234ef9cfbd507a9cfad32ab0e267a8de0f61550b34c374c6786",
+    "profiles/v1/labels/default.json": "eaa6a996acdf9026f977c6debac244840075006369151e465b4c2b89b9b99cd6",
+    "profiles/v1/labels/items/997f1a38-7ca2-4fd8-9e0c-08484d095045.json": "ef00583db2046939af3650aa594ae18a0fdd5bfa51bb6da181fa38dc35dca2a4"
+  },
+  "catalogue_health_fix_installed_retest": "PCM-installed rebuilt 1.5.20: Data & backup \u2192 Data health visibly reports no malformed or untrusted records"
+}

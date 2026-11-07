@@ -15,6 +15,7 @@ from svg2mod.exporter import Svg2ModExport, Svg2ModExportLatest, DEFAULT_DPI
 from svg2mod.importer import Svg2ModImport
 
 from ..core.font_library import FontLibraryStore
+from ..core.text_formatting import formatted_runs
 
 # svg2mod configures DEBUG/INFO stream handlers at import time, including an
 # "unfiltered" stdout logger. KiCad captures IPC process output on Windows;
@@ -49,14 +50,10 @@ class Buzzard():
         self.lineOverThickness = 2
         self.lineOverStyle = 'Square'
         self.lineSpacing = 15
-        #self.SystemFonts = svg.Text._system_fonts
-
-        #svg.Text.load_system_fonts()
-
-        fnt_lib = svg.Text._system_fonts
-        if fnt_lib is None:
-            fnt_lib = {}
-            svg.Text._system_fonts = fnt_lib
+        # Index the locally installed, renderable system fonts first. The
+        # svg2mod cache keeps this work to once per Kobee process, then our
+        # bundled and user-downloaded faces are layered on top.
+        fnt_lib = svg.Text.load_system_fonts()
 
         # Load included fonts 
         typeface_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'fonts')
@@ -78,6 +75,26 @@ class Buzzard():
         if fnt_lib is None:
             fnt_lib = {}; svg.Text._system_fonts = fnt_lib
         fnt_lib[str(renderer_name)] = {'Path': str(path)}
+
+    def system_font_names(self):
+        """Names discovered from the operating system, excluding Kobee paths."""
+        fnt_lib = svg.Text._system_fonts or {}
+        return tuple(sorted(
+            (str(name) for name, faces in fnt_lib.items()
+             if isinstance(faces, dict) and "Path" not in faces),
+            key=str.casefold,
+        ))
+
+    def system_font_paths(self):
+        """Return one renderable local file for each discovered system face."""
+        result = {}
+        for name, faces in (svg.Text._system_fonts or {}).items():
+            if not isinstance(faces, dict) or "Path" in faces:
+                continue
+            path = faces.get("Regular") or faces.get("Book") or next(iter(faces.values()), "")
+            if path:
+                result[str(name)] = str(path)
+        return result
 
     def generate(self, inString):
         self.svgText = self.renderLabel(inString)
@@ -120,7 +137,8 @@ class Buzzard():
                 t.add_text(s, origin=svg.Point(0, self.lineSpacing * i))
                 
             # This needs to be called to convert raw text to useable path elements    
-            t.convert_to_path()    
+            t.convert_to_path()
+            self._align_line_paths(t.paths)
 
         # bounds check padding
         padding = self.padding
@@ -223,18 +241,76 @@ class Buzzard():
     #   - Lineover has selectable thickness and style
     #   - Supports tag cap shapes denoted by ()[]<>/\
     #   
+    def _align_line_paths(self, lines):
+        """Align each visible line inside the complete text block's bounds."""
+        lines = [paths for paths in lines if paths]
+        if len(lines) < 2:
+            return
+        bounds = []
+        for paths in lines:
+            boxes = [path.bbox() for path in paths]
+            bounds.append((min(box[0].x for box in boxes), max(box[1].x for box in boxes)))
+        left = min(low for low, _ in bounds)
+        right = max(high for _, high in bounds)
+        for paths, (low, high) in zip(lines, bounds):
+            if self.alignment == 'Right':
+                offset = right - high
+            elif self.alignment == 'Center':
+                offset = (left + right - low - high) / 2.0
+            else:
+                offset = left - low
+            if offset:
+                for path in paths:
+                    # convert_to_path has already baked the font matrix into
+                    # the points. Applying it again would scale each glyph.
+                    path.matrix = svg.Matrix()
+                    path.transform(svg.Matrix([1, 0, 0, 1, offset, 0]))
+
     def formatString(self, inString, fontName):
+        """Render formatted runs using real glyph advances, including spaces."""
+        output = svg.Text()
+        output.set_font(fontName)
+        text = self.extractEndcaps(inString)
+        lines = []
+        with ttFont.TTFont(output.font_file) as font:
+            glyphs = font.getGlyphSet()
+            cmap = font.getBestCmap()
+            units = font['head'].unitsPerEm
+            for line_index, line in enumerate(text.split('\n')):
+                line_start = len(output.paths)
+                offset = 0.0
+                for run in formatted_runs(line):
+                    size = 12.0 * run.scale
+                    baseline = line_index * self.lineSpacing + run.baseline * 12.0
+                    advance = sum(glyphs[cmap[ord(char)]].width for char in run.text if ord(char) in cmap) * size / units
+                    if run.text.strip():
+                        chunk = svg.Text()
+                        chunk.set_font(fontName, size=size)
+                        chunk.add_text(run.text, origin=svg.Point(offset, baseline))
+                        chunk.convert_to_path()
+                        if any(chunk.paths):
+                            output.paths.extend(chunk.paths)
+                            low, high = chunk.bbox()
+                            thickness = max(1, self.lineOverThickness) * run.scale
+                            for enabled, y in ((run.overline, low.y - run.scale - thickness),
+                                               (run.underline, high.y + run.scale)):
+                                if enabled:
+                                    path = svg.Path()
+                                    if self.lineOverStyle == 'Rounded':
+                                        radius = thickness / 2.0
+                                        path.parse('M {},{} h {} a {},{} 0 0 1 0,{} h {} a {},{} 0 0 1 0,{} z'.format(
+                                            offset, y, advance, radius, radius, thickness,
+                                            -advance, radius, radius, -thickness))
+                                    else:
+                                        path.parse('M {},{} h {} v {} h {} z'.format(offset, y, advance, thickness, -advance))
+                                    output.paths.append([path])
+                    offset += advance
+                lines.append([path for paths in output.paths[line_start:] for path in paths])
+        self._align_line_paths(lines)
+        output.transform_styles(output.matrix)
+        return output
 
-        formattedText = []
-        horizontalOffset = 0
-        # Get the width of a space for this typeface
-        spaceWidth = self.getSpaceWidth(fontName)
-
-        # In case lineover thickness gets set to 0
-        if self.lineOverThickness == 0:
-            self.lineOverThickness = 1
-
-        # Detect endcap characters and remove them
+    # Detect endcap characters and remove them
         inString = self.extractEndcaps(inString)
 
         for lineIndex,lineString in enumerate(inString.split('\n')):

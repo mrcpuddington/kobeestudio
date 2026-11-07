@@ -1121,7 +1121,9 @@ class Text(Transformable):
     default_font = None
     _system_fonts = {}
     _os_font_paths = {
-        "Darwin": ["/Library/Fonts", "~/Library/Fonts"],
+        # macOS ships most fonts under /System/Library/Fonts. Leaving that
+        # directory out meant Kobee could only see the small user subset.
+        "Darwin": ["/System/Library/Fonts", "/Library/Fonts", "~/Library/Fonts"],
         "Linux": ["/usr/share/fonts","/usr/local/share/fonts","~/.local/share/fonts"],
         "Windows": ["C:/Windows/Fonts", "~/AppData/Local/Microsoft/Windows/Fonts"]
     }
@@ -1481,4 +1483,3 @@ for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
     tag = getattr(cls, 'tag', None)
     if tag:
         svgClass[svg_ns + tag] = cls
-

@@ -1,0 +1,30 @@
+{
+  "scope": "Official public 1.4.1 archive installed through PCM, launched, created actual artwork, then PCM updated to local testing 1.5.20 and PCB Editor restarted. A fresh upgraded session reopened and updated the saved 1.4.1 artwork. Native parser verifies final saved board. Not a catalogue-delivered 1.5 update.",
+  "before": [
+    {
+      "uuid": "21e3822f-530c-4d3c-b0ab-b48b0283b177",
+      "reference": "kobee-studio-6AEE6637",
+      "x": 0,
+      "y": 0,
+      "generator_version": "1.4.1",
+      "text": "UPGRADE_141",
+      "graphics": 347
+    }
+  ],
+  "after": [
+    {
+      "uuid": "21e3822f-530c-4d3c-b0ab-b48b0283b177",
+      "reference": "kobee-studio-834559852eff",
+      "x": 0,
+      "y": 0,
+      "generator_version": "1.5.20",
+      "text": "UPGRADE_1520",
+      "graphics": 28
+    }
+  ],
+  "same_uuid": true,
+  "same_position": true,
+  "same_count": true,
+  "native_reload": "passed",
+  "restart_required_observed": true
+}

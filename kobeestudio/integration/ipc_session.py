@@ -9,6 +9,7 @@ is actually launched by KiCad.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -114,7 +115,50 @@ class IpcSession:
         The placement adapter will use this before it creates or replaces the
         grouped PCB items that make up one Kobee Studio artwork item.
         """
+        self.check_write_compatibility()
         return self.board.begin_commit()
+
+    def check_write_compatibility(self) -> None:
+        """Avoid KiCad #24966 before sending a transaction to an affected host.
+
+        KiCad 10.0.0–10.0.6 has a null frame in its schematic API handler.
+        BeginCommit has no document selector, so even a PCB transaction can
+        reach that handler. Python cannot catch the resulting host segfault.
+        Recheck at every write: the schematic can open while Studio is open.
+        Upstream fix: bdcb150903658e2c8f91b8862f87d950b35c0d1f.
+        """
+        match = re.match(r"(\d+)\.(\d+)\.(\d+)", self.version())
+        if match is None:
+            raise IpcUnavailableError("Could not verify the KiCad version before changing the board. Reopen Kobee Studio from PCB Editor.")
+        version = tuple(int(part) for part in match.groups())
+        if not (10, 0, 0) <= version < (10, 0, 7):
+            return
+        get_documents = getattr(self.kicad, "get_open_documents", None)
+        if get_documents is None:
+            return  # Retained adapters without multi-editor IPC routing.
+        from kipy.proto.common.types import DocumentType
+        from kipy.proto.common import ApiStatusCode
+        from kipy.errors import ApiError
+
+        try:
+            schematics = get_documents(DocumentType.DOCTYPE_SCHEMATIC)
+        except Exception as error:
+            # When eeschema has never been opened, no schematic handler is
+            # registered at all. KiCad reports AS_UNHANDLED rather than an
+            # empty document list; that is the safe PCB-only case.
+            if isinstance(error, ApiError) and error.code == ApiStatusCode.AS_UNHANDLED:
+                return
+            raise IpcUnavailableError(
+                "Could not check for KiCad's schematic transaction crash. "
+                "Update KiCad to 10.0.7 or newer, or close Schematic Editor and retry."
+            ) from error
+        if schematics:
+            raise IpcUnavailableError(
+                "KiCad {} can crash when a plug-in changes the PCB while Schematic Editor is open. "
+                "Close Schematic Editor and retry, or update KiCad to 10.0.7 or newer. "
+                "No board changes were sent."
+                .format(self.version())
+            )
 
     def commit(self, transaction, message: str) -> None:
         self.board.push_commit(transaction, message)

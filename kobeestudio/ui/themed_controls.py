@@ -203,6 +203,11 @@ class ThemedSpinCtrlDouble(wx.Control):
         self._digits = 2
         self._value = float(initial)
         self.editor = wx.TextCtrl(self, value=str(value), style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
+        # Make the editable portion explicit on every wx port. In particular,
+        # Cocoa can otherwise treat a child editor inside a painted control as
+        # a display field after the parent has handled a click.
+        self.editor.SetEditable(True)
+        self.editor.Enable(True)
         self._apply_colours()
         self.SetMinSize(wx.Size(84, 30))
         self.Bind(wx.EVT_PAINT, self._on_paint)
@@ -285,14 +290,20 @@ class ThemedSpinCtrlDouble(wx.Control):
         changed = wx.CommandEvent(wx.EVT_TEXT.typeId, self.GetId())
         changed.SetEventObject(self)
         wx.PostEvent(self, changed)
+        event.Skip()
 
     def _on_text_enter(self, event):
         self.SetValue(self.GetValue())
         self._notify(wx.EVT_SPINCTRLDOUBLE)
 
     def _on_click(self, event):
-        if not self.IsEnabled() or event.GetPosition().x < self.GetClientSize().width - self.arrow_width:
-            event.Skip()
+        if not self.IsEnabled():
+            return
+        if event.GetPosition().x < self.GetClientSize().width - self.arrow_width:
+            # A click can arrive at the painted parent rather than the child
+            # editor on Cocoa. Explicitly focus the editor so every numeric
+            # field remains directly typeable as well as spinner-adjustable.
+            self.editor.SetFocus()
             return
         # A zero-valued symbol size means "automatic" in the editor. Promote
         # it to the current text height on the first arrow press rather than
@@ -390,6 +401,7 @@ class ThemedTextField(wx.Panel):
         command = wx.CommandEvent(wx.EVT_TEXT.typeId, self.GetId())
         command.SetEventObject(self)
         wx.PostEvent(self, command)
+        event.Skip()
 
     def _on_paint(self, event):
         colours = _colours()
@@ -411,8 +423,6 @@ class ThemedActionButton(wx.Control):
         self.callback = callback
         self.primary = bool(primary)
         self.hovered = False
-        width, _height = parent.GetTextExtent(label)
-        self._best_size = wx.Size(width + 28, 32)
         self.SetInitialSize(self._best_size)
         self.SetMinSize(self._best_size)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -424,6 +434,18 @@ class ThemedActionButton(wx.Control):
 
     def DoGetBestSize(self):
         return self._best_size
+
+    def SetLabel(self, label):
+        super().SetLabel(str(label))
+        dc = wx.ClientDC(self)
+        dc.SetFont(self.GetFont().Bold())
+        width, _height = dc.GetTextExtent(str(label))
+        self._best_size = wx.Size(width + 28, 32)
+        self.SetMinSize(self._best_size)
+        self.InvalidateBestSize()
+        if self.GetParent().GetSizer():
+            self.GetParent().Layout()
+        self.Refresh(False)
 
     def _on_click(self, event):
         if self.IsEnabled():
@@ -486,6 +508,9 @@ class ThemedListBox(wx.Control):
         self.Bind(wx.EVT_MOTION, self._on_motion)
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
         self.Bind(wx.EVT_MOUSEWHEEL, self._on_wheel)
+        self.Bind(wx.EVT_KEY_DOWN, self._on_key)
+        self.Bind(wx.EVT_SET_FOCUS, lambda event: (self.Refresh(False), event.Skip()))
+        self.Bind(wx.EVT_KILL_FOCUS, lambda event: (self.Refresh(False), event.Skip()))
 
     def Set(self, choices):
         self._items = [str(item) for item in choices]
@@ -509,6 +534,9 @@ class ThemedListBox(wx.Control):
     def GetSelection(self):
         return self._selection
 
+    def GetStringSelection(self):
+        return self._items[self._selection] if 0 <= self._selection < len(self._items) else ""
+
     def SetSelection(self, selection):
         selection = int(selection)
         self._selection = selection if 0 <= selection < len(self._items) else wx.NOT_FOUND
@@ -531,6 +559,9 @@ class ThemedListBox(wx.Control):
         return index if 0 <= index < len(self._items) else wx.NOT_FOUND
 
     def _on_click(self, event):
+        if not self.IsEnabled():
+            return
+        self.SetFocus()
         index = self._index_at(event.GetPosition())
         if index == wx.NOT_FOUND:
             return
@@ -539,6 +570,34 @@ class ThemedListBox(wx.Control):
         changed.SetEventObject(self)
         changed.SetInt(index)
         wx.PostEvent(self, changed)
+
+    def _on_key(self, event):
+        if not self.IsEnabled() or not self._items:
+            event.Skip()
+            return
+        key = event.GetKeyCode()
+        current = self._selection
+        steps = {
+            wx.WXK_UP: -1, wx.WXK_DOWN: 1,
+            wx.WXK_PAGEUP: -self._visible_rows(),
+            wx.WXK_PAGEDOWN: self._visible_rows(),
+        }
+        if key == wx.WXK_HOME:
+            index = 0
+        elif key == wx.WXK_END:
+            index = len(self._items) - 1
+        elif key in steps:
+            index = 0 if current == wx.NOT_FOUND else current + steps[key]
+        else:
+            event.Skip()
+            return
+        index = max(0, min(len(self._items) - 1, index))
+        if index != current:
+            self.SetSelection(index)
+            changed = wx.CommandEvent(wx.EVT_LISTBOX.typeId, self.GetId())
+            changed.SetEventObject(self)
+            changed.SetInt(index)
+            wx.PostEvent(self, changed)
 
     def _on_motion(self, event):
         index = self._index_at(event.GetPosition())
@@ -571,6 +630,10 @@ class ThemedListBox(wx.Control):
         dc.SetPen(wx.Pen(colours["border"]))
         dc.SetBrush(wx.Brush(colours["field"]))
         dc.DrawRoundedRectangle(rect, 6)
+        if self.HasFocus():
+            dc.SetPen(wx.Pen(colours["accent"], 1))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            dc.DrawRoundedRectangle(rect.Deflate(2), 4)
         for index, item in enumerate(self._items):
             y = 5 + (index - self._scroll_offset) * self.row_height
             if y + self.row_height < 5:

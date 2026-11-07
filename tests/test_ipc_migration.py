@@ -8,7 +8,13 @@ import struct
 import unittest
 from pathlib import Path
 
-from kobeestudio.core.composition import CompositionDocument
+from kobeestudio.core.composition import (
+    CompositionDocument,
+    DocumentStyle,
+    ShapeObject,
+    ShapeStyle,
+    Size,
+)
 from kobeestudio.core.shape_geometry import Point
 from kobeestudio.core.studio_artwork import StudioArtwork, StrokePath
 from kobeestudio.integration.ipc_artwork import (
@@ -26,6 +32,7 @@ from kobeestudio.integration.ipc_session import (
     IpcUnavailableError,
     unique_client_name,
 )
+from kobeestudio.version import __version__
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -181,6 +188,65 @@ class _MinimalPlacement(IpcArtworkPlacement):
 
 
 class IpcMigrationTests(unittest.TestCase):
+    def test_affected_kicad_with_open_schematic_is_blocked_before_begin_commit(self):
+        session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+        session.kicad.get_open_documents = lambda kind: [object()]
+        with self.assertRaisesRegex(IpcUnavailableError, "Close Schematic Editor"):
+            session.begin_commit()
+        self.assertEqual([], session.board.messages)
+        self.assertEqual([], session.board.created)
+
+    def test_fixed_kicad_and_pcb_only_sessions_can_commit(self):
+        for version, documents in (("10.0.6", []), ("10.0.7", [object()]), ("11.0.0", [object()])):
+            session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+            session.kicad.get_version = lambda: version
+            session.kicad.get_open_documents = lambda kind: documents
+            self.assertIs(session.board.commit, session.begin_commit())
+
+    def test_schematic_check_failure_does_not_send_a_transaction(self):
+        session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+        def unavailable(kind):
+            raise OSError("disconnected")
+        session.kicad.get_open_documents = unavailable
+        with self.assertRaisesRegex(IpcUnavailableError, "Could not check"):
+            session.begin_commit()
+
+    def test_absent_schematic_api_handler_is_a_safe_pcb_only_session(self):
+        from kipy.errors import ApiError
+        from kipy.proto.common import ApiStatusCode
+        session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+        def no_handler(kind):
+            raise ApiError("no handler", code=ApiStatusCode.AS_UNHANDLED)
+        session.kicad.get_open_documents = no_handler
+        self.assertIs(session.board.commit, session.begin_commit())
+
+    def test_empty_placement_response_rolls_back_instead_of_reporting_success(self):
+        session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+        session.board.create_items = lambda item: []
+        artwork = StudioArtwork((), (), (), CompositionDocument(()))
+        with self.assertRaisesRegex(RuntimeError, "did not retain"):
+            _MinimalPlacement(session).place(artwork, {}, "F.SilkS")
+        self.assertEqual([("drop", session.board.commit)], session.board.messages)
+        self.assertEqual([], session.board.moved)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_all_hidden_fields_have_dimensions_accepted_by_native_properties(self):
+        from kipy.util import to_mm
+        placement = IpcArtworkPlacement(None)
+        artwork = StudioArtwork(((Point(0, 0), Point(1, 0), Point(0, 1)),), (), (), CompositionDocument(()))
+        footprints = (
+            placement.build_footprint(artwork, {}, "F.SilkS"),
+            placement.build_variable_footprint({"VariableTemplateText": "${REV}"}, {}, "B.SilkS"),
+        )
+        for footprint in footprints:
+            fields = [footprint.reference_field, footprint.value_field, footprint.datasheet_field, footprint.description_field]
+            fields.extend(item for item in footprint.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME)
+            self.assertEqual(5, len(fields))
+            for field in fields:
+                self.assertGreaterEqual(to_mm(field.text.attributes.size.x), 0.001)
+                self.assertGreaterEqual(to_mm(field.text.attributes.size.y), 0.001)
+                self.assertFalse(field.visible)
+
     def test_project_asset_context_uses_only_a_saved_board_filename(self):
         from kobeestudio.ui.editor_v2 import _active_board_path
 
@@ -193,6 +259,30 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIsNone(_active_board_path(Session()))
         Session.board.name = "/tmp/not-a-board.txt"
         self.assertIsNone(_active_board_path(Session()))
+
+    def test_project_data_uses_the_ipc_project_not_the_board_name(self):
+        from tempfile import TemporaryDirectory
+        from kobeestudio.ui.editor_v2 import _active_project_path
+
+        with TemporaryDirectory() as directory:
+            project = Path(directory) / "controller.kicad_pro"
+            project.write_text("{}", encoding="utf-8")
+
+            class Project:
+                path = str(project)
+                name = "controller"
+
+            class Board:
+                name = ""
+
+                @staticmethod
+                def get_project():
+                    return Project()
+
+            class Session:
+                board = Board()
+
+            self.assertEqual(project, _active_project_path(Session()))
 
     def test_ui2_editor_is_used_by_both_plugin_entrypoints(self):
         for relative_path in (
@@ -207,7 +297,10 @@ class IpcMigrationTests(unittest.TestCase):
     def test_ui2_editor_owns_its_layout_and_caches_preview_geometry(self):
         source = (ROOT / "kobeestudio/ui/editor_v2.py").read_text()
         themed_source = (ROOT / "kobeestudio/ui/themed_controls.py").read_text()
-        self.assertIn("class StudioEditorDialog(wx.Dialog):", source)
+        from kobeestudio.ui.editor_v2 import StudioEditorDialog
+        import wx
+        self.assertTrue(issubclass(StudioEditorDialog, wx.Dialog))
+        self.assertNotIn("UpstreamDialog", [base.__name__ for base in StudioEditorDialog.__mro__])
         self.assertNotIn("class StudioEditorDialog(UpstreamDialog)", source)
         self.assertIn("class PreviewCanvas(wx.Panel):", source)
         self.assertIn("self._cache", source)
@@ -264,6 +357,12 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn('("labels", "Connector Overlay", "2.54 mm Pin Header")', source)
         self.assertIn('("graphics", "Imported Graphic", "Imported Graphic")', source)
         self.assertIn('("board_tools", "Cleanup", "Board Tools")', source)
+        self.assertIn("self._build_container(LABEL_SHAPE_LABELS)", source)
+        self.assertIn("self._build_typography(padding=True, width=True)", source)
+        self.assertIn("Use Refresh values, then Update artwork", source)
+        self.assertIn("System font · {}", source)
+        self.assertIn("Typeface unavailable", source)
+        self.assertIn("set_font_favourite", source)
         self.assertIn('"Reference layout"', source)
         self.assertIn('"Detail line"', source)
         self.assertIn('"Above text"', source)
@@ -295,13 +394,12 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertIn("callback=self._choose_icon", source)
         self.assertIn('"Settings",', source)
         settings_source = (ROOT / "kobeestudio/ui/settings_dialog.py").read_text()
-        self.assertIn("class SettingsDialog(wx.Dialog):", settings_source)
+        from kobeestudio.ui.settings_dialog import SettingsDialog
+        self.assertTrue(issubclass(SettingsDialog, wx.Dialog))
         self.assertIn("Include unsaved settings", settings_source)
         self.assertIn("Save and back up", settings_source)
         self.assertIn("def _preferences_from_controls", settings_source)
         self.assertIn('label="Search available families"', settings_source)
-        self.assertIn('self.font_catalog_list.SetMinSize(wx.Size(-1, 175))', settings_source)
-        self.assertIn('self.installed_font_list.SetMinSize(wx.Size(-1, 218))', settings_source)
         self.assertIn('label="Likely to include Ω / math symbols (Google tags)"', settings_source)
         self.assertIn('self.SetMinSize(wx.Size(-1, 86))', settings_source)
         self.assertIn("SymbolAssetId", source)
@@ -402,8 +500,8 @@ class IpcMigrationTests(unittest.TestCase):
         metadata = json.loads((ROOT / "pcm/metadata_template.json").read_text())
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
-        self.assertEqual("1.5.0", metadata["versions"][0]["version"])
-        self.assertEqual("development", metadata["versions"][0]["status"])
+        self.assertEqual(__version__, metadata["versions"][0]["version"])
+        self.assertEqual("testing", metadata["versions"][0]["status"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))
@@ -789,6 +887,16 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertTrue(any(item[0]=="drop" for item in session.board.messages))
         self.assertTrue(Source.reference_field.visible)
 
+    def test_failed_rollback_reports_an_uncertain_board_state(self):
+        class BrokenSession:
+            def discard(self, transaction):
+                raise ConnectionError("KiCad closed the IPC socket")
+
+        with self.assertRaisesRegex(IpcUnavailableError, "could not confirm its rollback"):
+            IpcArtworkPlacement(BrokenSession())._discard_or_report_unknown_state(
+                object(), RuntimeError("create failed")
+            )
+
     def test_metadata_round_trip_reopens_selected_artwork(self):
         payload = {
             "format": "kobee-studio-composition",
@@ -813,6 +921,33 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual("POWER", loaded["MultiLineText"])
         self.assertTrue(loaded["_LoadedFootprintSettings"])
         self.assertIsInstance(footprint, Footprint)
+
+    def test_variable_metadata_reopens_in_variables_with_its_original_expression(self):
+        payload = {
+            "format": "kobee-studio-composition",
+            "legacy_settings": {"HeightCtrl": 1.2},
+            "feature": {
+                "kind": "variable_label",
+                "template": "Revision ${KOBEE_REVISION}",
+            },
+        }
+
+        class Text:
+            value = encode_metadata(payload)
+
+        class Field:
+            name = METADATA_FIELD_NAME
+            text = Text()
+
+        class Definition:
+            items = [Field()]
+
+        class Footprint:
+            definition = Definition()
+
+        loaded, _footprint = selected_artwork([Footprint()])
+        self.assertEqual("Variables", loaded["StudioTool"])
+        self.assertEqual("Revision ${KOBEE_REVISION}", loaded["VariableTemplateText"])
 
     def test_released_swig_footprint_metadata_opens_through_ipc(self):
         payload = {
@@ -874,6 +1009,47 @@ class IpcMigrationTests(unittest.TestCase):
             decode_metadata(footprint.definition.items[-1].text.value)["feature"]["kind"],
         )
         self.assertGreater(footprint.proto.ByteSize(), 0)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_variable_footprint_can_add_an_outline_container_without_baking_text(self):
+        from kipy.board_types import BoardText
+
+        settings = {
+            "VariableTemplateText": "${KOBEE_REVISION}",
+            "HeightCtrl": 1.2,
+            "NativeTextWidthCtrl": 1.0,
+        }
+        container = StudioArtwork(
+            (),
+            (),
+            (),
+            CompositionDocument(
+                objects=(
+                    ShapeObject(
+                        "shape.background",
+                        shape="rounded_rectangle",
+                        size=Size(14.0, 4.0),
+                    ),
+                ),
+                style=DocumentStyle(
+                    shape=ShapeStyle(
+                        border_thickness_mm=0.25,
+                        filled=False,
+                    ),
+                ),
+            ),
+        )
+        footprint = IpcArtworkPlacement(session=None).build_variable_footprint(
+            settings,
+            {"feature": {"kind": "variable_label"}},
+            "F.SilkS",
+            container_artwork=container,
+        )
+        texts = [item for item in footprint.definition.items if isinstance(item, BoardText)]
+        self.assertEqual(1, len(texts))
+        self.assertEqual("${KOBEE_REVISION}", texts[0].value)
+        # One outlined polygon + one native text item + Kobee metadata.
+        self.assertEqual(3, len(footprint.definition.items))
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_real_kicad_python_wrappers_build_an_ipc_footprint(self):

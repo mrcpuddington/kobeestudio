@@ -86,6 +86,60 @@ def configure_window_branding(window: Any, icon_path: Path, wx_module: Any) -> b
         return False
 
 
+def activate_application(platform_name: Optional[str] = None) -> bool:
+    """Ask the OS to foreground Kobee's existing GUI process.
+
+    ``wx.Window.Raise`` only reorders windows within the current application
+    on macOS. A second KiCad toolbar click arrives in a different helper
+    process, so explicitly activate the original process before raising its
+    dialog through the singleton callback.
+    """
+    platform_name = platform_name or sys.platform
+    if platform_name != "darwin":
+        return False
+    try:
+        appkit_path = ctypes.util.find_library("AppKit")
+        if not appkit_path:
+            return False
+        ctypes.CDLL(appkit_path, mode=ctypes.RTLD_GLOBAL)
+        objc = ctypes.CDLL(ctypes.util.find_library("objc") or "/usr/lib/libobjc.A.dylib")
+
+        objc_get_class = objc.objc_getClass
+        objc_get_class.argtypes = [ctypes.c_char_p]
+        objc_get_class.restype = ctypes.c_void_p
+        selector = objc.sel_registerName
+        selector.argtypes = [ctypes.c_char_p]
+        selector.restype = ctypes.c_void_p
+        # objc_msgSend is variadic. Calling one untyped ctypes function with
+        # both id-returning and BOOL-argument selectors is unsafe on Apple
+        # Silicon (and can silently terminate the IPC helper). Give each
+        # selector signature its own callable instead.
+        message_id = ctypes.CFUNCTYPE(
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
+        )(("objc_msgSend", objc))
+        message_bool = ctypes.CFUNCTYPE(
+            None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool
+        )(("objc_msgSend", objc))
+
+        application = int(
+            message_id(
+                ctypes.c_void_p(objc_get_class(b"NSApplication")),
+                ctypes.c_void_p(selector(b"sharedApplication")),
+            )
+            or 0
+        )
+        if not application:
+            return False
+        message_bool(
+            ctypes.c_void_p(application),
+            ctypes.c_void_p(selector(b"activateIgnoringOtherApps:")),
+            True,
+        )
+        return True
+    except (AttributeError, OSError, TypeError, ValueError):
+        return False
+
+
 def _set_macos_application_icon(icon_path: Path) -> bool:
     """Set NSApplication's Dock icon without adding a PyObjC dependency."""
     if not icon_path.is_file():

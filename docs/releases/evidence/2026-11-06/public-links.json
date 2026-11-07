@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-11-06",
+  "inAppBrowserJourneyVerified": true,
+  "routes": [
+    {
+      "url": "https://kobee.com.au/tutorials/kobee-studio-docs",
+      "finalUrl": "https://kobee.com.au/tutorials/kobee-studio-docs",
+      "status": 200,
+      "title": "Kobee Studio user manual | Kobee",
+      "htmlBytes": 217294
+    },
+    {
+      "url": "https://kobee.com.au/tutorials/kobee-studio-support-and-feedback",
+      "finalUrl": "https://kobee.com.au/tutorials/kobee-studio-support-and-feedback",
+      "status": 200,
+      "title": "Kobee Studio: support and feedback | Kobee",
+      "htmlBytes": 210148
+    },
+    {
+      "url": "https://kobee.com.au/privacy",
+      "finalUrl": "https://kobee.com.au/privacy",
+      "status": 200,
+      "title": "Privacy Policy | Kobee",
+      "htmlBytes": 125830
+    },
+    {
+      "url": "https://kobee.com.au/terms",
+      "finalUrl": "https://kobee.com.au/terms",
+      "status": 200,
+      "title": "Terms of Service | Kobee",
+      "htmlBytes": 130843
+    }
+  ],
+  "browserJourney": {
+    "app": "installed local testing1.5.20",
+    "browser": "Chrome",
+    "actions": [
+      "Need help? \u2192 manual",
+      "Support and feedback",
+      "Privacy Policy \u2192 privacy",
+      "Terms of Service \u2192 terms"
+    ],
+    "visuallyVerified": true,
+    "screenshot": "in-app-help-terms.jpg"
+  }
+}

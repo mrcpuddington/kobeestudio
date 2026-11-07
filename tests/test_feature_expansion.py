@@ -50,6 +50,18 @@ class GraphicObjectTests(unittest.TestCase):
         self.assertAlmostEqual(3,sum(point.x for point in points)/len(points),places=6)
         self.assertAlmostEqual(4,sum(point.y for point in points)/len(points),places=6)
         self.assertEqual(graphic,artwork.document.objects[0])
+
+    def test_embedded_graphic_uses_viewbox_canvas_to_preserve_shape_aspect(self):
+        # A square mark inside a wide viewBox must remain square. The graphic
+        # picker derives its locked 2:1 dimensions from this authored canvas.
+        svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><rect width="10" height="10"/></svg>'
+        artwork=render_graphic_artwork(
+            GraphicObject("graphic", "asset", svg, size=Size(20, 10)), "F.SilkS"
+        )
+        points=[point for polygon in artwork.filled_polygons for point in polygon]
+        width=max(point.x for point in points)-min(point.x for point in points)
+        height=max(point.y for point in points)-min(point.y for point in points)
+        self.assertAlmostEqual(width, height, places=6)
         self.assertTrue(artwork.guides)
 
 
@@ -237,6 +249,28 @@ class _Session:
 
 
 class BoardToolsTests(unittest.TestCase):
+    def test_failed_cleanup_restores_local_fields_and_geometry(self):
+        for method in ("remove_designators", "remove_silkscreen"):
+            footprint = _Footprint()
+            original = list(footprint.definition.items)
+            board = _Board([footprint])
+            with patch.object(board, "update_items", return_value=[]):
+                with self.assertRaisesRegex(RuntimeError, "rolled back"):
+                    getattr(BoardToolsService(_Session(board)), method)("selected")
+            self.assertEqual(original, footprint.definition.items)
+            self.assertTrue(footprint.reference_field.visible)
+            self.assertTrue(footprint.value_field.visible)
+            self.assertEqual("drop", board.events[-1])
+
+    def test_failed_begin_commit_does_not_mutate_cleanup_inputs(self):
+        footprint = _Footprint()
+        board = _Board([footprint])
+        original = list(footprint.definition.items)
+        with patch.object(board, "begin_commit", side_effect=RuntimeError("Close Schematic Editor")):
+            with self.assertRaisesRegex(RuntimeError, "Schematic"):
+                BoardToolsService(_Session(board)).remove_silkscreen("selected")
+        self.assertEqual(original, footprint.definition.items)
+        self.assertTrue(footprint.reference_field.visible)
     def test_designator_cleanup_hides_semantic_field_in_one_commit(self):
         footprint=_Footprint(); board=_Board([footprint]); result=BoardToolsService(_Session(board)).remove_designators("selected")
         self.assertFalse(footprint.reference_field.visible); self.assertEqual(1,result.affected)

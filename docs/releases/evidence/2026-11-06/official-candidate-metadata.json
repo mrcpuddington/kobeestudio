@@ -1,0 +1,71 @@
+{
+  "$schema": "https://go.kicad.org/pcm/schemas/v2",
+  "name": "Kobee Studio",
+  "description": "Create PCB labels, variable text, graphics, connector overlays, QR Codes, and board tools inside KiCad",
+  "description_full": "Kobee Studio creates editable PCB artwork on silkscreen, copper, and solder-mask layers. It includes native KiCad project-variable templates, parametric labels, installed Google Fonts, PCB symbols, SVG/PNG graphics, component callouts and arrays, common and custom-pitch connector overlays, QR Codes, Code 128 barcodes, reusable libraries, and transactional designator and silkscreen board tools. Kobee Studio evolved from KiBuzzard and provides a modern KiCad 10 IPC workflow for creating consistent PCB graphics.",
+  "identifier": "com.github.mrcpuddington.kobeestudio",
+  "type": "plugin",
+  "author": {
+    "name": "Corey Busuttil",
+    "contact": {
+      "github": "https://github.com/mrcpuddington",
+      "web": "https://kobee.com.au"
+    }
+  },
+  "maintainer": {
+    "name": "Kobee — Corey Busuttil",
+    "contact": {
+      "github": "https://github.com/mrcpuddington/kobeestudio",
+      "web": "https://www.kobee.com.au"
+    }
+  },
+  "license": "GPL-2.0",
+  "resources": {
+    "homepage": "https://kobee.com.au",
+    "documentation": "https://kobee.com.au/tutorials/kobee-studio-docs",
+    "repository": "https://github.com/mrcpuddington/kobeestudio",
+    "issues": "https://github.com/mrcpuddington/kobeestudio/issues"
+  },
+  "versions": [
+    {
+      "version": "1.5.20",
+      "status": "testing",
+      "kicad_version": "10.0",
+      "runtime": "ipc",
+      "download_url": "https://github.com/mrcpuddington/kobeestudio/releases/download/v1.5.20-beta.1/Kobee-Studio-1.5.20-pcm.zip",
+      "download_sha256": "7467a066d3cf334bfc8d4c6d7bb519c0f4371557f6c2dbd35a96482c3ec5d02f",
+      "download_size": 2710904,
+      "install_size": 7300340
+    },
+    {
+      "version": "1.4.1",
+      "status": "stable",
+      "kicad_version": "10.0",
+      "runtime": "ipc",
+      "install_size": 6505849,
+      "download_size": 2558995,
+      "download_sha256": "2a191f0fbf5a08aca7493ce114ad849671946fe448263981e519ae9aa36a2a8a",
+      "download_url": "https://github.com/mrcpuddington/kobeestudio/releases/download/v1.4.1/Kobee-Studio-1.4.1-pcm.zip"
+    },
+    {
+      "version": "1.4.0",
+      "status": "stable",
+      "kicad_version": "10.0",
+      "runtime": "ipc",
+      "install_size": 6503468,
+      "download_size": 2558066,
+      "download_sha256": "738e3e4060394eb7d0d3f5528b81952ecf3f7ddca8ccab6845ba5d5c22bb503e",
+      "download_url": "https://github.com/mrcpuddington/kobeestudio/releases/download/v1.4.0/Kobee-Studio-1.4.0-pcm.zip"
+    },
+    {
+      "version": "1.3.4",
+      "status": "stable",
+      "kicad_version": "10.0",
+      "runtime": "ipc",
+      "install_size": 6116727,
+      "download_size": 2414262,
+      "download_sha256": "f30409e622b7b80d6041e0eb830bd515cc21a61dfc9e92a08a7da11321084337",
+      "download_url": "https://github.com/mrcpuddington/kobeestudio/releases/download/v1.3.4/Kobee-Studio-1.3.4-pcm.zip"
+    }
+  ]
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterable, Optional, Sequence, Tuple
 
 from .composition import (
@@ -14,6 +14,7 @@ from .composition import (
     GraphicObject,
     GuideObject,
     IconObject,
+    Padding,
     Point,
     ShapeObject,
     ShapeStyle,
@@ -33,7 +34,7 @@ from .shape_geometry import (
     shape_contour,
 )
 from .transforms import SUPPORTED_OUTPUT_LAYERS, is_bottom
-from .svg_symbols import svg_polygons_from_root, validate_svg_bytes
+from .svg_symbols import svg_canvas_bounds, svg_polygons_from_root, validate_svg_bytes
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,7 @@ class TextVectorizer:
         lineover_style: str = "Rounded",
         lineover_thickness: int = 1,
     ) -> TextVectors:
-        if not text:
+        if not text.strip():
             return TextVectors((), Size())
 
         cache_key = (
@@ -176,6 +177,26 @@ class TextVectorizer:
             ),
             Size(vectors.size.width * factor, vectors.size.height * factor),
         )
+
+
+PLACEMENT_ANCHORS = (
+    "Top left", "Top centre", "Top right",
+    "Centre left", "Centre", "Centre right",
+    "Bottom left", "Bottom centre", "Bottom right",
+)
+
+
+def with_placement_anchor(artwork: StudioArtwork, anchor: str) -> StudioArtwork:
+    """Select a fixed placement point without changing the artwork geometry."""
+    if anchor not in PLACEMENT_ANCHORS:
+        raise ValueError("Choose a supported placement anchor")
+    minimum, maximum = polygon_bounds(artwork.all_exported_polygons)
+    row, column = divmod(PLACEMENT_ANCHORS.index(anchor), 3)
+    origin = Point(
+        (minimum.x, (minimum.x + maximum.x) / 2.0, maximum.x)[column],
+        (minimum.y, (minimum.y + maximum.y) / 2.0, maximum.y)[row],
+    )
+    return replace(artwork, document=replace(artwork.document, origin=origin))
 
 
 def _translate_polygon(polygon: Polygon, offset: Point) -> Polygon:
@@ -331,8 +352,27 @@ def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, 
             span_left = None
             if right[0] - left[0] <= epsilon:
                 continue
-            key = (left[3], right[3])
-            strip = active.pop(key, None)
+            # A contour corner changes source edge IDs without splitting the
+            # filled region. Continue whenever both span endpoints meet the
+            # previous band; retaining every bend makes this exact, while
+            # avoiding a new footprint child for every glyph vertex.
+            start_key = (round(left[1], 9), round(right[1], 9))
+            end_key = (round(left[2], 9), round(right[2], 9))
+            strip = active.pop(start_key, None)
+            if strip is None:
+                # At a split or join, retain one overlapping span and start
+                # separate regions for the other branches. The horizontal
+                # step at y0 preserves the exact union and keeps each region
+                # simple and y-monotone, without bridged holes.
+                candidates = [
+                    (min(key[1], right[1]) - max(key[0], left[1]), key)
+                    for key, previous in active.items()
+                    if abs(previous["end_y"] - y0) <= epsilon
+                    and min(key[1], right[1]) - max(key[0], left[1]) > epsilon
+                ]
+                if candidates:
+                    _overlap, previous_key = max(candidates)
+                    strip = active.pop(previous_key)
             if strip is None or abs(strip["end_y"] - y0) > epsilon:
                 if strip is not None:
                     finish(strip)
@@ -341,10 +381,12 @@ def _knockout_tiles(outer: Polygon, holes: Iterable[Polygon]) -> Tuple[Polygon, 
                     "right": [Point(right[1], y0)],
                     "end_y": y0,
                 }
+            append_edge_point(strip["left"], Point(left[1], y0))
+            append_edge_point(strip["right"], Point(right[1], y0))
             append_edge_point(strip["left"], Point(left[2], y1))
             append_edge_point(strip["right"], Point(right[2], y1))
             strip["end_y"] = y1
-            next_active[key] = strip
+            next_active[end_key] = strip
         for strip in active.values():
             finish(strip)
         active = next_active
@@ -506,6 +548,7 @@ def render_label_artwork(
     output_layer: str,
     shape: Optional[str] = None,
     minimum_width_mm: float = 0.0,
+    minimum_height_mm: float = 0.0,
     inline_format: bool = False,
     lineover_style: str = "Rounded",
     lineover_thickness: int = 1,
@@ -521,6 +564,10 @@ def render_label_artwork(
     underline_gap_mm: float = 0.12,
     icon_variant: str = "default",
     icon_renderer=render_builtin_icon,
+    allow_empty: bool = False,
+    overline: bool = False,
+    overline_thickness_mm: float = 0.15,
+    overline_gap_mm: float = 0.12,
 ) -> StudioArtwork:
     if icon_position not in ("left", "right", "above", "below", "only"):
         raise ValueError("Unsupported icon position: {}".format(icon_position))
@@ -534,10 +581,12 @@ def render_label_artwork(
         raise ValueError("Underline thickness must be greater than zero")
     if underline_gap_mm < 0:
         raise ValueError("Underline gap must be non-negative")
+    if overline_thickness_mm <= 0 or overline_gap_mm < 0:
+        raise ValueError("Overline thickness must be positive and its gap non-negative")
 
     has_icon = bool(icon_id)
-    has_text = bool(text or subtitle_text) and icon_position != "only"
-    if not has_text and not has_icon:
+    has_text = bool(text.strip() or subtitle_text.strip()) and icon_position != "only"
+    if not has_text and not has_icon and not allow_empty:
         raise ValueError("A label needs text or an icon")
 
     vectors = vectorizer.render(
@@ -563,9 +612,13 @@ def render_label_artwork(
     )
     has_primary = bool(vectors.polygons)
     has_subtitle = bool(subtitle_vectors.polygons)
+    if not has_primary and not has_subtitle and not has_icon and not allow_empty:
+        raise ValueError("A label needs visible text or an icon")
     has_underline = bool(underline and has_primary)
+    has_overline = bool(overline and has_primary)
     underline_extra = underline_gap_mm + underline_thickness_mm if has_underline else 0.0
-    primary_block_height = vectors.size.height + underline_extra
+    overline_extra = overline_gap_mm + overline_thickness_mm if has_overline else 0.0
+    primary_block_height = vectors.size.height + underline_extra + overline_extra
     text_gap = subtitle_gap_mm if has_primary and has_subtitle else 0.0
     text_stack_size = Size(
         max(vectors.size.width, subtitle_vectors.size.width),
@@ -584,7 +637,7 @@ def render_label_artwork(
         primary_block_centre_y = -text_stack_size.height / 2.0 + primary_block_height / 2.0
     primary_in_stack = Point(
         line_x(vectors.size.width),
-        primary_block_centre_y - underline_extra / 2.0,
+        primary_block_centre_y + (overline_extra - underline_extra) / 2.0,
     )
     subtitle_in_stack = Point(line_x(subtitle_vectors.size.width), 0.0)
     if has_primary and has_subtitle:
@@ -594,7 +647,11 @@ def render_label_artwork(
         )
     underline_in_stack = Point(
         line_x(vectors.size.width),
-        primary_block_centre_y + (vectors.size.height + underline_gap_mm) / 2.0,
+        primary_in_stack.y + vectors.size.height / 2.0 + underline_gap_mm + underline_thickness_mm / 2.0,
+    )
+    overline_in_stack = Point(
+        line_x(vectors.size.width),
+        primary_in_stack.y - vectors.size.height / 2.0 - overline_gap_mm - overline_thickness_mm / 2.0,
     )
     icon = (
         icon_renderer(icon_id, icon_height_mm or style.typography.height_mm)
@@ -645,6 +702,7 @@ def render_label_artwork(
         text_stack_centre.x + underline_in_stack.x,
         text_stack_centre.y + underline_in_stack.y,
     )
+    overline_centre = Point(text_stack_centre.x + overline_in_stack.x, text_stack_centre.y + overline_in_stack.y)
     placed_text = tuple(_translate_polygon(polygon, text_centre) for polygon in vectors.polygons)
     placed_subtitle = tuple(
         _translate_polygon(polygon, subtitle_centre) for polygon in subtitle_vectors.polygons
@@ -660,7 +718,13 @@ def render_label_artwork(
             Point(underline_centre.x - vectors.size.width / 2.0, underline_centre.y + underline_thickness_mm / 2.0),
         ),
     ) if has_underline else ()
-    content_polygons = placed_text + placed_subtitle + placed_icon + placed_underline
+    placed_overline = ((
+        Point(overline_centre.x - vectors.size.width / 2.0, overline_centre.y - overline_thickness_mm / 2.0),
+        Point(overline_centre.x + vectors.size.width / 2.0, overline_centre.y - overline_thickness_mm / 2.0),
+        Point(overline_centre.x + vectors.size.width / 2.0, overline_centre.y + overline_thickness_mm / 2.0),
+        Point(overline_centre.x - vectors.size.width / 2.0, overline_centre.y + overline_thickness_mm / 2.0),
+    ),) if has_overline else ()
+    content_polygons = placed_text + placed_subtitle + placed_icon + placed_underline + placed_overline
     if content_polygons:
         content_minimum, content_maximum = polygon_bounds(content_polygons)
         normalise = Point(
@@ -673,6 +737,7 @@ def render_label_artwork(
         )
         icon_centre = Point(icon_centre.x + normalise.x, icon_centre.y + normalise.y)
         underline_centre = Point(underline_centre.x + normalise.x, underline_centre.y + normalise.y)
+        overline_centre = Point(overline_centre.x + normalise.x, overline_centre.y + normalise.y)
         content_polygons = tuple(
             _translate_polygon(polygon, normalise) for polygon in content_polygons
         )
@@ -705,6 +770,9 @@ def render_label_artwork(
                 size=Size(vectors.size.width, underline_thickness_mm),
             )
         )
+    if has_overline:
+        objects.append(ShapeObject("text.overline", shape="rectangle", position=overline_centre,
+                                   size=Size(vectors.size.width, overline_thickness_mm)))
     if icon is not None:
         objects.append(
             IconObject(
@@ -736,7 +804,7 @@ def render_label_artwork(
     shape_object = ShapeObject(
         "shape.background",
         shape=shape,
-        size=Size(max(0.0, minimum_width_mm), 0.0),
+        size=Size(max(0.0, minimum_width_mm), max(0.0, minimum_height_mm)),
         content_ids=tuple(item.object_id for item in objects),
     )
     geometry = render_shape(shape_object, style.shape, content_size)
@@ -764,6 +832,7 @@ def render_label_artwork(
                     position=position,
                     size=item.size,
                     rotation_deg=item.rotation_deg,
+                    variant=item.variant,
                 )
             )
         else:
@@ -801,6 +870,155 @@ def render_label_artwork(
         style=artwork_style,
     )
     return StudioArtwork(filled, strokes, (), document)
+
+
+def render_multipart_label_artwork(
+    vectorizer: TextVectorizer,
+    sections: Sequence[str],
+    style: DocumentStyle,
+    output_layer: str,
+    start_cap: str = "rounded",
+    end_cap: str = "square",
+    separator: str = "\\",
+    gap_mm: float = 0.35,
+    separator_depth_mm: float = 0.0,
+    start_padding_left_mm: Optional[float] = None,
+    start_padding_right_mm: Optional[float] = None,
+    middle_padding_left_mm: Optional[float] = None,
+    middle_padding_right_mm: Optional[float] = None,
+    end_padding_left_mm: Optional[float] = None,
+    end_padding_right_mm: Optional[float] = None,
+    inline_format: bool = False,
+    lineover_style: str = "Rounded",
+    lineover_thickness: int = 1,
+    underline: bool = False,
+    underline_thickness_mm: float = 0.15,
+    underline_gap_mm: float = 0.12,
+    overline: bool = False,
+    overline_thickness_mm: float = 0.15,
+    overline_gap_mm: float = 0.12,
+) -> StudioArtwork:
+    """Render bracketed variable sections as one placeable label footprint.
+
+    Each section has its own container and text knockout.  The outer ends are
+    independent, while every internal boundary uses the chosen slash or bar
+    style.  The returned artwork is intentionally a single document so IPC
+    placement emits one Kobee footprint even though it contains many regions.
+    """
+    values = tuple(str(value) for value in sections)
+    if len(values) < 2:
+        raise ValueError("A multipart variable label needs at least two [sections]")
+    if separator not in ("\\", "/", "|"):
+        raise ValueError("Multipart separators must be \\, /, or |")
+    if gap_mm < 0:
+        raise ValueError("Multipart section gap cannot be negative")
+
+    separator_cap = {"\\": "skew_forward", "/": "skew_back", "|": "square"}[separator]
+    multipart_style = replace(
+        style,
+        shape=replace(
+            style.shape,
+            feature_size_mm=max(0.0, float(separator_depth_mm)),
+        ),
+    )
+    base_padding = multipart_style.shape.padding
+    horizontal_padding = (
+        (
+            base_padding.left if start_padding_left_mm is None else float(start_padding_left_mm),
+            base_padding.right if start_padding_right_mm is None else float(start_padding_right_mm),
+        ),
+        (
+            base_padding.left if middle_padding_left_mm is None else float(middle_padding_left_mm),
+            base_padding.right if middle_padding_right_mm is None else float(middle_padding_right_mm),
+        ),
+        (
+            base_padding.left if end_padding_left_mm is None else float(end_padding_left_mm),
+            base_padding.right if end_padding_right_mm is None else float(end_padding_right_mm),
+        ),
+    )
+    if any(value < 0 or not math.isfinite(value) for pair in horizontal_padding for value in pair):
+        raise ValueError("Multipart section padding must be finite and non-negative")
+    def render_section(index: int, value: str, minimum_height_mm: float = 0.0) -> StudioArtwork:
+        padding_left, padding_right = horizontal_padding[
+            0 if index == 0 else 2 if index == len(values) - 1 else 1
+        ]
+        section_style = replace(
+            multipart_style,
+            shape=replace(
+                multipart_style.shape,
+                start_cap=start_cap if index == 0 else separator_cap,
+                end_cap=end_cap if index == len(values) - 1 else separator_cap,
+                padding=Padding(
+                    top=base_padding.top,
+                    right=padding_right,
+                    bottom=base_padding.bottom,
+                    left=padding_left,
+                ),
+            ),
+        )
+        return render_label_artwork(
+            vectorizer,
+            value,
+            section_style,
+            output_layer,
+            shape="custom_ends",
+            minimum_width_mm=0.0,
+            minimum_height_mm=minimum_height_mm,
+            inline_format=inline_format,
+            lineover_style=lineover_style,
+            lineover_thickness=lineover_thickness,
+            icon_id="",
+            icon_position="left",
+            subtitle_text="",
+            underline=underline,
+            underline_thickness_mm=underline_thickness_mm,
+            underline_gap_mm=underline_gap_mm,
+            overline=overline,
+            overline_thickness_mm=overline_thickness_mm,
+            overline_gap_mm=overline_gap_mm,
+            allow_empty=not value.strip(),
+        )
+
+    rendered = [render_section(index, value) for index, value in enumerate(values)]
+    standard_height = max(item.document.size.height for item in rendered)
+    if any(item.document.size.height < standard_height - 1e-9 for item in rendered):
+        rendered = [
+            render_section(index, value, standard_height)
+            for index, value in enumerate(values)
+        ]
+
+    total_width = sum(item.document.size.width for item in rendered) + gap_mm * (len(rendered) - 1)
+    maximum_height = max(item.document.size.height for item in rendered)
+    cursor = -total_width / 2.0
+    filled = []
+    strokes = []
+    objects = []
+    for index, artwork in enumerate(rendered):
+        width = artwork.document.size.width
+        centre = Point(cursor + width / 2.0, 0.0)
+        filled.extend(_translate_polygon(polygon, centre) for polygon in artwork.filled_polygons)
+        strokes.extend(
+            StrokePath(_translate_polygon(stroke.points, centre), stroke.width_mm)
+            for stroke in artwork.strokes
+        )
+        objects.append(
+            ShapeObject(
+                "multipart.section.{}".format(index + 1),
+                shape="custom_ends",
+                position=centre,
+                size=artwork.document.size,
+            )
+        )
+        cursor += width + gap_mm
+    objects.append(GroupObject("group.multipart", tuple(item.object_id for item in objects)))
+    document = CompositionDocument(
+        objects=tuple(objects),
+        output_layer=output_layer,
+        size=Size(total_width, maximum_height),
+        alignment="center",
+        style=multipart_style,
+    )
+    return StudioArtwork(tuple(filled), tuple(strokes), (), document)
 
 
 def _component_cutout_contour(spec: ComponentCalloutSpec) -> Polygon:
@@ -1418,7 +1636,10 @@ def render_graphic_artwork(graphic: GraphicObject, output_layer: str) -> StudioA
     data = graphic.geometry_svg.encode("utf-8")
     root = validate_svg_bytes(data, require_renderable=True, allow_strokes=True)
     polygons = svg_polygons_from_root(root, allow_strokes=True)
-    minimum, maximum = polygon_bounds(polygons)
+    # Match render_svg's viewBox-aware canvas calculation. The graphic picker
+    # derives its aspect-lock size from that canvas, so using raw path bounds
+    # here would scale X and Y independently for SVGs with a padded viewBox.
+    minimum, maximum = svg_canvas_bounds(root, polygons)
     natural_width, natural_height = maximum.x - minimum.x, maximum.y - minimum.y
     if natural_width <= 0 or natural_height <= 0:
         raise ValueError("Imported graphic has no measurable size")
@@ -1503,9 +1724,12 @@ def serialize_artwork(
     graphics = []
     for layer in layers:
         bottom = is_bottom(layer)
-        filled = tuple(_mirror_polygon(polygon) if bottom else polygon for polygon in artwork.filled_polygons)
+        origin = artwork.document.origin
+        offset = Point(-origin.x, -origin.y)
+        shifted = tuple(_translate_polygon(polygon, offset) for polygon in artwork.filled_polygons)
+        filled = tuple(_mirror_polygon(polygon) if bottom else polygon for polygon in shifted)
         strokes = tuple(
-            StrokePath(_mirror_polygon(stroke.points) if bottom else stroke.points, stroke.width_mm)
+            StrokePath(_mirror_polygon(_translate_polygon(stroke.points, offset)) if bottom else _translate_polygon(stroke.points, offset), stroke.width_mm)
             for stroke in artwork.strokes
         )
         graphics.extend(
@@ -1524,10 +1748,10 @@ def serialize_artwork(
   (descr \"Generated with Kobee Studio (evolved from KiBuzzard)\")
   (tags \"kb_params={parameters}\")
   (fp_text reference \"{name}\" (at 0 {reference_y}) (layer \"{output_layer}\") hide
-    (effects (font (size 0 0) (thickness 0)))
+    (effects (font (size 1 1) (thickness 0.15)))
   )
   (fp_text value \"G***\" (at 0 {value_y}) (layer \"{output_layer}\") hide
-    (effects (font (size 0 0) (thickness 0)))
+    (effects (font (size 1 1) (thickness 0.15)))
   )
 {graphics}
 )""".format(

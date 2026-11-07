@@ -169,6 +169,23 @@ class ShapeGeometryTests(unittest.TestCase):
                         all(math.isfinite(point.x) and math.isfinite(point.y) for point in contour)
                     )
 
+    def test_matching_skew_ends_have_parallel_slopes(self):
+        for skew in ("skew_forward", "skew_back"):
+            with self.subTest(skew=skew):
+                contour = shape_contour(
+                    "custom_ends",
+                    Size(10.0, 4.0),
+                    ShapeStyle(start_cap=skew, end_cap=skew, feature_size_mm=1.0),
+                )
+                diagonal_slopes = []
+                for index, point in enumerate(contour):
+                    next_point = contour[(index + 1) % len(contour)]
+                    dx, dy = next_point.x - point.x, next_point.y - point.y
+                    if not math.isclose(dx, 0.0) and math.isclose(abs(dy), 4.0):
+                        diagonal_slopes.append(dx / dy)
+                self.assertEqual(2, len(diagonal_slopes))
+                self.assertAlmostEqual(diagonal_slopes[0], diagonal_slopes[1])
+
     def test_independent_long_edges_round_corners_without_creating_end_caps(self):
         contour = shape_contour(
             "custom_long_edges",

@@ -24,12 +24,63 @@ from kobeestudio.core.studio_artwork import (
     TextVectorizer,
     render_header_artwork,
     render_label_artwork,
+    render_multipart_label_artwork,
     serialize_artwork,
 )
 from kobeestudio.core.text_geometry import TextGeometry
 
 
 class StudioArtworkTests(unittest.TestCase):
+    def test_multiline_alignment_moves_short_lines_in_plain_and_formatted_text(self):
+        from kobeestudio.core.shape_geometry import polygon_bounds
+
+        for formatted, text in ((False, "HH\nHHHHHH"), (True, "~{HH}\nHHHHHH")):
+            for alignment in ("left", "center", "right"):
+                with self.subTest(formatted=formatted, alignment=alignment):
+                    vectors = self.vectorizer.render(
+                        text, TypographyStyle(height_mm=1.2, line_spacing=2.0, alignment=alignment),
+                        inline_format=formatted, lineover_style="Square",
+                    )
+                    # These separated lines have identical cap-height letters;
+                    # compare their actual exported geometry, not UI settings.
+                    top = [polygon for polygon in vectors.polygons if max(p.y for p in polygon) < 0]
+                    bottom = [polygon for polygon in vectors.polygons if min(p.y for p in polygon) > 0]
+                    self.assertTrue(top)
+                    self.assertTrue(bottom)
+                    low_top, high_top = polygon_bounds(top)
+                    low_bottom, high_bottom = polygon_bounds(bottom)
+                    if alignment == "left":
+                        self.assertAlmostEqual(low_top.x, low_bottom.x, places=5)
+                    elif alignment == "right":
+                        self.assertAlmostEqual(high_top.x, high_bottom.x, places=5)
+                    else:
+                        self.assertAlmostEqual(low_top.x + high_top.x, low_bottom.x + high_bottom.x, places=5)
+
+    def test_large_header_uses_compact_simple_regions(self):
+        spec = PinHeaderSpec(
+            32, tuple("PIN{:02}".format(i) for i in range(1, 33)),
+            opening_mode="continuous", opening_shape="rectangle",
+            style=self.style(filled=True, inverted=True),
+        )
+        artwork = render_header_artwork(self.vectorizer, spec)
+        # Thousands of footprint children reproduce the native position-edit
+        # freeze. Keep the same complete overlay within a practical budget.
+        self.assertLess(len(artwork.filled_polygons), 500)
+
+    def test_compacted_regions_preserve_union_across_splits_and_joins(self):
+        outer = (Point(0, 0), Point(10, 0), Point(10, 10), Point(0, 10))
+        holes = (
+            (Point(1, 1), Point(6, 1), Point(6, 5), Point(1, 5)),
+            (Point(4, 3), Point(9, 3), Point(9, 8), Point(4, 8)),
+            (Point(1, 6), Point(3, 7), Point(2, 9)),
+        )
+        regions = _knockout_tiles(outer, holes)
+        for ix in range(40):
+            for iy in range(40):
+                point = Point((ix + 0.37) / 4, (iy + 0.29) / 4)
+                expected = not any(_point_in_polygon(point, hole) for hole in holes)
+                self.assertEqual(expected, any(_point_in_polygon(point, region) for region in regions), point)
+
     @classmethod
     def setUpClass(cls):
         cls.vectorizer = TextVectorizer(TextGeometry().buzzard)
@@ -68,6 +119,56 @@ class StudioArtworkTests(unittest.TestCase):
                 artwork = render_label_artwork(self.vectorizer, "GND", self.style(), "F.SilkS", shape)
                 self.assertGreater(len(artwork.filled_polygons), 0)
                 self.assertEqual(1, len(artwork.strokes))
+
+    def test_multipart_label_renders_each_section_as_one_footprint_document(self):
+        artwork = render_multipart_label_artwork(
+            self.vectorizer,
+            ("PCB-0001-B01", "Rev A", "v1.0"),
+            self.style(filled=True, inverted=True),
+            "F.SilkS",
+            start_cap="rounded",
+            end_cap="square",
+            separator="/",
+            gap_mm=0.35,
+            separator_depth_mm=0.8,
+        )
+        self.assertEqual(3, len([item for item in artwork.document.objects if item.kind == "shape"]))
+        self.assertEqual("group", artwork.document.objects[-1].kind)
+        self.assertGreater(len(artwork.filled_polygons), 3)
+        section_heights = [
+            item.size.height for item in artwork.document.objects if item.kind == "shape"
+        ]
+        self.assertEqual(1, len({round(height, 9) for height in section_heights}))
+
+    def test_multipart_sections_have_independent_horizontal_padding(self):
+        base = render_multipart_label_artwork(
+            self.vectorizer, ("Start", "Middle", "End"), self.style(), "F.SilkS"
+        )
+        adjusted = render_multipart_label_artwork(
+            self.vectorizer,
+            ("Start", "Middle", "End"),
+            self.style(),
+            "F.SilkS",
+            start_padding_left_mm=1.4,
+            start_padding_right_mm=0.1,
+            middle_padding_left_mm=0.8,
+            middle_padding_right_mm=1.1,
+            end_padding_left_mm=0.2,
+            end_padding_right_mm=1.6,
+        )
+        base_sections = [item for item in base.document.objects if item.kind == "shape"]
+        adjusted_sections = [item for item in adjusted.document.objects if item.kind == "shape"]
+        self.assertNotEqual(base_sections[0].size.width, adjusted_sections[0].size.width)
+        self.assertNotEqual(base_sections[1].size.width, adjusted_sections[1].size.width)
+        self.assertNotEqual(base_sections[2].size.width, adjusted_sections[2].size.width)
+
+    def test_blank_multipart_sections_render_as_editable_containers(self):
+        artwork = render_multipart_label_artwork(
+            self.vectorizer, ("", ""), self.style(filled=True, inverted=True), "F.SilkS"
+        )
+        sections = [item for item in artwork.document.objects if item.kind == "shape"]
+        self.assertEqual(2, len(sections))
+        self.assertTrue(all(item.size.width > 0 and item.size.height > 0 for item in sections))
 
     def test_text_vectors_are_reused_when_only_container_geometry_changes(self):
         typography = TypographyStyle(font_name="FreddySpark-Regular", height_mm=1.2)

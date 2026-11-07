@@ -76,12 +76,16 @@ through KiCad's Plugin and Content Manager using **Install from File**.
 ## Release checklist
 
 1. Update the version and status in the files listed above.
-2. Run the focused tests.
+2. Run the complete suite with `python tools/run_tests.py` in the native wx runtime.
 3. Build the PCM ZIP with `python3 pcm/build.py`.
 4. Verify the ZIP metadata and checksum.
 5. Create a GitHub release using the matching tag.
 6. Mark beta releases as GitHub pre-releases and PCM versions as `testing`.
 7. Mark the final release as stable in both GitHub and PCM metadata.
+8. Generate the official-catalog update from the exact released ZIP using
+   `tools/prepare_kicad_submission.py --verify-download`; retain all prior
+   versions. Follow [the release pipeline](docs/RELEASE_PIPELINE.md) before
+   submitting the GitLab metadata merge request.
 
 ## References
 

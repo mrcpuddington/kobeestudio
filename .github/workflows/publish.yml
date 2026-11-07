@@ -45,19 +45,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run focused tests
+      - name: Prepare native test runtime
         run: |
-          python -m unittest \
-            tests.test_ipc_migration.IpcMigrationTests.test_manifest_declares_supported_ipc_runtime \
-            tests.test_ipc_migration.IpcMigrationTests.test_pcm_metadata_matches_ipc_manifest_and_catalog_icon_rules \
-            tests.test_ipc_migration.IpcMigrationTests.test_ipc_requirements_use_kicad_bundled_wxpython \
-            tests.test_ipc_migration.IpcMigrationTests.test_pcm_builder_places_ipc_manifest_in_plugin_subdirectory \
-            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_uses_the_connection_details_from_kicad \
-            tests.test_ipc_migration.IpcMigrationTests.test_development_connection_accepts_kicads_empty_external_token \
-            tests.test_ipc_migration.IpcMigrationTests.test_ipc_session_fails_clearly_outside_kicad \
-            tests.test_ipc_migration.IpcMigrationTests.test_each_plugin_process_has_a_unique_ipc_commit_identity \
-            tests.test_ipc_migration.IpcMigrationTests.test_metadata_round_trip_reopens_selected_artwork \
-            tests.test_platform_branding
+          sudo apt-get update
+          sudo apt-get install -y python3-wxgtk4.0 python3-venv xvfb
+          /usr/bin/python3 -m venv --system-site-packages /tmp/kobee-tests
+          /tmp/kobee-tests/bin/python -m pip install -r ipc_plugin/requirements.txt
+
+      - name: Run complete test suite
+        run: xvfb-run -a /tmp/kobee-tests/bin/python tools/run_tests.py
 
       - name: Build PCM package
         run: python pcm/build.py
@@ -108,6 +104,23 @@ jobs:
               output.write(f"version={version}\n")
               output.write(f"archive={archive}\n")
 
+      - name: Prepare official KiCad metadata draft
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          python tools/prepare_kicad_submission.py \
+            --archive "$ARCHIVE" \
+            --release-tag "$RELEASE_TAG" \
+            --output pcm/build/official-submission
+
+      - name: Upload official KiCad submission draft
+        uses: actions/upload-artifact@v4
+        with:
+          name: kicad-metadata-${{ steps.package.outputs.version }}
+          path: pcm/build/official-submission/
+          if-no-files-found: error
+
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -115,10 +128,15 @@ jobs:
           RELEASE_NAME: ${{ inputs.release_name }}
           CHANNEL: ${{ inputs.channel }}
           ARCHIVE: ${{ steps.package.outputs.archive }}
+          NOTES_FILE: docs/releases/${{ steps.package.outputs.version }}-notes.md
         run: |
           title="$RELEASE_NAME"
           if [ -z "$title" ]; then
             title="Kobee Studio $RELEASE_TAG"
+          fi
+          notes_args=(--generate-notes)
+          if [ -f "$NOTES_FILE" ]; then
+            notes_args=(--notes-file "$NOTES_FILE")
           fi
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
@@ -133,13 +151,13 @@ jobs:
               gh release create "$RELEASE_TAG" "$ARCHIVE" \
                 --title "$title" \
                 --target "${{ inputs.source_ref }}" \
-                --generate-notes \
+                "${notes_args[@]}" \
                 --prerelease
             else
               gh release create "$RELEASE_TAG" "$ARCHIVE" \
                 --title "$title" \
                 --target "${{ inputs.source_ref }}" \
-                --generate-notes
+                "${notes_args[@]}"
             fi
           fi
 

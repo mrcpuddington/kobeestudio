@@ -7,13 +7,14 @@ import json
 import logging
 import os
 import platform
+import sys
 from pathlib import Path
 
 import pcbnew
 import wx
 
 from .integration.kicad_compatibility import KiCadCompatibility
-from .integration.platform_branding import configure_window_branding
+from .integration.platform_branding import activate_application, configure_window_branding
 from .ui.single_instance import StudioWindowSingleton
 if os.environ.get("KOBEE_USE_LEGACY_EDITOR"):
     from .ui.main_dialog import MainDialog
@@ -92,8 +93,11 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
 
             geometry = TextGeometry()
             self._log_dependency_versions()
+            resume_state = None
             while True:
                 dialog = MainDialog(None, self.config_file, geometry.buzzard, self._generate_and_place)
+                if resume_state is not None and hasattr(dialog, "restore_session_state"):
+                    dialog.restore_session_state(resume_state)
                 icon_path = (
                     Path(__file__).resolve().parent
                     / "resources"
@@ -105,15 +109,32 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
                         return
                     if dialog.IsIconized():
                         dialog.Iconize(False)
+                    activate_application()
+                    wx.GetApp().SetTopWindow(dialog)
                     dialog.Show(True)
                     dialog.Raise()
                     dialog.SetFocus()
                     dialog.RequestUserAttention(wx.USER_ATTENTION_INFO)
+                    if sys.platform == "darwin" and not getattr(dialog, "_kobee_front_pulse", False):
+                        dialog._kobee_front_pulse = True
+                        dialog.ToggleWindowStyle(wx.STAY_ON_TOP)
+
+                        def clear_front_pulse():
+                            if not dialog.IsBeingDeleted() and getattr(dialog, "_kobee_front_pulse", False):
+                                dialog.ToggleWindowStyle(wx.STAY_ON_TOP)
+                                dialog._kobee_front_pulse = False
+
+                        wx.CallLater(450, clear_front_pulse)
 
                 singleton.attach(lambda: wx.CallAfter(focus_existing_dialog))
                 try:
+                    # The modeless activation needs to run after wx has made
+                    # the modal dialog visible, otherwise macOS can leave the
+                    # editor behind PCB Editor on its first launch.
+                    wx.CallAfter(focus_existing_dialog)
                     dialog.ShowModal()
                     restart_requested = bool(getattr(dialog, "restart_requested", False))
+                    resume_state = getattr(dialog, "restart_state", None)
                 finally:
                     dialog.Destroy()
                 if not restart_requested:
@@ -127,8 +148,8 @@ class KobeeStudioPlugin(pcbnew.ActionPlugin):
         try:
             if getattr(dialog, "_tool", "") == "Variables":
                 raise RuntimeError(
-                    "Variable labels require the KiCad 10 IPC plugin so ${NAME} "
-                    "expressions remain native KiCad text."
+                    "Variable labels require the KiCad 10 IPC plugin so Kobee can "
+                    "resolve current project variables and place the label artwork."
                 )
             if not dialog.polys:
                 dialog.EndModal(wx.ID_CANCEL)

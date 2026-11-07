@@ -38,6 +38,7 @@ ORIENTATIONS = ("horizontal", "vertical")
 PIN1_ENDS = ("start", "end")
 LABEL_SIDES = ("above", "below", "left", "right")
 OPENING_MODES = ("none", "continuous", "individual")
+OPENING_SHAPES = ("pill", "rounded_rectangle", "rectangle")
 PIN_LABEL_CLEARANCE_MM = 0.20
 
 
@@ -76,6 +77,11 @@ class PinHeaderSpec:
     label_outer_padding_mm: Optional[float] = None
     rail_cross_size_mm: float = 0.0
     opening_mode: str = "none"
+    # Shape of the continuous/individual connector cutout.  This is separate
+    # from the outer rail shape so users can keep a rounded label while making
+    # the connector edge square (or vice versa).
+    opening_shape: str = "pill"
+    opening_corner_radius_mm: float = 0.5
     opening_end_padding_mm: float = 0.0
     pin1_marker: bool = True
     shape: str = "rounded_rectangle"
@@ -101,6 +107,7 @@ class PinHeaderSpec:
             "trailing_padding_mm",
             "label_padding_mm",
             "opening_end_padding_mm",
+            "opening_corner_radius_mm",
             "rail_cross_size_mm",
         ):
             _non_negative(name, getattr(self, name))
@@ -134,6 +141,8 @@ class PinHeaderSpec:
             raise ValueError("Vertical headers require labels left or right")
         if self.opening_mode not in OPENING_MODES:
             raise ValueError("Unsupported connector opening: {}".format(self.opening_mode))
+        if self.opening_shape not in OPENING_SHAPES:
+            raise ValueError("Unsupported connector cutout shape: {}".format(self.opening_shape))
         if self.opening_mode == "individual" and self.pad_clearance_mm > self.pitch_mm:
             raise ValueError(
                 "Individual pin openings cannot be wider than the pitch; use a continuous opening"
@@ -168,6 +177,8 @@ class PinHeaderSpec:
             "label_outer_padding_mm": self.label_outer_padding_mm,
             "rail_cross_size_mm": self.rail_cross_size_mm,
             "opening_mode": self.opening_mode,
+            "opening_shape": self.opening_shape,
+            "opening_corner_radius_mm": self.opening_corner_radius_mm,
             "opening_end_padding_mm": self.opening_end_padding_mm,
             "pin1_marker": self.pin1_marker,
             "shape": self.shape,
@@ -262,6 +273,8 @@ class PinHeaderSpec:
             rail_cross_size_mm=float(data.get("rail_cross_size_mm", 0.0)),
             # Existing 0.3.0-dev headers always used a continuous opening.
             opening_mode=str(data.get("opening_mode", "continuous")),
+            opening_shape=str(data.get("opening_shape", "pill")),
+            opening_corner_radius_mm=float(data.get("opening_corner_radius_mm", 0.5)),
             opening_end_padding_mm=float(data.get("opening_end_padding_mm", 0.0)),
             pin1_marker=bool(data.get("pin1_marker", True)),
             shape=str(data.get("shape", "rounded_rectangle")),
@@ -606,10 +619,13 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
     else:
         keepout_size = Size(spec.pad_clearance_mm, keepout_axis_size)
         keepout_centre = Point(0.0, keepout_axis_centre)
-    keepout_object = ShapeObject("header.connector-keepout", shape="pill", size=keepout_size)
+    keepout_object = ShapeObject(
+        "header.connector-keepout", shape=spec.opening_shape, size=keepout_size
+    )
     keepout_style = replace(
         spec.style.shape,
         padding=Padding(),
+        corner_radius_mm=spec.opening_corner_radius_mm,
         filled=True,
         inverted=False,
         border_thickness_mm=0.0,
