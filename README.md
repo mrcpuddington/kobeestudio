@@ -65,7 +65,7 @@ The reviewed 1.5.20 candidate includes:
 - Styled designators and scoped board cleanup tools, with selection and undo checks.
 - Preview, geometry, placement and dialog-lifecycle hardening.
 
-These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md), the [development branch](https://github.com/mrcpuddington/kobeestudio/tree/DEV) and the [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for scope and validation limits.
+These are **development/testing features**, not additions to the stable 1.4.1 package. See [CHANGELOG.md](CHANGELOG.md) and the [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for scope and validation limits.
 
 ## What’s in 1.4.1
 
