@@ -1,5 +1,6 @@
 """Exercise real editor controls with tools/run_tests.py (wxApp required)."""
 
+import importlib.util
 import tempfile
 import unittest
 from dataclasses import replace
@@ -42,6 +43,39 @@ class EditorWorkflowTests(unittest.TestCase):
             current_module="labels", preferences_changed=lambda *_: None,
             project_asset_store=None, symbol_catalog=self.dialog.symbol_catalog,
         )
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_selected_connector_prefills_an_editable_new_overlay(self):
+        from kipy.board_types import FootprintInstance, Pad
+        from kipy.geometry import Vector2
+
+        connector = FootprintInstance()
+        connector.definition.id.library = "Connector_PinHeader_2.54mm"
+        for number in (1, 2, 3, 4):
+            pad = Pad()
+            pad.number = str(number)
+            pad.position = Vector2.from_xy_mm(50, 60 + number * 1.27)
+            connector.definition.add_item(pad)
+        session = SimpleNamespace(selected_artwork=lambda: None, selected_items=lambda: [connector])
+        dialog = StudioEditorDialog(
+            None, str(Path(self.data.name) / "config.json"),
+            TextGeometry().buzzard, lambda *_: None, editor_session=session,
+        )
+        try:
+            self.assertEqual("Connector Overlay", dialog._tool)
+            self.assertIsNone(dialog.updateFootprint)
+            controls = dialog.active_page.controls
+            self.assertEqual("1.27 mm", controls["HeaderPitchChoice"].GetStringSelection())
+            self.assertEqual("Pin 1\nPin 2\nPin 3\nPin 4", controls["MultiLineText"].GetValue())
+            controls["MultiLineText"].ChangeValue("VIN\nGND\nSDA\nSCL")
+            controls["HeaderOpeningChoice"].SetStringSelection("Individual pin openings")
+            controls["HeaderIndividualCutoutEdgeChoice"].SetStringSelection("Square rectangle cutout")
+            dialog._regenerate_preview()
+            self.assertIsNone(dialog.error)
+            self.assertTrue(dialog.artwork.filled_polygons or dialog.artwork.strokes)
+        finally:
+            dialog.Destroy()
+            wx.Yield()
 
     def test_late_font_completions_are_ignored_after_destroy(self):
         dialog = self.make_settings()

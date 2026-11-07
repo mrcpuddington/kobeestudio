@@ -130,6 +130,16 @@ OPENING_LABELS = {
     "Continuous plug opening": "continuous",
     "Individual pin openings": "individual",
 }
+HEADER_CUTOUT_SHAPES = {
+    "Pill cutout": "pill",
+    "Round cutout": "pill",
+    "Rounded rectangle cutout": "rounded_rectangle",
+    "Square rectangle cutout": "rectangle",
+    "Rounded cutout": "rounded_rectangle",
+    "Square edge cutout": "rectangle",
+}
+CONTINUOUS_CUTOUT_CHOICES = ("Pill cutout", "Rounded rectangle cutout", "Square rectangle cutout")
+INDIVIDUAL_CUTOUT_CHOICES = ("Round cutout", "Rounded rectangle cutout", "Square rectangle cutout")
 PRESET_LABELS = {"Custom label": None}
 PRESET_LABELS.update({preset.display_name: preset for preset in LABEL_PRESETS})
 PRESET_ID_TO_LABEL = {preset.preset_id: preset.display_name for preset in LABEL_PRESETS}
@@ -226,6 +236,7 @@ STUDIO_DEFAULTS = {
     "HeaderPadClearanceCtrl": 2.0,
     "HeaderOpeningChoice": "Continuous plug opening",
     "HeaderCutoutEdgeChoice": "Pill cutout",
+    "HeaderIndividualCutoutEdgeChoice": "Round cutout",
     "HeaderCutoutRadiusCtrl": 0.5,
     "HeaderOpeningEndPaddingCtrl": 0.0,
     "HeaderLeadingPaddingCtrl": 0.3,
@@ -601,9 +612,11 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderOpeningChoice = wx.Choice(header_parent, choices=tuple(OPENING_LABELS.keys()))
         self.m_HeaderCutoutEdgeChoice = wx.Choice(
             header_parent,
-            choices=("Pill cutout", "Rounded rectangle cutout", "Square rectangle cutout"),
+            choices=CONTINUOUS_CUTOUT_CHOICES,
         )
         self.m_HeaderCutoutEdgeChoice.SetSelection(0)
+        self.m_HeaderIndividualCutoutEdgeChoice = wx.Choice(header_parent, choices=INDIVIDUAL_CUTOUT_CHOICES)
+        self.m_HeaderIndividualCutoutEdgeChoice.SetSelection(0)
         self.m_HeaderCutoutRadiusCtrl = self._double_control(header_parent, 0.0, 100.0, 0.5, 0.05, 2)
         self.m_HeaderOpeningEndPaddingCtrl = self._double_control(header_detail_parent, 0.0, 100.0, 0.0, 0.1, 2)
         self.m_HeaderLabelPaddingCtrl = self._double_control(header_detail_parent, 0.0, 20.0, 0.3, 0.1, 2)
@@ -624,6 +637,7 @@ class MainDialog(UpstreamDialog):
             ("Pins on", self.m_HeaderPinSideChoice),
             ("Artwork opening", self.m_HeaderOpeningChoice),
             ("Cutout edge", self.m_HeaderCutoutEdgeChoice),
+            ("Per-pin cutout edge", self.m_HeaderIndividualCutoutEdgeChoice),
             ("Rounded corner radius (mm)", self.m_HeaderCutoutRadiusCtrl),
             ("Connector width (mm)", self.m_HeaderPadClearanceCtrl),
             ("Pin 1 end outer padding (mm)", self.m_HeaderLeadingPaddingCtrl),
@@ -874,6 +888,7 @@ class MainDialog(UpstreamDialog):
             "HeaderPadClearanceCtrl": self.m_HeaderPadClearanceCtrl,
             "HeaderOpeningChoice": self.m_HeaderOpeningChoice,
             "HeaderCutoutEdgeChoice": self.m_HeaderCutoutEdgeChoice,
+            "HeaderIndividualCutoutEdgeChoice": self.m_HeaderIndividualCutoutEdgeChoice,
             "HeaderCutoutRadiusCtrl": self.m_HeaderCutoutRadiusCtrl,
             "HeaderOpeningEndPaddingCtrl": self.m_HeaderOpeningEndPaddingCtrl,
             "HeaderLeadingPaddingCtrl": self.m_HeaderLeadingPaddingCtrl,
@@ -902,6 +917,7 @@ class MainDialog(UpstreamDialog):
         self.m_HeaderOrientationChoice.Bind(wx.EVT_CHOICE, self._on_header_orientation_changed)
         self.m_HeaderOpeningChoice.Bind(wx.EVT_CHOICE, self._on_header_opening_changed)
         self.m_HeaderCutoutEdgeChoice.Bind(wx.EVT_CHOICE, self._on_header_opening_changed)
+        self.m_HeaderIndividualCutoutEdgeChoice.Bind(wx.EVT_CHOICE, self._on_header_opening_changed)
         self.m_HeaderDetailsCheckbox.Bind(wx.EVT_CHECKBOX, self._on_header_details_changed)
         self.m_HeaderPinCountCtrl.Bind(wx.EVT_SPINCTRL, self._on_header_pin_count_changed)
         self.m_HeaderPinCountCtrl.Bind(wx.EVT_TEXT, self._on_header_pin_count_changed)
@@ -1828,8 +1844,14 @@ class MainDialog(UpstreamDialog):
         # when no artwork opening is cut.
         self.m_HeaderPadClearanceCtrl.Enable(True)
         self.m_HeaderOpeningEndPaddingCtrl.Enable(mode == "continuous")
+        self.m_HeaderCutoutEdgeChoice.Enable(mode == "continuous")
+        self.m_HeaderIndividualCutoutEdgeChoice.Enable(mode == "individual")
+        cutout_choice = (
+            self.m_HeaderIndividualCutoutEdgeChoice if mode == "individual"
+            else self.m_HeaderCutoutEdgeChoice
+        )
         self.m_HeaderCutoutRadiusCtrl.Enable(
-            self.m_HeaderCutoutEdgeChoice.GetStringSelection() == "Rounded rectangle cutout"
+            mode != "none" and cutout_choice.GetStringSelection() == "Rounded rectangle cutout"
         )
 
     def _update_shape_ui(self):
@@ -2513,13 +2535,10 @@ class MainDialog(UpstreamDialog):
                     opening_mode=OPENING_LABELS[
                         self.m_HeaderOpeningChoice.GetStringSelection()
                     ],
-                    opening_shape={
-                        "Pill cutout": "pill",
-                        "Rounded cutout": "rounded_rectangle",
-                        "Rounded rectangle cutout": "rounded_rectangle",
-                        "Square edge cutout": "rectangle",
-                        "Square rectangle cutout": "rectangle",
-                    }.get(self.m_HeaderCutoutEdgeChoice.GetStringSelection(), "pill"),
+                    opening_shape=HEADER_CUTOUT_SHAPES.get(self.m_HeaderCutoutEdgeChoice.GetStringSelection(), "pill"),
+                    individual_opening_shape=HEADER_CUTOUT_SHAPES.get(
+                        self.m_HeaderIndividualCutoutEdgeChoice.GetStringSelection(), "pill"
+                    ),
                     opening_corner_radius_mm=self.m_HeaderCutoutRadiusCtrl.GetValue(),
                     opening_end_padding_mm=self.m_HeaderOpeningEndPaddingCtrl.GetValue(),
                     leading_padding_mm=self.m_HeaderLeadingPaddingCtrl.GetValue(),

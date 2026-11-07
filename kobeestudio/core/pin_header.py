@@ -23,7 +23,7 @@ from .composition import (
     TextObject,
     TypographyStyle,
 )
-from .shape_geometry import Polygon, ShapeGeometry, polygon_bounds, render_shape, transform_geometry
+from .shape_geometry import Polygon, ShapeGeometry, polygon_bounds, render_shape, shape_contour, transform_geometry
 from .transforms import (
     BOTTOM_COPPER,
     FRONT_COPPER,
@@ -39,6 +39,10 @@ PIN1_ENDS = ("start", "end")
 LABEL_SIDES = ("above", "below", "left", "right")
 OPENING_MODES = ("none", "continuous", "individual")
 OPENING_SHAPES = ("pill", "rounded_rectangle", "rectangle")
+HEADER_PITCH_CHOICES = (
+    "1.00 mm", "1.25 mm", "1.27 mm", "1.50 mm", "2.00 mm", "2.50 mm",
+    "2.54 mm", "3.50 mm", "3.81 mm", "5.00 mm", "5.08 mm", "Custom",
+)
 PIN_LABEL_CLEARANCE_MM = 0.20
 
 
@@ -77,9 +81,7 @@ class PinHeaderSpec:
     label_outer_padding_mm: Optional[float] = None
     rail_cross_size_mm: float = 0.0
     opening_mode: str = "none"
-    # Shape of the continuous/individual connector cutout.  This is separate
-    # from the outer rail shape so users can keep a rounded label while making
-    # the connector edge square (or vice versa).
+    # Continuous opening shape. Individual openings historically used circles.
     opening_shape: str = "pill"
     opening_corner_radius_mm: float = 0.5
     opening_end_padding_mm: float = 0.0
@@ -89,6 +91,7 @@ class PinHeaderSpec:
     style: DocumentStyle = field(default_factory=DocumentStyle)
     schema_version: int = PIN_HEADER_SCHEMA_VERSION
     generator_version: str = __version__
+    individual_opening_shape: str = "pill"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pin_labels", tuple(self.pin_labels))
@@ -143,6 +146,8 @@ class PinHeaderSpec:
             raise ValueError("Unsupported connector opening: {}".format(self.opening_mode))
         if self.opening_shape not in OPENING_SHAPES:
             raise ValueError("Unsupported connector cutout shape: {}".format(self.opening_shape))
+        if self.individual_opening_shape not in OPENING_SHAPES:
+            raise ValueError("Unsupported pin cutout shape: {}".format(self.individual_opening_shape))
         if self.opening_mode == "individual" and self.pad_clearance_mm > self.pitch_mm:
             raise ValueError(
                 "Individual pin openings cannot be wider than the pitch; use a continuous opening"
@@ -178,6 +183,7 @@ class PinHeaderSpec:
             "rail_cross_size_mm": self.rail_cross_size_mm,
             "opening_mode": self.opening_mode,
             "opening_shape": self.opening_shape,
+            "individual_opening_shape": self.individual_opening_shape,
             "opening_corner_radius_mm": self.opening_corner_radius_mm,
             "opening_end_padding_mm": self.opening_end_padding_mm,
             "pin1_marker": self.pin1_marker,
@@ -274,6 +280,7 @@ class PinHeaderSpec:
             # Existing 0.3.0-dev headers always used a continuous opening.
             opening_mode=str(data.get("opening_mode", "continuous")),
             opening_shape=str(data.get("opening_shape", "pill")),
+            individual_opening_shape=str(data.get("individual_opening_shape", "pill")),
             opening_corner_radius_mm=float(data.get("opening_corner_radius_mm", 0.5)),
             opening_end_padding_mm=float(data.get("opening_end_padding_mm", 0.0)),
             pin1_marker=bool(data.get("pin1_marker", True)),
@@ -630,6 +637,16 @@ def layout_pin_header(spec: PinHeaderSpec, label_sizes: Sequence[Size]) -> Heade
         inverted=False,
         border_thickness_mm=0.0,
     )
+    if spec.opening_mode == "individual" and spec.individual_opening_shape != "pill":
+        contour = shape_contour(
+            spec.individual_opening_shape,
+            Size(spec.pad_clearance_mm, spec.pad_clearance_mm),
+            keepout_style,
+        )
+        guides = tuple(
+            tuple(Point(centre.x + point.x, centre.y + point.y) for point in contour)
+            for centre in pin_centres
+        )
     keepout_geometry = render_shape(keepout_object, keepout_style)
     keepout_geometry = transform_geometry(
         keepout_geometry,

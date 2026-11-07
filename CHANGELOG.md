@@ -2,8 +2,7 @@
 
 ## Unreleased
 
-- Fixed Data Health incorrectly flagging a valid refreshed Google Fonts catalogue
-  as oversized, while retaining bounded catalogue and individual-record checks.
+The development line is currently versioned **1.5.20** and prepared for testing. These notes do not announce a published package. KiCad's official repository currently offers **1.4.1 stable** as its newest version (checked 5 November 2026). See the [1.5.x article](https://kobee.com.au/news/kobee-studio-1-5-20) and [illustrated 1.5 manual](https://kobee.com.au/tutorials/kobee-studio-docs) for context.
 
 - Follow-up hardening: ignore late background results after dialogs close,
   stop timers throughout the dialog tree, preserve unsaved artwork forms and

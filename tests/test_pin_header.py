@@ -47,6 +47,29 @@ class PinHeaderTests(unittest.TestCase):
             self.assertEqual(0.0, second.y)
         self.assertEqual(layout.pin_centres[0], layout.anchor)
 
+    def test_individual_cutouts_keep_legacy_circles_and_round_trip_new_shapes(self):
+        spec = self.make_spec(3, opening_mode="individual", opening_shape="rectangle")
+        sizes = (Size(1.0, 1.0),) * 3
+        old_payload = spec.to_dict()
+        del old_payload["individual_opening_shape"]
+        old = layout_pin_header(PinHeaderSpec.from_dict(old_payload), sizes)
+        self.assertTrue(all(len(guide) == 32 for guide in old.pad_guides))
+
+        for shape in ("rectangle", "rounded_rectangle"):
+            with self.subTest(shape=shape):
+                configured = replace(spec, individual_opening_shape=shape)
+                self.assertEqual(configured, PinHeaderSpec.from_dict(configured.to_dict()))
+                layout = layout_pin_header(configured, sizes)
+                self.assertEqual(old.connector_keepout, layout.connector_keepout)
+                for centre, circle, cutout in zip(layout.pin_centres, old.pad_guides, layout.pad_guides):
+                    self.assertNotEqual(circle, cutout)
+                    self.assertAlmostEqual(centre.x - 1, min(point.x for point in cutout))
+                    self.assertAlmostEqual(centre.x + 1, max(point.x for point in cutout))
+                    self.assertAlmostEqual(centre.y - 1, min(point.y for point in cutout))
+                    self.assertAlmostEqual(centre.y + 1, max(point.y for point in cutout))
+                    if shape == "rectangle":
+                        self.assertEqual(4, len(cutout))
+
     def test_expected_bounds_for_common_pin_counts(self):
         for pin_count in (1, 2, 3, 8, 10, 20):
             with self.subTest(pin_count=pin_count):

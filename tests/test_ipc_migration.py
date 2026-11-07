@@ -7,6 +7,8 @@ import importlib.util
 import struct
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from kobeestudio.core.composition import (
     CompositionDocument,
@@ -17,6 +19,8 @@ from kobeestudio.core.composition import (
 )
 from kobeestudio.core.shape_geometry import Point
 from kobeestudio.core.studio_artwork import StudioArtwork, StrokePath
+from kobeestudio.integration import ipc_artwork
+from kobeestudio.integration.connector_prefill import connector_prefill
 from kobeestudio.integration.ipc_artwork import (
     DESIGNATOR_METADATA_FIELD_NAME,
     METADATA_FIELD_NAME,
@@ -228,6 +232,86 @@ class IpcMigrationTests(unittest.TestCase):
             _MinimalPlacement(session).place(artwork, {}, "F.SilkS")
         self.assertEqual([("drop", session.board.commit)], session.board.messages)
         self.assertEqual([], session.board.moved)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_windows_replacement_validates_before_removal_and_discards_on_failure(self):
+        from kipy.geometry import Angle, Vector2
+
+        session = IpcSession.connect(socket_path="/tmp/test.sock", client_factory=_Client)
+        board = session.board
+        board.get_groups = lambda: []
+        artwork = StudioArtwork(((Point(), Point(1, 0), Point(0, 1)),), (), (), CompositionDocument(()))
+        placement = IpcArtworkPlacement(session)
+        original = placement.build_footprint(artwork, {}, "F.SilkS")
+        original.id.value = "original"
+        original.position = Vector2.from_xy_mm(81, 73)
+        original.orientation = Angle.from_degrees(37)
+        original.locked = True
+        board.created.append(original)
+        before = original.proto.SerializeToString()
+
+        def create_replacement(item):
+            item.id.value = "replacement"
+            board.created.append(item)
+            return [item]
+
+        def fail_removal(item):
+            self.assertEqual(original.id, item.id)
+            self.assertNotEqual(original.id, board.created[-1].id)
+            board.messages.append(("remove", item))
+            raise RuntimeError("failure after staging removal")
+
+        with patch.object(ipc_artwork, "sys", SimpleNamespace(platform="win32")), patch.object(
+            session, "version", return_value="10.0.6 (release)"
+        ):
+            with patch.object(board, "create_items", return_value=[original]):
+                with self.assertRaisesRegex(RuntimeError, "The original was kept"):
+                    placement.place(artwork, {}, "F.SilkS", old_footprint=original)
+            self.assertEqual([("drop", board.commit)], board.messages)
+            board.messages.clear()
+            with patch.object(board, "create_items", side_effect=create_replacement), patch.object(
+                board, "remove_items", side_effect=fail_removal
+            ):
+                with self.assertRaisesRegex(RuntimeError, "after staging removal"):
+                    placement.place(artwork, {}, "F.SilkS", old_footprint=original)
+
+        replacement = board.created[-1]
+        self.assertEqual([("remove", original), ("drop", board.commit)], board.messages)
+        self.assertEqual(before, original.proto.SerializeToString())
+        self.assertEqual(original.position.proto, replacement.position.proto)
+        self.assertEqual(original.orientation.degrees, replacement.orientation.degrees)
+        self.assertTrue(replacement.locked)
+        self.assertEqual([], board.updated)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_connector_prefill_uses_numbered_pad_geometry_and_net_names(self):
+        from kipy.board_types import FootprintInstance, Pad
+        from kipy.geometry import Vector2
+        from kipy.proto.board.board_types_pb2 import BL_B_Cu, BL_F_Cu
+
+        connector = FootprintInstance()
+        connector.definition.id.library = "Connector_PinHeader_2.54mm"
+        connector.layer = BL_F_Cu
+        for number, name in ((3, ""), (1, "/Power/VCC"), (2, "unconnected-(J1-Pad2)")):
+            pad = Pad()
+            pad.number = str(number)
+            pad.position = Vector2.from_xy_mm(80 - number * 3.2, 45)
+            net = pad.net
+            net.name = name
+            pad.net = net
+            connector.definition.add_item(pad)
+
+        settings = connector_prefill([connector])
+        self.assertEqual("VCC\nPin 2\nPin 3", settings["MultiLineText"])
+        self.assertEqual("Custom", settings["HeaderPitchChoice"])
+        self.assertEqual(3.2, settings["HeaderCustomPitchCtrl"])
+        self.assertEqual("Horizontal", settings["HeaderOrientationChoice"])
+        self.assertEqual("End", settings["HeaderPin1Choice"])
+        connector.layer = BL_B_Cu
+        self.assertEqual("Start", connector_prefill([connector])["HeaderPin1Choice"])
+        self.assertIsNone(connector_prefill([connector, connector]))
+        connector.definition.pads[0].position = Vector2.from_xy_mm(70.4, 48.2)
+        self.assertIsNone(connector_prefill([connector]))
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_all_hidden_fields_have_dimensions_accepted_by_native_properties(self):

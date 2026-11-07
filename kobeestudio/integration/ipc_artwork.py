@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import sys
 import uuid
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
@@ -440,46 +441,7 @@ class IpcArtworkPlacement:
             output_layers=output_layers,
             container_artwork=container_artwork,
         )
-        if old_footprint is not None:
-            try:
-                footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
-            except Exception:
-                pass
-            footprint.position = old_footprint.position
-            footprint.orientation = old_footprint.orientation
-            footprint.proto.id.CopyFrom(old_footprint.id)
-            try:
-                footprint.locked = old_footprint.locked
-            except Exception:
-                pass
-
-        transaction = self.session.begin_commit()
-        try:
-            if old_footprint is not None:
-                created = self.session.board.update_items(footprint)
-            else:
-                created = self.session.board.create_items(footprint)
-            if len(created or ()) != 1:
-                raise RuntimeError("KiCad did not retain the artwork; the operation was rolled back")
-            self.session.commit(
-                transaction,
-                "Update Kobee Studio variable label"
-                if old_footprint is not None else
-                "Place Kobee Studio variable label",
-            )
-        except Exception as error:
-            self._discard_or_report_unknown_state(transaction, error)
-            raise
-
-        placed = created[0] if created else None
-        if placed is not None and old_footprint is not None:
-            try:
-                self.session.board.add_to_selection(placed)
-            except Exception:
-                pass
-        if placed is not None and old_footprint is None and start_interactive_move:
-            self.start_interactive_move(placed)
-        return placed
+        return self._place_footprint(footprint, old_footprint, start_interactive_move, "variable label")
 
     def place(
         self,
@@ -490,62 +452,135 @@ class IpcArtworkPlacement:
         old_footprint: Optional[Any] = None,
         start_interactive_move: bool = True,
     ):
-        api = self._api()
         footprint = self.build_footprint(artwork, payload, output_layer, output_layers=output_layers)
+        return self._place_footprint(footprint, old_footprint, start_interactive_move, "artwork")
+
+    def _place_footprint(self, footprint, old_footprint, start_interactive_move, label):
+        replacement = (
+            old_footprint is not None and sys.platform == "win32"
+            and re.match(r"10\.0\.6(?:\D|$)", self.session.version()) is not None
+        )
+        if replacement:
+            # CreateItems assigns a fresh identity. It cannot inherit the
+            # original's group membership, so leave grouped artwork intact.
+            board = self.session.board
+            original = self._find_board_item(old_footprint.id)
+            if original is None:
+                raise RuntimeError("The original artwork is no longer on the board. Reopen the editor.")
+            old_footprint = original
+            if any(old_footprint.id in group.proto.items for group in board.get_groups()):
+                raise RuntimeError("Ungroup this artwork before updating it on KiCad 10.0.6.")
+
         if old_footprint is not None:
-            # KiCad matches the top-level item by UUID, but preserving the
-            # existing footprint definition identity avoids replacing an
-            # edited board item with a logically new shell that can momentarily
-            # drop out of the workspace on some edit paths.
-            try:
-                footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
-            except Exception:
-                pass
+            if not replacement:
+                try:
+                    footprint.definition.proto.id.CopyFrom(old_footprint.definition.proto.id)
+                except Exception:
+                    pass
+                footprint.proto.id.CopyFrom(old_footprint.id)
             footprint.position = old_footprint.position
             footprint.orientation = old_footprint.orientation
-            # KiCad updates board items by UUID. Preserve the selected
-            # footprint's identity so this is a true in-place replacement.
-            footprint.proto.id.CopyFrom(old_footprint.id)
             try:
                 footprint.locked = old_footprint.locked
             except Exception:
-                pass
+                if replacement:
+                    raise
 
         transaction = self.session.begin_commit()
         try:
-            if old_footprint is not None:
+            if old_footprint is not None and not replacement:
                 created = self.session.board.update_items(footprint)
             else:
                 created = self.session.board.create_items(footprint)
             if len(created or ()) != 1:
                 raise RuntimeError("KiCad did not retain the artwork; the operation was rolled back")
-            self.session.commit(
-                transaction,
-                "Update Kobee Studio artwork" if old_footprint is not None else "Place Kobee Studio artwork",
-            )
+            placed = created[0]
+            if replacement:
+                self._verify_replacement(footprint, placed, old_footprint)
+                # Both operations are staged until PushCommit. A failure
+                # before then leaves the original in place.
+                self.session.board.remove_items(old_footprint)
+            action = "Update" if old_footprint is not None else "Place"
+            self.session.commit(transaction, "{} Kobee Studio {}".format(action, label))
         except Exception as error:
             self._discard_or_report_unknown_state(transaction, error)
             raise
 
-        placed = created[0] if created else None
-        if placed is not None and old_footprint is not None:
+        if replacement:
+            # KiCad 10.0.6 returns an empty per-item deletion response.
+            # Query the board after PushCommit to catch a refused deletion.
+            if self._find_board_item(placed.id) is None:
+                raise RuntimeError(
+                    "KiCad could not confirm the replacement on the board. Undo the update before retrying."
+                )
+            if self._find_board_item(old_footprint.id) is not None:
+                raise RuntimeError(
+                    "KiCad kept both the original and the replacement. Undo the update before retrying."
+                )
+
+        if old_footprint is not None:
             try:
                 self.session.board.add_to_selection(placed)
             except Exception:
-                # Selection is convenience only; placement has already succeeded.
                 pass
-        if placed is not None and old_footprint is None and start_interactive_move:
+        elif start_interactive_move:
             self.start_interactive_move(placed)
         return placed
 
+    @staticmethod
+    def _verify_replacement(expected, placed, original):
+        from kipy.board_types import BoardText, to_concrete_board_shape
+
+        def polygon_sizes(footprint):
+            sizes = []
+            for item in footprint.definition.shapes:
+                shape = to_concrete_board_shape(item)
+                sizes.append((shape.layer, tuple(len(polygon.outline.nodes) for polygon in shape.polygons)))
+            return sorted(sizes)
+
+        def native_text(footprint):
+            return sorted((item.layer, item.value) for item in footprint.definition.items if isinstance(item, BoardText))
+
+        def metadata(footprint):
+            return [item.text.value for item in footprint.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME]
+
+        if (
+            not placed.id.value or placed.id == original.id
+            or placed.position.proto != expected.position.proto
+            or abs((placed.orientation.degrees - expected.orientation.degrees + 180) % 360 - 180) > 1e-6
+            or placed.layer != expected.layer or placed.locked != expected.locked
+            or polygon_sizes(placed) != polygon_sizes(expected)
+            or native_text(placed) != native_text(expected)
+            or metadata(placed) != metadata(expected)
+        ):
+            raise RuntimeError("KiCad did not retain the replacement artwork. The original was kept.")
+
     def start_interactive_move(self, placed: Any) -> None:
         """Attach a committed footprint after the plugin modal has closed."""
+        if self._find_board_item(placed.id) is None:
+            return
         try:
             self.session.board.add_to_selection(placed)
         except Exception:
             # Selection is convenience only; placement has already succeeded.
             pass
         self.session.board.interactive_move(placed.id)
+
+    def _find_board_item(self, item_id):
+        try:
+            items = self.session.board.get_items_by_id([item_id])
+        except Exception as error:
+            from kipy.errors import ApiError
+            from kipy.proto.common import ApiStatusCode
+
+            # KiCad 10 reports an absent ID as a bad request, not an empty list.
+            if (
+                isinstance(error, ApiError) and error.code == ApiStatusCode.AS_BAD_REQUEST
+                and str(error).endswith("none of the requested IDs were found or valid")
+            ):
+                return None
+            raise
+        return next((item for item in items if item.id == item_id), None)
 
     @staticmethod
     def _angle_from_degrees(value: float):

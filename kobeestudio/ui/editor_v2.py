@@ -32,7 +32,7 @@ from ..core.machine_codes import (
     QR_MIN_MODULE_MM,
 )
 from ..core.measurement_units import MeasurementUnit, from_millimetres, to_millimetres
-from ..core.pin_header import PinHeaderSpec, maximum_pin_label_height
+from ..core.pin_header import HEADER_PITCH_CHOICES, PinHeaderSpec, maximum_pin_label_height
 from ..core.project_data import (
     ProjectData,
     ProjectDataCatalog,
@@ -108,13 +108,16 @@ from .main_dialog import (
     COMPONENT_PRESET_BY_LABEL,
     COMPONENT_PRESET_LABELS,
     COMPONENT_SHAPE_LABELS,
+    CONTINUOUS_CUTOUT_CHOICES,
     CONTENT_LAYOUT_LABELS,
     DEFAULT_LABEL_DIMENSIONS,
     HEADER_CAP_LABELS,
+    HEADER_CUTOUT_SHAPES,
     HEADER_SHAPE_LABELS,
     ICON_ID_TO_LABEL,
     ICON_LABELS,
     ICON_POSITION_LABELS,
+    INDIVIDUAL_CUTOUT_CHOICES,
     LABEL_SHAPE_LABELS,
     LAYER_LABELS,
     LAYER_ORDER,
@@ -1900,15 +1903,18 @@ class ToolPage(wx.Panel):
     def _update_header_opening_ui(self):
         if "HeaderOpeningChoice" not in self.controls:
             return
-        continuous = (
-            self.controls["HeaderOpeningChoice"].GetStringSelection()
-            == "Continuous plug opening"
-        )
+        mode = OPENING_LABELS.get(self.controls["HeaderOpeningChoice"].GetStringSelection())
+        continuous = mode == "continuous"
+        individual = mode == "individual"
         self._set_field_visible("HeaderOpeningEndPaddingCtrl", continuous)
-        cutout_choice = self.controls.get("HeaderCutoutEdgeChoice")
+        self._set_field_visible("HeaderCutoutEdgeChoice", continuous)
+        self._set_field_visible("HeaderIndividualCutoutEdgeChoice", individual)
+        cutout_choice = self.controls[
+            "HeaderIndividualCutoutEdgeChoice" if individual else "HeaderCutoutEdgeChoice"
+        ]
         self._set_field_visible(
             "HeaderCutoutRadiusCtrl",
-            cutout_choice is not None
+            (continuous or individual)
             and cutout_choice.GetStringSelection() == "Rounded rectangle cutout",
         )
         self._schedule_layout()
@@ -2300,7 +2306,7 @@ class ToolPage(wx.Panel):
             content = self._card("Connector")
             self._build_content(content, multiline=True)
             grid = self._grid(content)
-            pitch_choice = self._add(grid, "HeaderPitchChoice", "Pitch", self.choice(("1.00 mm","1.25 mm","1.27 mm","1.50 mm","2.00 mm","2.50 mm","2.54 mm","3.50 mm","3.81 mm","5.00 mm","5.08 mm","Custom"), "2.54 mm"))
+            pitch_choice = self._add(grid, "HeaderPitchChoice", "Pitch", self.choice(HEADER_PITCH_CHOICES, "2.54 mm"))
             custom_pitch = self._add(grid, "HeaderCustomPitchCtrl", "Custom pitch (mm)", self.spin(0.5, 20, 2.54, 0.01))
             self.header_pitch_limit = wx.StaticText(self._active_parent, label="")
             content.Add(self.header_pitch_limit, 0, wx.EXPAND | wx.TOP, 7)
@@ -2316,10 +2322,13 @@ class ToolPage(wx.Panel):
                 grid,
                 "HeaderCutoutEdgeChoice",
                 "Cutout edge",
-                self.choice(
-                    ("Pill cutout", "Rounded rectangle cutout", "Square rectangle cutout"),
-                    "Pill cutout",
-                ),
+                self.choice(CONTINUOUS_CUTOUT_CHOICES, "Pill cutout"),
+            )
+            self._add(
+                grid,
+                "HeaderIndividualCutoutEdgeChoice",
+                "Per-pin cutout edge",
+                self.choice(INDIVIDUAL_CUTOUT_CHOICES, "Round cutout"),
             )
             self._add(
                 grid,
@@ -2348,6 +2357,9 @@ class ToolPage(wx.Panel):
                 wx.EVT_CHOICE, self._on_header_opening_changed
             )
             self.controls["HeaderCutoutEdgeChoice"].Bind(
+                wx.EVT_CHOICE, self._on_header_opening_changed
+            )
+            self.controls["HeaderIndividualCutoutEdgeChoice"].Bind(
                 wx.EVT_CHOICE, self._on_header_opening_changed
             )
             self._update_header_opening_ui()
@@ -3134,6 +3146,7 @@ class ToolPage(wx.Panel):
                 if orientation == "Horizontal"
                 else ("Left", "Right")
             )
+            self.controls["HeaderIndividualCutoutEdgeChoice"].SetStringSelection("Round cutout")
         saved_shape = str(settings.get("ShapeChoice", ""))
         if self.mode == "2.54 mm Pin Header" and saved_shape not in HEADER_SHAPE_LABELS:
             saved_shape = "Rounded rectangle"
@@ -3358,6 +3371,13 @@ class StudioEditorDialog(AsyncDialog):
                     params["_LoadedFootprintSettings"] = True
                     self._editing_existing = True
                     return self._normalise_loaded_settings(params), footprint
+                from ..integration.connector_prefill import connector_prefill
+
+                prefill = connector_prefill(self.editor_session.selected_items())
+                if prefill is not None:
+                    defaults = mode_defaults("2.54 mm Pin Header")
+                    defaults.update(prefill)
+                    return defaults, None
             except Exception:
                 wx.LogError(traceback.format_exc())
         else:
@@ -4914,13 +4934,10 @@ class StudioEditorDialog(AsyncDialog):
                     label_side=PIN_SIDE_TO_LABEL_SIDE[side],
                     pad_clearance_mm=float(settings.get("HeaderPadClearanceCtrl", 2.0)),
                     opening_mode=OPENING_LABELS.get(settings.get("HeaderOpeningChoice"), "continuous"),
-                    opening_shape={
-                        "Pill cutout": "pill",
-                        "Rounded cutout": "rounded_rectangle",
-                        "Rounded rectangle cutout": "rounded_rectangle",
-                        "Square edge cutout": "rectangle",
-                        "Square rectangle cutout": "rectangle",
-                    }.get(settings.get("HeaderCutoutEdgeChoice", "Pill cutout"), "pill"),
+                    opening_shape=HEADER_CUTOUT_SHAPES.get(settings.get("HeaderCutoutEdgeChoice"), "pill"),
+                    individual_opening_shape=HEADER_CUTOUT_SHAPES.get(
+                        settings.get("HeaderIndividualCutoutEdgeChoice"), "pill"
+                    ),
                     opening_corner_radius_mm=float(settings.get("HeaderCutoutRadiusCtrl", 0.5)),
                     opening_end_padding_mm=float(settings.get("HeaderOpeningEndPaddingCtrl", 0)),
                     leading_padding_mm=float(settings.get("HeaderLeadingPaddingCtrl", 0.3)),
