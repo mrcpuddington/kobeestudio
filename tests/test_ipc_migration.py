@@ -284,6 +284,32 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual([], board.updated)
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
+    def test_replacement_accepts_duplicate_vertex_normalization_but_rejects_changed_geometry(self):
+        from kipy.board_types import FootprintInstance
+
+        placement = IpcArtworkPlacement(None)
+        a, b, c = Point(), Point(1, 0), Point(0, 1)
+        artwork = StudioArtwork(((a, b, b, c, a),), (), (), CompositionDocument(()))
+        expected = placement.build_footprint(artwork, {}, "F.SilkS")
+        original = FootprintInstance()
+        original.id.value = "original"
+        placed = FootprintInstance(expected.proto)
+        placed.id.value = "replacement"
+        outline = placed.definition.shapes[0].polygons[0].outline.proto
+        # KiCad discards an adjacent duplicate and the repeated closing point.
+        del outline.nodes[4]
+        del outline.nodes[2]
+        placement._verify_replacement(expected, placed, original)
+
+        # A changed point with the same vertex count is still a geometry loss.
+        outline.nodes[1].point.x_nm += 1000
+        with self.assertRaisesRegex(RuntimeError, "polygon geometry changed.*original was kept"):
+            placement._verify_replacement(expected, placed, original)
+        del outline.nodes[:]
+        with self.assertRaisesRegex(RuntimeError, "polygon geometry changed.*original was kept"):
+            placement._verify_replacement(expected, placed, original)
+
+    @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
     def test_connector_prefill_uses_numbered_pad_geometry_and_net_names(self):
         from kipy.board_types import FootprintInstance, Pad
         from kipy.geometry import Vector2
@@ -585,7 +611,7 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual(manifest["identifier"], metadata["identifier"])
         self.assertEqual("ipc", metadata["versions"][0]["runtime"])
         self.assertEqual(__version__, metadata["versions"][0]["version"])
-        self.assertEqual("stable", metadata["versions"][0]["status"])
+        self.assertEqual("testing", metadata["versions"][0]["status"])
         icon_data = (ROOT / "pcm/resources/icon.png").read_bytes()
         self.assertEqual(b"\x89PNG\r\n\x1a\n", icon_data[:8])
         self.assertEqual((64, 64), struct.unpack(">II", icon_data[16:24]))

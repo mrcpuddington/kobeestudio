@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.21 Beta 1
+
+- Accept artwork replacements when KiCad removes duplicate polygon vertices
+  without changing the geometry. Keep the original if replacement verification
+  fails, and report which check failed.
+
 ## 1.5.20 - 2026-11-07
 
 1.5.20 is the current stable release for KiCad 10. The release ZIP is available

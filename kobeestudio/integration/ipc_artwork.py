@@ -529,14 +529,35 @@ class IpcArtworkPlacement:
 
     @staticmethod
     def _verify_replacement(expected, placed, original):
-        from kipy.board_types import BoardText, to_concrete_board_shape
+        from kipy.board_types import BoardPolygon, BoardText
 
-        def polygon_sizes(footprint):
-            sizes = []
-            for item in footprint.definition.shapes:
-                shape = to_concrete_board_shape(item)
-                sizes.append((shape.layer, tuple(len(polygon.outline.nodes) for polygon in shape.polygons)))
-            return sorted(sizes)
+        def outline_points(outline):
+            # KiCad merges duplicate consecutive points and a repeated closing
+            # point when deserializing a closed polygon. Compare the actual
+            # vertices so this normalization cannot hide lost geometry.
+            points = []
+            for node in outline.nodes:
+                if not node.HasField("point"):
+                    return ()
+                point = (node.point.x_nm, node.point.y_nm)
+                if not points or point != points[-1]:
+                    points.append(point)
+            if outline.closed and len(points) > 1 and points[0] == points[-1]:
+                points.pop()
+            return tuple(points)
+
+        def polygons(footprint):
+            return sorted(
+                (
+                    shape.layer,
+                    tuple(
+                        tuple((outline.closed, outline_points(outline.proto))
+                              for outline in (polygon.outline, *polygon.holes))
+                        for polygon in shape.polygons
+                    ) if isinstance(shape, BoardPolygon) else (),
+                )
+                for shape in footprint.definition.shapes
+            )
 
         def native_text(footprint):
             return sorted((item.layer, item.value) for item in footprint.definition.items if isinstance(item, BoardText))
@@ -544,16 +565,24 @@ class IpcArtworkPlacement:
         def metadata(footprint):
             return [item.text.value for item in footprint.definition.items if getattr(item, "name", "") == METADATA_FIELD_NAME]
 
-        if (
-            not placed.id.value or placed.id == original.id
-            or placed.position.proto != expected.position.proto
+        if not placed.id.value or placed.id == original.id:
+            mismatch = "KiCad did not assign a new footprint ID"
+        elif (
+            placed.position.proto != expected.position.proto
             or abs((placed.orientation.degrees - expected.orientation.degrees + 180) % 360 - 180) > 1e-6
-            or placed.layer != expected.layer or placed.locked != expected.locked
-            or polygon_sizes(placed) != polygon_sizes(expected)
-            or native_text(placed) != native_text(expected)
-            or metadata(placed) != metadata(expected)
         ):
-            raise RuntimeError("KiCad did not retain the replacement artwork. The original was kept.")
+            mismatch = "the replacement position or rotation changed"
+        elif placed.layer != expected.layer or placed.locked != expected.locked:
+            mismatch = "the replacement side or lock state changed"
+        elif polygons(placed) != polygons(expected):
+            mismatch = "the replacement polygon geometry changed"
+        elif native_text(placed) != native_text(expected):
+            mismatch = "the replacement native text changed"
+        elif metadata(placed) != metadata(expected):
+            mismatch = "the replacement edit data changed"
+        else:
+            return
+        raise RuntimeError(f"Kobee could not verify the replacement because {mismatch}. The original was kept.")
 
     def start_interactive_move(self, placed: Any) -> None:
         """Attach a committed footprint after the plugin modal has closed."""
