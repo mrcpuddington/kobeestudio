@@ -255,6 +255,13 @@ For installation help, tutorials and practical Kobee Studio guides, visit the [K
 
 Bug reports, ideas and pull requests are always welcome through GitHub. If you build something cool with Kobee Studio, I'd genuinely love to see it.
 
+## Contributors
+
+- **[Lucas Pfennig (@mrred2k)](https://github.com/mrred2k)** diagnosed why artwork
+  updates were rejected on Windows with KiCad 10.0.6, contributed the fix that
+  informed the replacement check, and verified that one Undo restored the
+  original artwork. [PR #36](https://github.com/mrcpuddington/kobeestudio/pull/36)
+
 ---
 
 ## Acknowledgements

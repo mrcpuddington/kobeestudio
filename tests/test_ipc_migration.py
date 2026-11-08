@@ -284,28 +284,34 @@ class IpcMigrationTests(unittest.TestCase):
         self.assertEqual([], board.updated)
 
     @unittest.skipUnless(importlib.util.find_spec("kipy"), "kicad-python is not installed")
-    def test_replacement_accepts_duplicate_vertex_normalization_but_rejects_changed_geometry(self):
+    def test_replacement_accepts_redundant_vertices_but_rejects_changed_geometry(self):
         from kipy.board_types import FootprintInstance
 
         placement = IpcArtworkPlacement(None)
         a, b, c = Point(), Point(1, 0), Point(0, 1)
-        artwork = StudioArtwork(((a, b, b, c, a),), (), (), CompositionDocument(()))
+        artwork = StudioArtwork(((a, Point(0.5, 0), b, b, c, a),), (), (), CompositionDocument(()))
         expected = placement.build_footprint(artwork, {}, "F.SilkS")
         original = FootprintInstance()
         original.id.value = "original"
         placed = FootprintInstance(expected.proto)
         placed.id.value = "replacement"
         outline = placed.definition.shapes[0].polygons[0].outline.proto
-        # KiCad discards an adjacent duplicate and the repeated closing point.
-        del outline.nodes[4]
-        del outline.nodes[2]
+        # KiCad discards an adjacent duplicate, the repeated closing point
+        # and a point on the straight edge between two corners.
+        del outline.nodes[5]
+        del outline.nodes[3]
+        del outline.nodes[1]
         placement._verify_replacement(expected, placed, original)
 
         # A changed point with the same vertex count is still a geometry loss.
         outline.nodes[1].point.x_nm += 1000
         with self.assertRaisesRegex(RuntimeError, "polygon geometry changed.*original was kept"):
             placement._verify_replacement(expected, placed, original)
-        del outline.nodes[:]
+        outline.nodes[1].point.x_nm -= 1000
+        del outline.nodes[1]
+        with self.assertRaisesRegex(RuntimeError, "polygon geometry changed.*original was kept"):
+            placement._verify_replacement(expected, placed, original)
+        placed.definition.items = placed.definition.texts
         with self.assertRaisesRegex(RuntimeError, "polygon geometry changed.*original was kept"):
             placement._verify_replacement(expected, placed, original)
 

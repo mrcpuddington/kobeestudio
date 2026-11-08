@@ -1,10 +1,12 @@
 # Changelog
 
-## 1.5.21 Beta 1
+## Unreleased
 
-- Accept artwork replacements when KiCad removes duplicate polygon vertices
-  without changing the geometry. Keep the original if replacement verification
-  fails, and report which check failed.
+- Allow artwork edits on Windows with KiCad 10.0.6 when KiCad removes duplicate
+  or redundant collinear polygon vertices. Keep the original if the replacement
+  geometry changes. Thanks to Lucas Pfennig (@mrred2k) for diagnosing the failure,
+  contributing the fix and testing Undo on Windows.
+  [PR #36](https://github.com/mrcpuddington/kobeestudio/pull/36)
 
 ## 1.5.20 - 2026-11-07
 

@@ -532,9 +532,9 @@ class IpcArtworkPlacement:
         from kipy.board_types import BoardPolygon, BoardText
 
         def outline_points(outline):
-            # KiCad merges duplicate consecutive points and a repeated closing
-            # point when deserializing a closed polygon. Compare the actual
-            # vertices so this normalization cannot hide lost geometry.
+            # PR #36 showed that KiCad can also drop collinear points. Strip
+            # those only when they lie between their neighbors, so a bend or
+            # a segment that doubles back is still part of the comparison.
             points = []
             for node in outline.nodes:
                 if not node.HasField("point"):
@@ -544,7 +544,23 @@ class IpcArtworkPlacement:
                     points.append(point)
             if outline.closed and len(points) > 1 and points[0] == points[-1]:
                 points.pop()
-            return tuple(points)
+            if len(points) < 3:
+                return tuple(points)
+
+            def is_corner(previous, point, following):
+                dx, dy = point[0] - previous[0], point[1] - previous[1]
+                next_dx, next_dy = following[0] - point[0], following[1] - point[1]
+                return dx * next_dy != dy * next_dx or dx * next_dx + dy * next_dy <= 0
+
+            if outline.closed:
+                return tuple(
+                    point for index, point in enumerate(points)
+                    if is_corner(points[index - 1], point, points[(index + 1) % len(points)])
+                )
+            return (points[0], *(
+                points[index] for index in range(1, len(points) - 1)
+                if is_corner(points[index - 1], points[index], points[index + 1])
+            ), points[-1])
 
         def polygons(footprint):
             return sorted(
