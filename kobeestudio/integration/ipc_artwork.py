@@ -531,12 +531,15 @@ class IpcArtworkPlacement:
     def _verify_replacement(expected, placed, original):
         from kipy.board_types import BoardText, to_concrete_board_shape
 
-        def polygon_sizes(footprint):
-            sizes = []
+        def polygon_structure(footprint):
+            # KiCad simplifies polygon outlines when the item is created (collinear
+            # points are dropped), so node counts are not stable. Shape count per
+            # layer and polygon count per shape are.
+            structure = []
             for item in footprint.definition.shapes:
                 shape = to_concrete_board_shape(item)
-                sizes.append((shape.layer, tuple(len(polygon.outline.nodes) for polygon in shape.polygons)))
-            return sorted(sizes)
+                structure.append((shape.layer, len(shape.polygons)))
+            return sorted(structure)
 
         def native_text(footprint):
             return sorted((item.layer, item.value) for item in footprint.definition.items if isinstance(item, BoardText))
@@ -549,7 +552,7 @@ class IpcArtworkPlacement:
             or placed.position.proto != expected.position.proto
             or abs((placed.orientation.degrees - expected.orientation.degrees + 180) % 360 - 180) > 1e-6
             or placed.layer != expected.layer or placed.locked != expected.locked
-            or polygon_sizes(placed) != polygon_sizes(expected)
+            or polygon_structure(placed) != polygon_structure(expected)
             or native_text(placed) != native_text(expected)
             or metadata(placed) != metadata(expected)
         ):
