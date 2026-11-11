@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed Project Data and its Settings page creating grouped controls with the
+  wrong parent, which triggered wxWidgets warnings on Windows.
+- Fixed a false FontTools error for valid OpenType version 1 name tables with
+  language metadata, while retaining diagnostics for incorrect offsets.
 - Allow artwork edits on Windows with KiCad 10.0.6 when KiCad removes duplicate
   or redundant collinear polygon vertices. Keep the original if the replacement
   geometry changes. Thanks to Lucas Pfennig (@mrred2k) for diagnosing the failure,

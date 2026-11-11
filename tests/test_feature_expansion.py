@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import io
 import zipfile
+import struct
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
@@ -78,6 +79,81 @@ class ComponentPresetStoreTests(unittest.TestCase):
             self.assertEqual("Project body", project_store.list()[0].name)
             global_store.delete(changed.preset_id)
             self.assertEqual((), global_store.list())
+
+
+class FontNameTableTests(unittest.TestCase):
+    @staticmethod
+    def name_table_data(version, language_tags=()):
+        value = "Diagnostic".encode("utf-16-be")
+        record = struct.pack(">HHHHHH", 3, 1, 0x409, 1, len(value), 0)
+        storage = value
+        extension = b""
+        if version == 1:
+            extension = struct.pack(">H", len(language_tags))
+            for tag in language_tags:
+                encoded = tag.encode("utf-16-be")
+                extension += struct.pack(">HH", len(encoded), len(storage))
+                storage += encoded
+        offset = 6 + 18 * 12 + len(extension)
+        return struct.pack(">HHH", version, 18, offset) + record * 18 + extension + storage
+
+    def test_valid_name_table_versions_and_language_tags_do_not_report_errors(self):
+        from fontTools.ttLib.tables._n_a_m_e import table__n_a_m_e
+
+        for version, tags in ((0, ()), (1, ()), (1, ("en", "de"))):
+            with self.subTest(version=version, tags=tags):
+                table = table__n_a_m_e("name")
+                with patch("fontTools.ttLib.tables._n_a_m_e.log.error") as error:
+                    table.decompile(self.name_table_data(version, tags), None)
+                error.assert_not_called()
+                self.assertEqual(18, len(table.names))
+                self.assertEqual("Diagnostic", table.getDebugName(1))
+
+    def test_incorrect_offsets_and_truncated_language_headers_are_detected(self):
+        from fontTools.ttLib.tables._n_a_m_e import table__n_a_m_e
+
+        for version in (0, 1):
+            with self.subTest(version=version):
+                data = bytearray(self.name_table_data(version))
+                data[4:6] = struct.pack(">H", len(data) + 1)
+                with self.assertLogs("fontTools.ttLib.tables._n_a_m_e", level="ERROR") as logs:
+                    table__n_a_m_e("name").decompile(bytes(data), None)
+                self.assertTrue(any("stringOffset incorrect" in line for line in logs.output))
+        with self.assertRaises(struct.error):
+            table__n_a_m_e("name").decompile(self.name_table_data(1)[:222], None)
+
+    def test_version1_font_installs_with_unchanged_names_and_glyphs(self):
+        from fontTools.ttLib import TTFont
+        from fontTools.ttLib.tables.DefaultTable import DefaultTable
+        from fontTools.pens.recordingPen import RecordingPen
+
+        bundled = Path(__file__).resolve().parents[1] / "kobeestudio/fonts/FreddySpark-Regular.ttf"
+        with TTFont(bundled) as font:
+            data = font.reader["name"]
+            version, count, offset = struct.unpack(">HHH", data[:6])
+            self.assertEqual(0, version)
+            expected_name = font["name"].getDebugName(1)
+            glyph_name = font.getBestCmap()[ord("R")]
+            expected_glyph = RecordingPen()
+            font.getGlyphSet()[glyph_name].draw(expected_glyph)
+            name = DefaultTable("name")
+            name.data = (
+                struct.pack(">HHH", 1, count, offset + 2)
+                + data[6:offset] + b"\0\0" + data[offset:]
+            )
+            font["name"] = name
+            output = io.BytesIO()
+            font.save(output)
+        with tempfile.TemporaryDirectory() as directory:
+            store = FontLibraryStore(Path(directory))
+            with patch("fontTools.ttLib.tables._n_a_m_e.log.error") as error:
+                face = store.install_bytes(output.getvalue(), family=expected_name)
+                with TTFont(face.path) as installed:
+                    self.assertEqual(expected_name, installed["name"].getDebugName(1))
+                    actual_glyph = RecordingPen()
+                    installed.getGlyphSet()[glyph_name].draw(actual_glyph)
+                    self.assertEqual(expected_glyph.value, actual_glyph.value)
+            error.assert_not_called()
 
 
 class FontLibraryStoreTests(unittest.TestCase):

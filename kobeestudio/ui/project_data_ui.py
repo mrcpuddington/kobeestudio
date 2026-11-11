@@ -210,13 +210,14 @@ class ProjectDataPage(wx.ScrolledWindow):
 
     def _field_section(self, title, scope, values):
         box = wx.StaticBoxSizer(wx.StaticBox(self, label=title), wx.VERTICAL)
+        parent = box.GetStaticBox()
         grid = wx.FlexGridSizer(0, 2, 7, 10); grid.AddGrowableCol(1)
         for field in fields_for(scope, self.project_data, self.catalog):
-            grid.Add(wx.StaticText(self, label=field.label), 0, wx.ALIGN_CENTER_VERTICAL)
+            grid.Add(wx.StaticText(parent, label=field.label), 0, wx.ALIGN_CENTER_VERTICAL)
             value = values.get(field.field_id, field.default_value)
             if scope == "revision" and field.field_id == "default_issue_date" and not value:
                 value = date.today().isoformat()
-            control = _control(self, field, value)
+            control = _control(parent, field, value)
             if field.help_text: control.SetToolTip(field.help_text)
             for event_type in (wx.EVT_TEXT, wx.EVT_CHOICE, wx.EVT_CHECKBOX):
                 try:
@@ -226,42 +227,44 @@ class ProjectDataPage(wx.ScrolledWindow):
             grid.Add(control, 1, wx.EXPAND); self.controls[(scope, field.field_id)] = (field, control)
         box.Add(grid, 0, wx.EXPAND | wx.ALL, 10)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        actions.Add(ThemedActionButton(self, "Add custom field…", lambda scope=scope: self._add_custom(scope)), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Save local field as reusable…", lambda scope=scope: self._save_reusable(scope)), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Remove reusable field…", lambda scope=scope: self._remove_reusable(scope)), 0)
+        actions.Add(ThemedActionButton(parent, "Add custom field…", lambda scope=scope: self._add_custom(scope)), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Save local field as reusable…", lambda scope=scope: self._save_reusable(scope)), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Remove reusable field…", lambda scope=scope: self._remove_reusable(scope)), 0)
         box.Add(actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.root.Add(box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
 
     def _history_section(self):
         box = wx.StaticBoxSizer(wx.StaticBox(self, label="Revision history"), wx.VERTICAL)
+        parent = box.GetStaticBox()
         entries = []
         for checkpoint in self.project_data.revisions:
             revision = checkpoint.values.get("default_revision", "Untitled revision")
             status = checkpoint.values.get("default_status", "")
             marker = "  • active" if checkpoint.revision_id == self.project_data.active_revision_id else ""
             entries.append("{}  —  {} {}{}".format(checkpoint.created_at, revision, status, marker))
-        self.history = ThemedListBox(self, choices=entries); self.history.SetMinSize(wx.Size(-1, 100))
+        self.history = ThemedListBox(parent, choices=entries); self.history.SetMinSize(wx.Size(-1, 100))
         box.Add(self.history, 1, wx.EXPAND | wx.ALL, 10)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        actions.Add(ThemedActionButton(self, "View selected details", self._view_selected), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Restore selected to draft", self._restore_selected), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Delete selected…", self._delete_selected), 0)
+        actions.Add(ThemedActionButton(parent, "View selected details", self._view_selected), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Restore selected to draft", self._restore_selected), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Delete selected…", self._delete_selected), 0)
         box.Add(actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.root.Add(box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
 
     def _variables_section(self):
         box = wx.StaticBoxSizer(wx.StaticBox(self, label="KiCad variables"), wx.VERTICAL)
+        parent = box.GetStaticBox()
         variables = generated_variables(self.project_data, self.catalog)
-        self.variable_list = ThemedListBox(self, choices=tuple("${%s}  →  %s" % item for item in sorted(variables.items())))
+        self.variable_list = ThemedListBox(parent, choices=tuple("${%s}  →  %s" % item for item in sorted(variables.items())))
         self.variable_list.SetMinSize(wx.Size(-1, 110)); box.Add(self.variable_list, 1, wx.EXPAND | wx.ALL, 10)
-        note = wx.StaticText(self, label="Only these names are updated by Sync. Other KiCad text variables and native title-block fields are preserved.")
+        note = wx.StaticText(parent, label="Only these names are updated by Sync. Other KiCad text variables and native title-block fields are preserved.")
         note.Wrap(700); box.Add(note, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        actions.Add(ThemedActionButton(self, "Copy selected token", self._copy_token), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Preview KiCad changes", self._preview_sync), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Save project details", self._save), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Sync to KiCad", lambda: self.editor.sync_project_data(False), primary=True), 0, wx.RIGHT, 7)
-        actions.Add(ThemedActionButton(self, "Create checkpoint & sync", lambda: self.editor.sync_project_data(True), primary=True), 0)
+        actions.Add(ThemedActionButton(parent, "Copy selected token", self._copy_token), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Preview KiCad changes", self._preview_sync), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Save project details", self._save), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Sync to KiCad", lambda: self.editor.sync_project_data(False), primary=True), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Create checkpoint & sync", lambda: self.editor.sync_project_data(True), primary=True), 0)
         box.Add(actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.root.Add(box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
 
@@ -516,7 +519,7 @@ class ProjectDataSettingsPage(wx.ScrolledWindow):
             return
         defaults = wx.StaticBoxSizer(wx.StaticBox(self, label="Default field visibility"), wx.VERTICAL)
         for field in DEFAULT_FIELDS:
-            control = wx.CheckBox(self, label=field.label)
+            control = wx.CheckBox(defaults.GetStaticBox(), label=field.label)
             control.SetValue(field.field_id not in self.catalog.hidden_default_field_ids)
             defaults.Add(control, 0, wx.ALL, 3); self.visibility_controls[field.field_id] = control
         self.root.Add(defaults, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
@@ -527,22 +530,23 @@ class ProjectDataSettingsPage(wx.ScrolledWindow):
 
     def _catalog_fields(self, title, kind):
         box = wx.StaticBoxSizer(wx.StaticBox(self, label=title), wx.VERTICAL)
+        parent = box.GetStaticBox()
         fields = fields_for("global", ProjectData.empty(), self.catalog, include_hidden=True) if kind == "global" else self.catalog.reusable_fields
         if kind == "global":
             grid = wx.FlexGridSizer(0, 2, 7, 10); grid.AddGrowableCol(1)
             for field in fields:
-                grid.Add(wx.StaticText(self, label=field.label), 0, wx.ALIGN_CENTER_VERTICAL)
-                control = _control(self, field, self.catalog.global_values.get(field.field_id, field.default_value))
+                grid.Add(wx.StaticText(parent, label=field.label), 0, wx.ALIGN_CENTER_VERTICAL)
+                control = _control(parent, field, self.catalog.global_values.get(field.field_id, field.default_value))
                 grid.Add(control, 1, wx.EXPAND); self.global_controls[field.field_id] = (field, control)
             box.Add(grid, 0, wx.EXPAND | wx.ALL, 10)
         else:
             lines = ["{} · {} · ${}".format(field.label, field.scope, field.key) for field in fields]
-            self.reusable_list = ThemedListBox(self, choices=lines); self.reusable_list.SetMinSize(wx.Size(-1, 110))
+            self.reusable_list = ThemedListBox(parent, choices=lines); self.reusable_list.SetMinSize(wx.Size(-1, 110))
             box.Add(self.reusable_list, 1, wx.EXPAND | wx.ALL, 10)
         actions = wx.BoxSizer(wx.HORIZONTAL)
-        actions.Add(ThemedActionButton(self, "Add {} field…".format("global" if kind == "global" else "reusable"), lambda kind=kind: self._add_field(kind)), 0, wx.RIGHT, 7)
+        actions.Add(ThemedActionButton(parent, "Add {} field…".format("global" if kind == "global" else "reusable"), lambda kind=kind: self._add_field(kind)), 0, wx.RIGHT, 7)
         if kind == "reusable":
-            actions.Add(ThemedActionButton(self, "Delete selected…", self._delete_reusable), 0)
+            actions.Add(ThemedActionButton(parent, "Delete selected…", self._delete_reusable), 0)
         box.Add(actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.root.Add(box, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
 

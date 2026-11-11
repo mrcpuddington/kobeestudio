@@ -18,6 +18,12 @@ from kobeestudio.ui.theme import is_dark_mode, set_appearance_preference
 from kobeestudio.core.app_preferences import AppPreferences, AppPreferencesStore
 
 
+def _descendants(window):
+    for child in window.GetChildren():
+        yield child
+        yield from _descendants(child)
+
+
 @unittest.skipUnless(wx.GetApp(), "run tools/run_tests.py to initialize wx")
 class EditorWorkflowTests(unittest.TestCase):
     @classmethod
@@ -279,7 +285,7 @@ class EditorWorkflowTests(unittest.TestCase):
                 try:
                     # Selection, saving and syncing rebuild the entire page.
                     page.reload(editor.project_data, editor.project_data_catalog)
-                    for child in page.GetChildren():
+                    for child in _descendants(page):
                         if isinstance(child, (wx.StaticText, wx.TextCtrl)):
                             foreground = luminance(child.GetForegroundColour())
                             background = luminance(child.GetBackgroundColour() if isinstance(child, wx.TextCtrl) else page.GetBackgroundColour())
@@ -304,7 +310,7 @@ class EditorWorkflowTests(unittest.TestCase):
         )
         page = ProjectDataPage(self.dialog, editor)
         try:
-            buttons = {child.GetLabel(): child for child in page.GetChildren() if isinstance(child, ThemedActionButton)}
+            buttons = {child.GetLabel(): child for child in _descendants(page) if isinstance(child, ThemedActionButton)}
             # Every painted button calls its callback without an event argument.
             for label, button in buttons.items():
                 with self.subTest(button=label):
@@ -326,11 +332,49 @@ class EditorWorkflowTests(unittest.TestCase):
             page.reload(editor.project_data, editor.project_data_catalog)
             page.history.SetSelection(0)
             with patch("wx.MessageBox", return_value=wx.OK) as message:
-                details = next(child for child in page.GetChildren() if isinstance(child, ThemedActionButton) and child.GetLabel() == "View selected details")
+                details = next(child for child in _descendants(page) if isinstance(child, ThemedActionButton) and child.GetLabel() == "View selected details")
                 details._on_click(None)
                 self.assertIn("Revision: A", message.call_args[0][0])
         finally:
             page.Destroy()
+
+    def test_project_data_static_box_children_keep_correct_parents_after_rebuild(self):
+        from kobeestudio.core.project_data import ProjectData, ProjectDataCatalog, ProjectDataCatalogStore, ProjectDataStore
+        from kobeestudio.ui.project_data_ui import ProjectDataPage, ProjectDataSettingsPage
+
+        project = Path(self.data.name) / "acceptance.kicad_pro"
+        editor = SimpleNamespace(
+            project_path=project, project_data_store=ProjectDataStore(project),
+            project_data=ProjectData.empty(), project_data_catalog=ProjectDataCatalog.empty(),
+            project_data_recovery_error=None, project_data_record_exists=False,
+        )
+
+        def check_parents(sizer, parent):
+            if isinstance(sizer, wx.StaticBoxSizer):
+                parent = sizer.GetStaticBox()
+            for item in sizer.GetChildren():
+                if item.IsSizer():
+                    check_parents(item.GetSizer(), parent)
+                elif item.IsWindow():
+                    control = item.GetWindow()
+                    self.assertEqual(parent, control.GetParent(), control.GetLabel())
+
+        pages = (
+            ProjectDataPage(self.dialog, editor),
+            ProjectDataSettingsPage(self.dialog, ProjectDataCatalogStore(Path(self.data.name) / "project-data")),
+        )
+        try:
+            for page in pages:
+                with self.subTest(page=type(page).__name__):
+                    check_parents(page.GetSizer(), page)
+                    if isinstance(page, ProjectDataPage):
+                        page.reload(editor.project_data, editor.project_data_catalog)
+                    else:
+                        page._build()
+                    check_parents(page.GetSizer(), page)
+        finally:
+            for page in pages:
+                page.Destroy()
 
     def test_every_artwork_tool_has_a_valid_initial_preview(self):
         for tool in ("Standard", "Connector Overlay", "Component Callout", "Component Array", "QR Code", "Barcode"):

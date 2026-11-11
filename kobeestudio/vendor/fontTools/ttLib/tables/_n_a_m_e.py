@@ -29,6 +29,10 @@ class table__n_a_m_e(DefaultTable.DefaultTable):
 	def decompile(self, data, ttFont):
 		format, n, stringOffset = struct.unpack(b">HHH", data[:6])
 		expectedStringOffset = 6 + n * nameRecordSize
+		if format == 1:
+			# OpenType version 1 adds language-tag records before string storage.
+			langTagCount = struct.unpack_from(b">H", data, expectedStringOffset)[0]
+			expectedStringOffset += 2 + langTagCount * 4
 		if stringOffset != expectedStringOffset:
 			log.error(
 				"'name' table stringOffset incorrect. Expected: %s; Actual: %s",
